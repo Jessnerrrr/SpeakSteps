@@ -2,7 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 
 export default function NewPasswordScreen() {
   const [oldPassword, setOldPassword] = useState('');
@@ -67,86 +67,91 @@ export default function NewPasswordScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <View style={styles.topHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
-            <Text style={styles.backIconBlue}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.topHeaderText}>Forgot Password</Text>
-        </View>
-
-        <View style={styles.container}>
-          <View style={styles.bottomCard}>
-            
-            <Image 
-              source={require('../../assets/images/bird-logo.gif')} 
-              style={styles.overlappingBird}
-              contentFit="contain"
-            />
-            
-            <View style={styles.textContainer}>
-              <Text style={styles.welcomeText}>Create new password</Text>
-              <Text style={styles.subText}>Provide your new password</Text>
-            </View>
-
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Old Password</Text>
-                <View style={styles.passwordWrapper}>
-                  <TextInput 
-                    style={[styles.input, { paddingRight: 50 }]} 
-                    placeholder="input password"
-                    placeholderTextColor="#999"
-                    secureTextEntry={!showOldPassword}
-                    value={oldPassword}
-                    onChangeText={setOldPassword}
-                  />
-                  <TouchableOpacity style={styles.eyeButton} onPress={() => setShowOldPassword(!showOldPassword)}>
-                    <Text style={styles.eyeButtonText}>{showOldPassword ? 'Hide' : 'Show'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>New Password</Text>
-                <View style={styles.passwordWrapper}>
-                  <TextInput 
-                    style={[styles.input, { paddingRight: 50 }]} 
-                    placeholder="input password"
-                    placeholderTextColor="#999"
-                    secureTextEntry={!showNewPassword}
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                  />
-                  <TouchableOpacity style={styles.eyeButton} onPress={() => setShowNewPassword(!showNewPassword)}>
-                    <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Confirm New Password</Text>
-                <View style={styles.passwordWrapper}>
-                  <TextInput 
-                    style={[styles.input, { paddingRight: 50 }]} 
-                    placeholder="input password"
-                    placeholderTextColor="#999"
-                    secureTextEntry={!showConfirmPassword}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                  />
-                  <TouchableOpacity style={styles.eyeButton} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                    <Text style={styles.eyeButtonText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Save</Text>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.topHeader}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
+              <Text style={styles.backIconBlue}>‹</Text>
             </TouchableOpacity>
-
+            <Text style={styles.topHeaderText}>Forgot Password</Text>
           </View>
-        </View>
+
+          <View style={styles.container}>
+            <View style={styles.bottomCard}>
+              
+              <Image 
+                source={require('../../assets/images/bird-logo.gif')} 
+                style={styles.overlappingBird}
+                contentFit="contain"
+              />
+              
+              <View style={styles.textContainer}>
+                <Text style={styles.welcomeText}>Create new password</Text>
+                <Text style={styles.subText}>Provide your new password</Text>
+              </View>
+
+              <View style={styles.formContainer}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Old Password</Text>
+                  <View style={styles.passwordWrapper}>
+                    <TextInput 
+                      style={[styles.input, { paddingRight: 50 }]} 
+                      placeholder="input password"
+                      placeholderTextColor="#999"
+                      secureTextEntry={!showOldPassword}
+                      value={oldPassword}
+                      onChangeText={setOldPassword}
+                    />
+                    <TouchableOpacity style={styles.eyeButton} onPress={() => setShowOldPassword(!showOldPassword)}>
+                      <Text style={styles.eyeButtonText}>{showOldPassword ? 'Hide' : 'Show'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>New Password</Text>
+                  <View style={styles.passwordWrapper}>
+                    <TextInput 
+                      style={[styles.input, { paddingRight: 50 }]} 
+                      placeholder="input password"
+                      placeholderTextColor="#999"
+                      secureTextEntry={!showNewPassword}
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                    />
+                    <TouchableOpacity style={styles.eyeButton} onPress={() => setShowNewPassword(!showNewPassword)}>
+                      <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Confirm New Password</Text>
+                  <View style={styles.passwordWrapper}>
+                    <TextInput 
+                      style={[styles.input, { paddingRight: 50 }]} 
+                      placeholder="input password"
+                      placeholderTextColor="#999"
+                      secureTextEntry={!showConfirmPassword}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                    />
+                    <TouchableOpacity style={styles.eyeButton} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                      <Text style={styles.eyeButtonText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveBtnText}>Save</Text>
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        </KeyboardAvoidingView>
 
         {/* Custom Branded UI Alert Modal */}
         <Modal visible={alertVisible} transparent={true} animationType="fade">

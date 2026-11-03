@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
 
 export default function CreateAccountScreen() {
   const [fontsLoaded] = useFonts({
@@ -22,74 +22,80 @@ export default function CreateAccountScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <View style={styles.container}>
-          
-          {/* Top Section */}
-          <View style={styles.topSection}>
-            <Image 
-              source={require('../../assets/images/bird-logo.gif')} 
-              style={styles.birdImage}
-              contentFit="contain"
-            />
-            <View style={styles.brandTextContainer}>
-              <Text style={styles.brandTitle}>SpeakSteps</Text>
-            </View>
-          </View>
-
-          {/* Bottom Section: White Card */}
-          <View style={styles.bottomCard}>
+        {/* KeyboardAvoidingView added for consistency and future-proofing */}
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.container}>
             
-            {/* Back Button Header */}
-            <View style={styles.cardHeader}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Text style={styles.backIcon}>‹</Text>
-              </TouchableOpacity>
-              <Text style={styles.headerText}>Create Account</Text>
+            {/* Top Section */}
+            <View style={styles.topSection}>
+              <Image 
+                source={require('../../assets/images/bird-logo.gif')} 
+                style={styles.birdImage}
+                contentFit="contain"
+              />
+              <View style={styles.brandTextContainer}>
+                <Text style={styles.brandTitle}>SpeakSteps</Text>
+              </View>
             </View>
 
-            <Text style={styles.welcomeText}>Create an Account</Text>
-            <Text style={styles.subText}>Choose the type of account.</Text>
+            {/* Bottom Section: White Card */}
+            <View style={styles.bottomCard}>
+              
+              {/* Back Button Header */}
+              <View style={styles.cardHeader}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                  <Text style={styles.backIcon}>‹</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerText}>Create Account</Text>
+              </View>
 
-            {/* Register as Therapist Button */}
-            <TouchableOpacity 
-              style={styles.roleCard}
-              onPress={() => router.push('/register-therapist' as any)} 
-            >
-              <View style={[styles.iconBox, { backgroundColor: '#CBE6F6' }]} />
-              <View style={styles.roleTextContainer}>
-                <Text style={styles.roleTitle}>Register as Therapist</Text>
-                <Text style={styles.roleSubtitle}>Licensed and ID check required</Text>
-              </View>
-              <View style={styles.arrowCircle}>
-                <Text style={styles.arrowText}>›</Text>
-              </View>
-            </TouchableOpacity>
+              <Text style={styles.welcomeText}>Create an Account</Text>
+              <Text style={styles.subText}>Choose the type of account.</Text>
 
-            {/* Create Patient Account Button */}
-            <TouchableOpacity 
-              style={styles.roleCard}
-              onPress={() => router.push('/register-patient' as any)} 
-            >
-              <View style={[styles.iconBox, { backgroundColor: '#FDE4AB' }]} />
-              <View style={styles.roleTextContainer}>
-                <Text style={styles.roleTitle}>Create Patient Account</Text>
-                <Text style={styles.roleSubtitle}>For parents/guardians and child</Text>
-              </View>
-              <View style={styles.arrowCircle}>
-                <Text style={styles.arrowText}>›</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Footer Link */}
-            <View style={styles.footer}>
-              <TouchableOpacity onPress={() => router.push('/login' as any)}>
-                <Text style={styles.loginLink}>Already Have an Account? Log In</Text>
+              {/* Register as Therapist Button */}
+              <TouchableOpacity 
+                style={styles.roleCard}
+                onPress={() => router.push('/register-therapist' as any)} 
+              >
+                <View style={[styles.iconBox, { backgroundColor: '#CBE6F6' }]} />
+                <View style={styles.roleTextContainer}>
+                  <Text style={styles.roleTitle}>Register as Therapist</Text>
+                  <Text style={styles.roleSubtitle}>Licensed and ID check required</Text>
+                </View>
+                <View style={styles.arrowCircle}>
+                  <Text style={styles.arrowText}>›</Text>
+                </View>
               </TouchableOpacity>
+
+              {/* Create Patient Account Button */}
+              <TouchableOpacity 
+                style={styles.roleCard}
+                onPress={() => router.push('/register-patient' as any)} 
+              >
+                <View style={[styles.iconBox, { backgroundColor: '#FDE4AB' }]} />
+                <View style={styles.roleTextContainer}>
+                  <Text style={styles.roleTitle}>Create Patient Account</Text>
+                  <Text style={styles.roleSubtitle}>For parents/guardians and child</Text>
+                </View>
+                <View style={styles.arrowCircle}>
+                  <Text style={styles.arrowText}>›</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Footer Link */}
+              <View style={styles.footer}>
+                <TouchableOpacity onPress={() => router.push('/login' as any)}>
+                  <Text style={styles.loginLink}>Already Have an Account? Log In</Text>
+                </TouchableOpacity>
+              </View>
+
             </View>
 
           </View>
-
-        </View>
+        </KeyboardAvoidingView>
       </ImageBackground>
     </>
   );

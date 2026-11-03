@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, FlatList } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 
 const SECURITY_QUESTIONS = [
   "What is the name of your first-grade teacher?",
@@ -43,56 +43,61 @@ export default function SecurityQuestionsScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        {/* Pinned Top Header */}
-        <View style={styles.topHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
-            <Text style={styles.backIconBlue}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.topHeaderText}>Forgot Password</Text>
-        </View>
-
-        {/* Centered Floating Card Layout */}
-        <View style={styles.container}>
-          <View style={styles.bottomCard}>
-            
-            <Text style={styles.welcomeText}>Security Questions</Text>
-            <Text style={styles.subText}>Pick 1 security question to answer</Text>
-
-            <View style={styles.formContainer}>
-              {/* Custom Dropdown Trigger */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Security Questions</Text>
-                <TouchableOpacity 
-                  style={styles.dropdownTrigger} 
-                  activeOpacity={0.7}
-                  onPress={() => setDropdownVisible(true)}
-                >
-                  <Text style={[styles.dropdownTriggerText, question === 'Select a question...' && { color: '#999' }]} numberOfLines={1}>
-                    {question}
-                  </Text>
-                  <Text style={styles.dropdownIcon}>▼</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Answer Input */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Answer</Text>
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="input answer"
-                  placeholderTextColor="#999"
-                  value={answer}
-                  onChangeText={setAnswer}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.submitBtn} onPress={() => router.push('/new-password' as any)}>
-              <Text style={styles.submitBtnText}>Submit</Text>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* Pinned Top Header */}
+          <View style={styles.topHeader}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
+              <Text style={styles.backIconBlue}>‹</Text>
             </TouchableOpacity>
-
+            <Text style={styles.topHeaderText}>Forgot Password</Text>
           </View>
-        </View>
+
+          {/* Centered Floating Card Layout */}
+          <View style={styles.container}>
+            <View style={styles.bottomCard}>
+              
+              <Text style={styles.welcomeText}>Security Questions</Text>
+              <Text style={styles.subText}>Pick 1 security question to answer</Text>
+
+              <View style={styles.formContainer}>
+                {/* Custom Dropdown Trigger */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Security Questions</Text>
+                  <TouchableOpacity 
+                    style={styles.dropdownTrigger} 
+                    activeOpacity={0.7}
+                    onPress={() => setDropdownVisible(true)}
+                  >
+                    <Text style={[styles.dropdownTriggerText, question === 'Select a question...' && { color: '#999' }]} numberOfLines={1}>
+                      {question}
+                    </Text>
+                    <Text style={styles.dropdownIcon}>▼</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Answer Input */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Answer</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="input answer"
+                    placeholderTextColor="#999"
+                    value={answer}
+                    onChangeText={setAnswer}
+                  />
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.submitBtn} onPress={() => router.push('/new-password' as any)}>
+                <Text style={styles.submitBtnText}>Submit</Text>
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        </KeyboardAvoidingView>
 
         {/* Custom Dropdown Modal */}
         <Modal visible={isDropdownVisible} transparent={true} animationType="fade">

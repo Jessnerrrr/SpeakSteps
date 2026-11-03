@@ -122,15 +122,16 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: '#FFB923', 
   },
-  primaryButtonText: {
+ primaryButtonText: {
     fontFamily: 'SourGummy-Bold',
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     marginRight: 10,
   },
   playIcon: {
     color: '#0865AD',
-    fontSize: 18,
+    fontSize: 30, 
+    marginLeft: 5,
   },
   secondaryButton: {
     backgroundColor: '#0865AD', 

@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
 
 export default function TherapistRegistrationScreen() {
   const [fullName, setFullName] = useState('');
@@ -86,110 +86,115 @@ export default function TherapistRegistrationScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <View style={styles.container}>
-          
-          <View style={styles.topSection}>
-            <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
-            <View style={styles.brandTextContainer}>
-              <Text style={styles.brandTitle}>SpeakSteps</Text>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.container}>
+            
+            <View style={styles.topSection}>
+              <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
+              <View style={styles.brandTextContainer}>
+                <Text style={styles.brandTitle}>SpeakSteps</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.bottomCard}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-              
-              <View style={styles.cardHeader}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                  <Text style={styles.backIcon}>‹</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerText}>Therapist Account</Text>
-              </View>
+            <View style={styles.bottomCard}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                
+                <View style={styles.cardHeader}>
+                  <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Text style={styles.backIcon}>‹</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.headerText}>Therapist Account</Text>
+                </View>
 
-              <Text style={styles.welcomeText}>Register as Therapist</Text>
-              <Text style={styles.subText}>Your license / therapy ID is checked by the Center before you can log in.</Text>
+                <Text style={styles.welcomeText}>Register as Therapist</Text>
+                <Text style={styles.subText}>Your license / therapy ID is checked by the Center before you can log in.</Text>
 
-              <Text style={styles.sectionTitle}>Personal Information</Text>
-              
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Full name</Text>
-                <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
-              </View>
+                <Text style={styles.sectionTitle}>Personal Information</Text>
+                
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Full name</Text>
+                  <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
+                </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Email</Text>
-                <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
-              </View>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+                </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Password</Text>
-                <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
-                  <TextInput 
-                    style={styles.passwordInput} 
-                    placeholder="••••••••" 
-                    placeholderTextColor="#999" 
-                    secureTextEntry={!showPassword} 
-                    value={password} 
-                    onChangeText={setPassword} 
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                    <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
+                    <TextInput 
+                      style={styles.passwordInput} 
+                      placeholder="••••••••" 
+                      placeholderTextColor="#999" 
+                      secureTextEntry={!showPassword} 
+                      value={password} 
+                      onChangeText={setPassword} 
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                      <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Upload Profile Picture</Text>
+                  <TouchableOpacity 
+                    style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage, hasSubmitted && !profileImage && styles.errorBorder]} 
+                    onPress={pickProfileImage}
+                  >
+                    {profileImage ? (
+                      <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
+                    ) : (
+                      <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                    )}
                   </TouchableOpacity>
                 </View>
-              </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Upload Profile Picture</Text>
-                <TouchableOpacity 
-                  style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage, hasSubmitted && !profileImage && styles.errorBorder]} 
-                  onPress={pickProfileImage}
-                >
-                  {profileImage ? (
-                    <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
-                  ) : (
-                    <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
-                  )}
+                <Text style={styles.sectionTitle}>Professional Verification</Text>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>License / Therapy ID no.</Text>
+                  <TextInput 
+                    style={[styles.input, hasSubmitted && !license && styles.errorBorder]} 
+                    placeholder="e.g. 1234567" 
+                    placeholderTextColor="#999" 
+                    keyboardType="numeric"
+                    value={license} 
+                    onChangeText={handleLicenseInput} 
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID *</Text>
+                  <TouchableOpacity 
+                    style={[styles.uploadButton, idImage && styles.uploadButtonWithImage, hasSubmitted && !idImage && styles.errorBorder]} 
+                    onPress={pickIdImage}
+                  >
+                    {idImage ? (
+                      <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
+                    ) : (
+                      <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+                  <Text style={styles.submitText}>Submit for Approval</Text>
                 </TouchableOpacity>
-              </View>
 
-              <Text style={styles.sectionTitle}>Professional Verification</Text>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>License / Therapy ID no.</Text>
-                <TextInput 
-                  style={[styles.input, hasSubmitted && !license && styles.errorBorder]} 
-                  placeholder="e.g. 1234567" 
-                  placeholderTextColor="#999" 
-                  keyboardType="numeric"
-                  value={license} 
-                  onChangeText={handleLicenseInput} 
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID *</Text>
-                <TouchableOpacity 
-                  style={[styles.uploadButton, idImage && styles.uploadButtonWithImage, hasSubmitted && !idImage && styles.errorBorder]} 
-                  onPress={pickIdImage}
-                >
-                  {idImage ? (
-                    <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
-                  ) : (
-                    <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
-                  )}
+                <TouchableOpacity onPress={() => router.push('/login' as any)}>
+                  <Text style={styles.loginLink}>Already Have an Account? Log In</Text>
                 </TouchableOpacity>
-              </View>
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                <Text style={styles.submitText}>Submit for Approval</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => router.push('/login' as any)}>
-                <Text style={styles.loginLink}>Already Have an Account? Log In</Text>
-              </TouchableOpacity>
-
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </ImageBackground>
 
       <Modal visible={alertVisible} transparent={true} animationType="fade">
@@ -218,7 +223,7 @@ topSection: {
     alignItems: 'center', 
     paddingTop: 40, 
     paddingHorizontal: 20,
-    transform: [{ translateX: -15 }], // <-- Visually nudges everything to the left without squeezing the text!
+    transform: [{ translateX: -15 }], 
   },  birdImage: { width: 110, height: 110, marginRight: 15 }, 
   brandTextContainer: { justifyContent: 'center' },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 }, 
@@ -229,7 +234,6 @@ topSection: {
   backIcon: { color: '#FFFFFF', fontSize: 18, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
   headerText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
   
-  // This is now Bold!
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#0865AD', marginBottom: 5 }, 
   
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#666', marginBottom: 15 },

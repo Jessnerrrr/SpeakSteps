@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
 
 export default function MultiFactorScreen() {
   const [email, setEmail] = useState('');
@@ -15,7 +15,7 @@ export default function MultiFactorScreen() {
 
   if (!fontsLoaded) return null; 
 
-  const handleSendOTP = () => {
+ const handleSendOTP = () => {
     setHasSubmitted(true);
     
     if (!email) {
@@ -23,11 +23,11 @@ export default function MultiFactorScreen() {
       return; 
     }
     
-    // Once validated, push to the next screen and pass the email!
+    // Added 'as any' here to resolve the TypeScript path error
     router.push({ 
       pathname: '/otp-verification', 
       params: { email: email } 
-    });
+    } as any);
   };
 
   return (
@@ -40,42 +40,47 @@ export default function MultiFactorScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <View style={styles.container}>
-          
-          {/* Top Header Section */}
-          <View style={styles.topHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
-              <Text style={styles.backIconBlue}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.topHeaderText}>Forgot Password</Text>
-          </View>
-
-          {/* Bottom Section: White Card that stretches to the bottom */}
-          <View style={styles.bottomCard}>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.container}>
             
-            <Text style={styles.welcomeText}>Multi-factor Authentication</Text>
-            <Text style={styles.subText}>Enter your email to start recovery.</Text>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput 
-                style={[styles.input, hasSubmitted && !email && styles.errorBorder]} 
-                placeholder="parent@gmail.com"
-                placeholderTextColor="#999"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
+            {/* Top Header Section */}
+            <View style={styles.topHeader}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
+                <Text style={styles.backIconBlue}>‹</Text>
+              </TouchableOpacity>
+              <Text style={styles.topHeaderText}>Forgot Password</Text>
             </View>
 
-            {/* Now triggering the validation function before routing */}
-            <TouchableOpacity style={styles.submitBtn} onPress={handleSendOTP}>
-              <Text style={styles.submitBtnText}>Get OTP</Text>
-            </TouchableOpacity>
+            {/* Bottom Section: White Card that stretches to the bottom */}
+            <View style={styles.bottomCard}>
+              
+              <Text style={styles.welcomeText}>Multi-factor Authentication</Text>
+              <Text style={styles.subText}>Enter your email to start recovery.</Text>
 
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <TextInput 
+                  style={[styles.input, hasSubmitted && !email && styles.errorBorder]} 
+                  placeholder="parent@gmail.com"
+                  placeholderTextColor="#999"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+
+              {/* Now triggering the validation function before routing */}
+              <TouchableOpacity style={styles.submitBtn} onPress={handleSendOTP}>
+                <Text style={styles.submitBtnText}>Get OTP</Text>
+              </TouchableOpacity>
+
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </ImageBackground>
     </>
   );

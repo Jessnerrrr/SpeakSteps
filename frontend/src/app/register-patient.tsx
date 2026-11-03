@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView } from 'react-native';
 
 export default function PatientRegistrationScreen() {
   const [fullName, setFullName] = useState('');
@@ -99,166 +99,171 @@ export default function PatientRegistrationScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <View style={styles.container}>
-          
-          <View style={styles.topSection}>
-            <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
-            <View style={styles.brandTextContainer}>
-              <Text style={styles.brandTitle}>SpeakSteps</Text>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.container}>
+            
+            <View style={styles.topSection}>
+              <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
+              <View style={styles.brandTextContainer}>
+                <Text style={styles.brandTitle}>SpeakSteps</Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.bottomCard}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-              
-              <View style={styles.cardHeader}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                  <Text style={styles.backIcon}>‹</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerText}>Patient Account</Text>
-              </View>
+            <View style={styles.bottomCard}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                
+                <View style={styles.cardHeader}>
+                  <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Text style={styles.backIcon}>‹</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.headerText}>Patient Account</Text>
+                </View>
 
-              <Text style={styles.welcomeText}>Create Patient Account</Text>
-              <Text style={styles.subText}>For parents and guardians. You will add your child next.</Text>
+                <Text style={styles.welcomeText}>Create Patient Account</Text>
+                <Text style={styles.subText}>For parents and guardians. You will add your child next.</Text>
 
-              <Text style={styles.sectionTitle}>1 - Parent / Guardian</Text>
-              
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Full name</Text>
-                <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
-              </View>
+                <Text style={styles.sectionTitle}>1 - Parent / Guardian</Text>
+                
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Full name</Text>
+                  <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
+                </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Birthday</Text>
-                <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !parentDob && styles.errorBorder]} onPress={() => setShowParentDatePicker(true)}>
-                  <Text style={[styles.dropdownPlaceholder, !parentDob && { color: '#999' }]}>
-                    {parentDob ? parentDob.toLocaleDateString() : "Select Birthday"}
-                  </Text>
-                  <Image source={require('../../assets/images/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Age</Text>
-                <TextInput 
-                  style={[styles.input, styles.readOnlyInput]} 
-                  placeholder="Auto-calculated" 
-                  placeholderTextColor="#999" 
-                  value={parentDob ? calculateAge(parentDob).toString() : ''} 
-                  editable={false} 
-                />
-              </View>
-
-              {showParentDatePicker && (
-                <DateTimePicker
-                  value={parentDob || parentMaxDate} 
-                  mode="date"
-                  display="default"
-                  minimumDate={parentMinDate} 
-                  maximumDate={parentMaxDate} 
-                  onChange={(event, selectedDate) => {
-                    setShowParentDatePicker(Platform.OS === 'ios'); 
-                    if (selectedDate) setParentDob(selectedDate);
-                  }}
-                />
-              )}
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Email</Text>
-                <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Password</Text>
-                <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
-                  <TextInput 
-                    style={styles.passwordInput} 
-                    placeholder="••••••••" 
-                    placeholderTextColor="#999" 
-                    secureTextEntry={!showPassword} 
-                    value={password} 
-                    onChangeText={setPassword} 
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                    <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Birthday</Text>
+                  <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !parentDob && styles.errorBorder]} onPress={() => setShowParentDatePicker(true)}>
+                    <Text style={[styles.dropdownPlaceholder, !parentDob && { color: '#999' }]}>
+                      {parentDob ? parentDob.toLocaleDateString() : "Select Birthday"}
+                    </Text>
+                    <Image source={require('../../assets/images/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
                   </TouchableOpacity>
                 </View>
-              </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Upload Profile Picture</Text>
-                <TouchableOpacity style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage, hasSubmitted && !profileImage && styles.errorBorder]} onPress={pickImage}>
-                  {profileImage ? (
-                    <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
-                  ) : (
-                    <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
-                  )}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Age</Text>
+                  <TextInput 
+                    style={[styles.input, styles.readOnlyInput]} 
+                    placeholder="Auto-calculated" 
+                    placeholderTextColor="#999" 
+                    value={parentDob ? calculateAge(parentDob).toString() : ''} 
+                    editable={false} 
+                  />
+                </View>
+
+                {showParentDatePicker && (
+                  <DateTimePicker
+                    value={parentDob || parentMaxDate} 
+                    mode="date"
+                    display="default"
+                    minimumDate={parentMinDate} 
+                    maximumDate={parentMaxDate} 
+                    onChange={(event, selectedDate) => {
+                      setShowParentDatePicker(Platform.OS === 'ios'); 
+                      if (selectedDate) setParentDob(selectedDate);
+                    }}
+                  />
+                )}
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
+                    <TextInput 
+                      style={styles.passwordInput} 
+                      placeholder="••••••••" 
+                      placeholderTextColor="#999" 
+                      secureTextEntry={!showPassword} 
+                      value={password} 
+                      onChangeText={setPassword} 
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                      <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Upload Profile Picture</Text>
+                  <TouchableOpacity style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage, hasSubmitted && !profileImage && styles.errorBorder]} onPress={pickImage}>
+                    {profileImage ? (
+                      <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
+                    ) : (
+                      <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.sectionTitle}>2 - Child's profile</Text>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Child's name</Text>
+                  <TextInput style={[styles.input, hasSubmitted && !childName && styles.errorBorder]} placeholder="" placeholderTextColor="#999" value={childName} onChangeText={setChildName} />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Birthday</Text>
+                  <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !childDob && styles.errorBorder]} onPress={() => setShowChildDatePicker(true)}>
+                    <Text style={[styles.dropdownPlaceholder, !childDob && { color: '#999' }]}>
+                      {childDob ? childDob.toLocaleDateString() : "Select Birthday"}
+                    </Text>
+                    <Image source={require('../../assets/images/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Age</Text>
+                  <TextInput 
+                    style={[styles.input, styles.readOnlyInput]} 
+                    placeholder="Auto-calculated" 
+                    placeholderTextColor="#999" 
+                    value={childDob ? calculateAge(childDob).toString() : ''} 
+                    editable={false} 
+                  />
+                </View>
+
+                {showChildDatePicker && (
+                  <DateTimePicker
+                    value={childDob || childMaxDate} 
+                    mode="date"
+                    display="default"
+                    minimumDate={childMinDate} 
+                    maximumDate={childMaxDate} 
+                    onChange={(event, selectedDate) => {
+                      setShowChildDatePicker(Platform.OS === 'ios');
+                      if (selectedDate) setChildDob(selectedDate);
+                    }}
+                  />
+                )}
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Starting Level</Text>
+                  <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !startingLevel && styles.errorBorder]} onPress={() => setShowLevelDropdown(true)}>
+                    <Text style={styles.dropdownPlaceholder}>
+                      {startingLevel || 'Select Level'}
+                    </Text>
+                    <Text style={styles.dropdownArrow}>▼</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+                  <Text style={styles.submitText}>Create Account</Text>
                 </TouchableOpacity>
-              </View>
 
-              <Text style={styles.sectionTitle}>2 - Child's profile</Text>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Child's name</Text>
-                <TextInput style={[styles.input, hasSubmitted && !childName && styles.errorBorder]} placeholder="" placeholderTextColor="#999" value={childName} onChangeText={setChildName} />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Birthday</Text>
-                <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !childDob && styles.errorBorder]} onPress={() => setShowChildDatePicker(true)}>
-                  <Text style={[styles.dropdownPlaceholder, !childDob && { color: '#999' }]}>
-                    {childDob ? childDob.toLocaleDateString() : "Select Birthday"}
-                  </Text>
-                  <Image source={require('../../assets/images/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
+                <TouchableOpacity onPress={() => router.push('/login' as any)}>
+                  <Text style={styles.loginLink}>Already Have an Account? Log In</Text>
                 </TouchableOpacity>
-              </View>
 
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Age</Text>
-                <TextInput 
-                  style={[styles.input, styles.readOnlyInput]} 
-                  placeholder="Auto-calculated" 
-                  placeholderTextColor="#999" 
-                  value={childDob ? calculateAge(childDob).toString() : ''} 
-                  editable={false} 
-                />
-              </View>
-
-              {showChildDatePicker && (
-                <DateTimePicker
-                  value={childDob || childMaxDate} 
-                  mode="date"
-                  display="default"
-                  minimumDate={childMinDate} 
-                  maximumDate={childMaxDate} 
-                  onChange={(event, selectedDate) => {
-                    setShowChildDatePicker(Platform.OS === 'ios');
-                    if (selectedDate) setChildDob(selectedDate);
-                  }}
-                />
-              )}
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Starting Level</Text>
-                <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !startingLevel && styles.errorBorder]} onPress={() => setShowLevelDropdown(true)}>
-                  <Text style={styles.dropdownPlaceholder}>
-                    {startingLevel || 'Select Level'}
-                  </Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                <Text style={styles.submitText}>Create Account</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => router.push('/login' as any)}>
-                <Text style={styles.loginLink}>Already Have an Account? Log In</Text>
-              </TouchableOpacity>
-
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </ImageBackground>
 
       <Modal visible={alertVisible} transparent={true} animationType="fade">

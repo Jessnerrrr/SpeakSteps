@@ -2,7 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
 
 export default function PatientLoginScreen() {
   const [email, setEmail] = useState('');
@@ -35,75 +35,80 @@ export default function PatientLoginScreen() {
         imageStyle={{ opacity: 1 }}
         resizeMode="cover"
       >
-        <View style={styles.container}>
-          
-          <View style={styles.topSection}>
-            <Image 
-              source={require('../../assets/images/bird-logo.gif')} 
-              style={styles.birdImage}
-              contentFit="contain"
-            />
-            <View style={styles.brandTextContainer}>
-              <Text style={styles.brandTitle}>SpeakSteps</Text>
-            </View>
-          </View>
-
-          <View style={styles.bottomCard}>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.container}>
             
-            <View style={styles.cardHeader}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Text style={styles.backIcon}>‹</Text>
-              </TouchableOpacity>
-              <Text style={styles.headerText}>Patient login</Text>
-            </View>
-
-            <View style={[styles.iconBox, { backgroundColor: '#FDE4AB' }]} />
-            <Text style={styles.welcomeText}>Patient sign in</Text>
-            <Text style={styles.subText}>Welcome back! Sign in to start practicing.</Text>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput 
-                style={[styles.input, hasSubmitted && !email && styles.errorBorder]} 
-                placeholder="parent@gmail.com"
-                placeholderTextColor="#999"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
+            <View style={styles.topSection}>
+              <Image 
+                source={require('../../assets/images/bird-logo.gif')} 
+                style={styles.birdImage}
+                contentFit="contain"
               />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
-                <TextInput 
-                  style={styles.passwordInput} 
-                  placeholder="••••••••"
-                  placeholderTextColor="#999"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity 
-                  style={styles.showButton}
-                  onPress={() => setShowPassword(!showPassword)}
-                >
-                  <Text style={styles.showButtonText}>{showPassword ? 'Hide' : 'Show'}</Text>
-                </TouchableOpacity>
+              <View style={styles.brandTextContainer}>
+                <Text style={styles.brandTitle}>SpeakSteps</Text>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.signInBtn} onPress={handleLogin}>
-              <Text style={styles.signInText}>Sign in</Text>
-            </TouchableOpacity>
+            <View style={styles.bottomCard}>
+              
+              <View style={styles.cardHeader}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                  <Text style={styles.backIcon}>‹</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerText}>Patient login</Text>
+              </View>
 
-            <TouchableOpacity onPress={() => router.push('/forgot-password' as any)}>
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity>
+              <View style={[styles.iconBox, { backgroundColor: '#FDE4AB' }]} />
+              <Text style={styles.welcomeText}>Patient sign in</Text>
+              <Text style={styles.subText}>Welcome back! Sign in to start practicing.</Text>
 
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <TextInput 
+                  style={[styles.input, hasSubmitted && !email && styles.errorBorder]} 
+                  placeholder="parent@gmail.com"
+                  placeholderTextColor="#999"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
+                  <TextInput 
+                    style={styles.passwordInput} 
+                    placeholder="••••••••"
+                    placeholderTextColor="#999"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                  <TouchableOpacity 
+                    style={styles.showButton}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Text style={styles.showButtonText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.signInBtn} onPress={handleLogin}>
+                <Text style={styles.signInText}>Sign in</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => router.push('/forgot-password' as any)}>
+                <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+              </TouchableOpacity>
+
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </ImageBackground>
     </>
   );

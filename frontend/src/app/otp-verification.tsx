@@ -2,7 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 export default function OtpVerificationScreen() {
@@ -106,103 +106,108 @@ export default function OtpVerificationScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <View style={styles.topHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
-            <Text style={styles.backIconBlue}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.topHeaderText}>Forgot Password</Text>
-        </View>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.topHeader}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
+              <Text style={styles.backIconBlue}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.topHeaderText}>Forgot Password</Text>
+          </View>
 
-        <View style={styles.container}>
-          <View style={styles.bottomCard}>
-            
-            <View style={styles.animationContainer}>
-              <View style={styles.circleWrapper}>
-                
-                {/* SVG Circular Progress Ring */}
-                <Svg width="140" height="140" style={styles.svgRing}>
-                  {/* Faded Background Track */}
-                  <Circle
-                    cx="70"
-                    cy="70"
-                    r={radius}
-                    stroke="#E8F4FA"
-                    strokeWidth="6"
-                    fill="none"
-                  />
-                  {/* Dynamic Color Countdown Track */}
-                  <Circle
-                    cx="70"
-                    cy="70"
-                    r={radius}
-                    stroke={getRingColor()}
-                    strokeWidth="6"
-                    fill="none"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                  />
-                </Svg>
+          <View style={styles.container}>
+            <View style={styles.bottomCard}>
+              
+              <View style={styles.animationContainer}>
+                <View style={styles.circleWrapper}>
+                  
+                  {/* SVG Circular Progress Ring */}
+                  <Svg width="140" height="140" style={styles.svgRing}>
+                    {/* Faded Background Track */}
+                    <Circle
+                      cx="70"
+                      cy="70"
+                      r={radius}
+                      stroke="#E8F4FA"
+                      strokeWidth="6"
+                      fill="none"
+                    />
+                    {/* Dynamic Color Countdown Track */}
+                    <Circle
+                      cx="70"
+                      cy="70"
+                      r={radius}
+                      stroke={getRingColor()}
+                      strokeWidth="6"
+                      fill="none"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                    />
+                  </Svg>
 
-                <View style={styles.innerCircle}>
-                  <Image 
-                    source={require('../../assets/images/otp-timer.gif')} 
-                    style={styles.centerGif}
-                    contentFit="contain"
-                  />
+                  <View style={styles.innerCircle}>
+                    <Image 
+                      source={require('../../assets/images/otp-timer.gif')} 
+                      style={styles.centerGif}
+                      contentFit="contain"
+                    />
+                  </View>
                 </View>
-              </View>
-              
-              {/* Text color now matches the ring color! */}
-              <Text style={[styles.timerText, { color: getRingColor() }]}>
-                {formatTime(timeLeft)}
-              </Text>
-            </View>
-
-            <View style={styles.textContainer}>
-              <Text style={styles.subText}>
-                Enter the OTP sent to {email ? email : 'your email'}:
-              </Text>
-            </View>
-
-            <View style={styles.formContainer}>
-              
-              <View style={styles.otpContainer}>
-                {otp.map((digit, index) => (
-                  <TextInput
-                    key={index}
-                    ref={(ref) => { inputRefs.current[index] = ref; }}
-                    style={styles.otpInput}
-                    value={digit}
-                    onChangeText={(text) => handleOtpChange(text, index)}
-                    onKeyPress={(e) => handleKeyPress(e, index)}
-                    keyboardType="numeric"
-                    maxLength={1}
-                  />
-                ))}
+                
+                {/* Text color now matches the ring color! */}
+                <Text style={[styles.timerText, { color: getRingColor() }]}>
+                  {formatTime(timeLeft)}
+                </Text>
               </View>
 
-              <Text style={styles.timeBasedLabel}>TIME-BASED ONE-TIME-PASSWORD</Text>
-
-              <View style={styles.buttonStack}>
-                <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                  <Text style={styles.submitBtnText}>Submit</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[styles.resendBtn, !canResend && { backgroundColor: '#F0F0F0' }]} 
-                  onPress={handleResend} 
-                  disabled={!canResend}
-                >
-                  <Text style={[styles.resendBtnText, !canResend && { color: '#999' }]}>
-                    Resend Code
-                  </Text>
-                </TouchableOpacity>
+              <View style={styles.textContainer}>
+                <Text style={styles.subText}>
+                  Enter the OTP sent to {email ? email : 'your email'}:
+                </Text>
               </View>
 
+              <View style={styles.formContainer}>
+                
+                <View style={styles.otpContainer}>
+                  {otp.map((digit, index) => (
+                    <TextInput
+                      key={index}
+                      ref={(ref) => { inputRefs.current[index] = ref; }}
+                      style={styles.otpInput}
+                      value={digit}
+                      onChangeText={(text) => handleOtpChange(text, index)}
+                      onKeyPress={(e) => handleKeyPress(e, index)}
+                      keyboardType="numeric"
+                      maxLength={1}
+                    />
+                  ))}
+                </View>
+
+                <Text style={styles.timeBasedLabel}>TIME-BASED ONE-TIME-PASSWORD</Text>
+
+                <View style={styles.buttonStack}>
+                  <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+                    <Text style={styles.submitBtnText}>Submit</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.resendBtn, !canResend && { backgroundColor: '#F0F0F0' }]} 
+                    onPress={handleResend} 
+                    disabled={!canResend}
+                  >
+                    <Text style={[styles.resendBtnText, !canResend && { color: '#999' }]}>
+                      Resend Code
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+              </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
 
         <Modal visible={alertVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
