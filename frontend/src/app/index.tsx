@@ -2,11 +2,15 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, Modal, StyleSheet, Text, View, TouchableOpacity, Pressable, Platform } from 'react-native';
 
 export default function App() {
   // State to control the About modal visibility
   const [aboutVisible, setAboutVisible] = useState(false);
+
+  // States to control hover effects (works on Web)
+  const [hoverGetStarted, setHoverGetStarted] = useState(false);
+  const [hoverAbout, setHoverAbout] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'),
@@ -36,21 +40,36 @@ export default function App() {
 
           <View style={styles.buttonContainer}>
             
-            <TouchableOpacity 
-              style={[styles.button, styles.primaryButton]}
+            {/* Get Started Button with Hover & Press Effects */}
+            <Pressable 
+              onHoverIn={() => setHoverGetStarted(true)}
+              onHoverOut={() => setHoverGetStarted(false)}
               onPress={() => router.push('/login' as any)} 
+              style={({ pressed }) => [
+                styles.button, 
+                styles.primaryButton,
+                hoverGetStarted && styles.hoverEffect,
+                pressed && styles.pressedEffect
+              ]}
             >
               <Text style={styles.primaryButtonText}>Get Started</Text>
               <Text style={styles.playIcon}>▶</Text> 
-            </TouchableOpacity>
+            </Pressable>
 
-            {/* Triggers the smooth fade-in Modal */}
-            <TouchableOpacity 
-              style={[styles.button, styles.secondaryButton]}
+            {/* About Button with Hover & Press Effects */}
+            <Pressable 
+              onHoverIn={() => setHoverAbout(true)}
+              onHoverOut={() => setHoverAbout(false)}
               onPress={() => setAboutVisible(true)}
+              style={({ pressed }) => [
+                styles.button, 
+                styles.secondaryButton,
+                hoverAbout && styles.hoverEffect,
+                pressed && styles.pressedEffect
+              ]}
             >
               <Text style={styles.secondaryButtonText}>About SpeakSteps</Text>
-            </TouchableOpacity>
+            </Pressable>
             
           </View>
         </View>
@@ -106,6 +125,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 15, 
   },
+  
+  // Base button styles
   button: {
     width: '80%',
     paddingVertical: 15,
@@ -119,20 +140,38 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 3,
   },
+  
+  // Interactive Effects
+  hoverEffect: {
+    ...Platform.select({
+      web: {
+        transform: [{ scale: 1.04 }],
+        shadowOpacity: 0.4,
+        shadowRadius: 5,
+      }
+    })
+  },
+  pressedEffect: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.9,
+  },
+
   primaryButton: {
     backgroundColor: '#FFB923', 
   },
- primaryButtonText: {
+  primaryButtonText: {
     fontFamily: 'SourGummy-Bold',
     color: '#FFFFFF',
-    fontSize: 20,
-    marginRight: 10,
+    fontSize: 24, // Expanded font size
+    // Removed marginRight to perfectly center text + icon as a single group
   },
   playIcon: {
     color: '#0865AD',
-    fontSize: 30, 
-    marginLeft: 5,
+    fontSize: 34, // Expanded icon size
+    marginLeft: 10, // Added clean spacing between text and icon
+    marginTop: -2, // Slight visual adjustment to align the triangle center with the text center
   },
+  
   secondaryButton: {
     backgroundColor: '#0865AD', 
   },

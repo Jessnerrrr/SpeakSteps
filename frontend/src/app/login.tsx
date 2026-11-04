@@ -59,7 +59,12 @@ export default function LoginScreen() {
                 style={styles.roleCard}
                 onPress={() => router.push('/therapist-login' as any)} 
               >
-                <View style={[styles.iconBox, { backgroundColor: '#CBE6F6' }]} />
+                {/* Replaced empty blue square with GIF */}
+                <Image 
+                  source={require('../../assets/images/therapist_blue.gif')} 
+                  style={styles.gifIcon}
+                  contentFit="cover"
+                />
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Log in as Therapist</Text>
                   <Text style={styles.roleSubtitle}>Access your patients</Text>
@@ -74,7 +79,12 @@ export default function LoginScreen() {
                 style={styles.roleCard}
                 onPress={() => router.push('/patient-login' as any)} 
               >
-                <View style={[styles.iconBox, { backgroundColor: '#FDE4AB' }]} />
+                {/* Replaced empty yellow square with GIF */}
+                <Image 
+                  source={require('../../assets/images/kid_yellow.gif')} 
+                  style={styles.gifIcon}
+                  contentFit="cover"
+                />
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Log in as Patient</Text>
                   <Text style={styles.roleSubtitle}>Start practicing</Text>
@@ -126,7 +136,10 @@ const styles = StyleSheet.create({
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 20 },
   
   roleCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', width: '100%', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#E5E5E5', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  iconBox: { width: 40, height: 40, borderRadius: 8, marginRight: 15 },
+  
+  // New style for the square GIF icons
+  gifIcon: { width: 40, height: 40, borderRadius: 8, marginRight: 15 },
+  
   roleTextContainer: { flex: 1 },
   roleTitle: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#000' },
   roleSubtitle: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#888', marginTop: 2 },

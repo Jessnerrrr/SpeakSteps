@@ -24,6 +24,7 @@ export default function PatientRegistrationScreen() {
   const [showChildDatePicker, setShowChildDatePicker] = useState(false);
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -64,6 +65,14 @@ export default function PatientRegistrationScreen() {
     return calculatedAge;
   };
 
+  // --- Real-time Password Validation Logic ---
+  const isLengthValid = password.length >= 8 && password.length <= 20;
+  const hasLowercase = /[a-z]/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(password);
+  const isPasswordValid = isLengthValid && hasLowercase && hasUppercase && hasNumber && hasSpecial;
+
   const handleSubmit = () => {
     setHasSubmitted(true);
     if (!fullName || !parentDob || !email || !password || !childName || !childDob || !startingLevel || !profileImage) {
@@ -72,6 +81,14 @@ export default function PatientRegistrationScreen() {
       setAlertType('error');
       setAlertVisible(true);
       return; 
+    }
+
+    if (!isPasswordValid) {
+      setAlertTitle("Weak Password");
+      setAlertMessage("Please ensure your password meets all the security requirements.");
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
     }
     
     setAlertTitle("Success!");
@@ -88,6 +105,14 @@ export default function PatientRegistrationScreen() {
   };
 
   const levelOptions = ['Beginner (Sounds & Words)', 'Intermediate (Short Phrases)', 'Advanced (Sentences)'];
+
+  // Reusable component for the checklist items
+  const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
+    <View style={styles.reqItem}>
+      <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
+      <Text style={styles.reqText}>{text}</Text>
+    </View>
+  );
 
   return (
     <>
@@ -121,6 +146,13 @@ export default function PatientRegistrationScreen() {
                   </TouchableOpacity>
                   <Text style={styles.headerText}>Patient Account</Text>
                 </View>
+
+                {/* Patient Kid GIF Icon (Matches Login UI) */}
+                <Image 
+                  source={require('../../assets/images/kid_yellow.gif')} 
+                  style={styles.gifIcon}
+                  contentFit="cover"
+                />
 
                 <Text style={styles.welcomeText}>Create Patient Account</Text>
                 <Text style={styles.subText}>For parents and guardians. You will add your child next.</Text>
@@ -181,13 +213,33 @@ export default function PatientRegistrationScreen() {
                       placeholderTextColor="#999" 
                       secureTextEntry={!showPassword} 
                       value={password} 
-                      onChangeText={setPassword} 
+                      onChangeText={setPassword}
+                      onFocus={() => setIsPasswordFocused(true)} 
+                      onBlur={() => setIsPasswordFocused(false)} 
                     />
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
                       <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Dynamic Password Requirements Box (Only visible when focused) */}
+                {isPasswordFocused && (
+                  <View style={styles.requirementsBox}>
+                    <View style={styles.requirementsHeader}>
+                      <Text style={styles.requirementsHeaderText}>
+                        The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
+                      </Text>
+                    </View>
+                    <View style={styles.requirementsList}>
+                      <RequirementItem text="Number of characters" isValid={isLengthValid} />
+                      <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
+                      <RequirementItem text="Capital letter" isValid={hasUppercase} />
+                      <RequirementItem text="Number" isValid={hasNumber} />
+                      <RequirementItem text="Special character" isValid={hasSpecial} />
+                    </View>
+                  </View>
+                )}
 
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Upload Profile Picture</Text>
@@ -305,7 +357,7 @@ topSection: {
     alignItems: 'center', 
     paddingTop: 40, 
     paddingHorizontal: 20,
-    transform: [{ translateX: -15 }], // <-- Visually nudges everything to the left without squeezing the text!
+    transform: [{ translateX: -15 }], 
   },  birdImage: { width: 110, height: 110, marginRight: 15 }, 
   brandTextContainer: { justifyContent: 'center' },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 }, 
@@ -316,7 +368,9 @@ topSection: {
   backIcon: { color: '#FFFFFF', fontSize: 18, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
   headerText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
   
-  // This is now Bold!
+  // GIF Icon added for consistency with the login screens
+  gifIcon: { width: 40, height: 40, borderRadius: 8, marginBottom: 10 },
+
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#0865AD', marginBottom: 5 }, 
   
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#666', marginBottom: 15 },
@@ -329,6 +383,17 @@ topSection: {
   passwordInput: { flex: 1, fontFamily: 'SourGummy', color: '#333', fontSize: 12, height: '100%' },
   eyeBtn: { paddingLeft: 10 },
   eyeText: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD' },
+
+  // --- Dynamic Requirements Styles ---
+  requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
+  requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
+  requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
+  requirementsList: { padding: 12, gap: 10 },
+  reqItem: { flexDirection: 'row', alignItems: 'center' },
+  reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
+  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
+  reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
+
   uploadButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 40, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   uploadButtonWithImage: { height: 150 }, 
   uploadIconImage: { width: 24, height: 24 },

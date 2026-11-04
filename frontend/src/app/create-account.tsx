@@ -60,7 +60,12 @@ export default function CreateAccountScreen() {
                 style={styles.roleCard}
                 onPress={() => router.push('/register-therapist' as any)} 
               >
-                <View style={[styles.iconBox, { backgroundColor: '#CBE6F6' }]} />
+                {/* Replaced empty blue square with GIF */}
+                <Image 
+                  source={require('../../assets/images/therapist_blue.gif')} 
+                  style={styles.gifIcon}
+                  contentFit="cover"
+                />
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Register as Therapist</Text>
                   <Text style={styles.roleSubtitle}>Licensed and ID check required</Text>
@@ -75,7 +80,12 @@ export default function CreateAccountScreen() {
                 style={styles.roleCard}
                 onPress={() => router.push('/register-patient' as any)} 
               >
-                <View style={[styles.iconBox, { backgroundColor: '#FDE4AB' }]} />
+                {/* Replaced empty yellow square with GIF */}
+                <Image 
+                  source={require('../../assets/images/kid_yellow.gif')} 
+                  style={styles.gifIcon}
+                  contentFit="cover"
+                />
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Create Patient Account</Text>
                   <Text style={styles.roleSubtitle}>For parents/guardians and child</Text>
@@ -104,7 +114,15 @@ export default function CreateAccountScreen() {
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: '#3487C6' },
   container: { flex: 1, justifyContent: 'space-between' },
-  topSection: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: 40, paddingHorizontal: 20 },
+  topSection: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingTop: 40, 
+    paddingHorizontal: 20,
+    transform: [{ translateX: -15 }], // Added for consistency with other screens
+  }, 
   
   birdImage: { width: 110, height: 110, marginRight: 15 }, 
   brandTextContainer: { flex: 1, justifyContent: 'center' },
@@ -119,7 +137,10 @@ const styles = StyleSheet.create({
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 20 },
   
   roleCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', width: '100%', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#E5E5E5', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  iconBox: { width: 40, height: 40, borderRadius: 8, marginRight: 15 },
+  
+  // New style for the square GIF icons
+  gifIcon: { width: 40, height: 40, borderRadius: 8, marginRight: 15 },
+  
   roleTextContainer: { flex: 1 },
   roleTitle: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#000' },
   roleSubtitle: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#888', marginTop: 2 },

@@ -2,7 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 export default function NewPasswordScreen() {
   const [oldPassword, setOldPassword] = useState('');
@@ -12,6 +12,9 @@ export default function NewPasswordScreen() {
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // NEW STATE: Tracks if the new password input is clicked/focused
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   // Custom Alert States
   const [alertVisible, setAlertVisible] = useState(false);
@@ -27,18 +30,35 @@ export default function NewPasswordScreen() {
 
   if (!fontsLoaded) return null; 
 
+  // --- Real-time Password Validation Logic ---
+  const isLengthValid = newPassword.length >= 8 && newPassword.length <= 20;
+  const hasLowercase = /[a-z]/.test(newPassword);
+  const hasUppercase = /[A-Z]/.test(newPassword);
+  const hasNumber = /\d/.test(newPassword);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(newPassword);
+
+  const isPasswordValid = isLengthValid && hasLowercase && hasUppercase && hasNumber && hasSpecial;
+
   const handleSave = () => {
-    if (newPassword !== confirmPassword) {
-      setAlertTitle("Oops!");
-      setAlertMessage("Your new password and confirm password don't match. Please try again.");
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setAlertTitle("Missing Fields");
+      setAlertMessage("Please fill out all password fields before saving.");
       setAlertType('error');
       setAlertVisible(true);
       return;
     }
 
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      setAlertTitle("Missing Fields");
-      setAlertMessage("Please fill out all password fields before saving.");
+    if (!isPasswordValid) {
+      setAlertTitle("Weak Password");
+      setAlertMessage("Please ensure your new password meets all the security requirements.");
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setAlertTitle("Oops!");
+      setAlertMessage("Your new password and confirm password don't match. Please try again.");
       setAlertType('error');
       setAlertVisible(true);
       return;
@@ -56,6 +76,14 @@ export default function NewPasswordScreen() {
       router.push('/login' as any);
     }
   };
+
+  // Reusable component for the checklist items
+  const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
+    <View style={styles.reqItem}>
+      <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
+      <Text style={styles.reqText}>{text}</Text>
+    </View>
+  );
 
   return (
     <>
@@ -87,68 +115,91 @@ export default function NewPasswordScreen() {
                 contentFit="contain"
               />
               
-              <View style={styles.textContainer}>
-                <Text style={styles.welcomeText}>Create new password</Text>
-                <Text style={styles.subText}>Provide your new password</Text>
-              </View>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                
+                <View style={styles.textContainer}>
+                  <Text style={styles.welcomeText}>Create new password</Text>
+                  <Text style={styles.subText}>Provide your new password</Text>
+                </View>
 
-              <View style={styles.formContainer}>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Old Password</Text>
-                  <View style={styles.passwordWrapper}>
-                    <TextInput 
-                      style={[styles.input, { paddingRight: 50 }]} 
-                      placeholder="input password"
-                      placeholderTextColor="#999"
-                      secureTextEntry={!showOldPassword}
-                      value={oldPassword}
-                      onChangeText={setOldPassword}
-                    />
-                    <TouchableOpacity style={styles.eyeButton} onPress={() => setShowOldPassword(!showOldPassword)}>
-                      <Text style={styles.eyeButtonText}>{showOldPassword ? 'Hide' : 'Show'}</Text>
-                    </TouchableOpacity>
+                <View style={styles.formContainer}>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Old Password</Text>
+                    <View style={styles.passwordWrapper}>
+                      <TextInput 
+                        style={[styles.input, { paddingRight: 50 }]} 
+                        placeholder="input password"
+                        placeholderTextColor="#999"
+                        secureTextEntry={!showOldPassword}
+                        value={oldPassword}
+                        onChangeText={setOldPassword}
+                      />
+                      <TouchableOpacity style={styles.eyeButton} onPress={() => setShowOldPassword(!showOldPassword)}>
+                        <Text style={styles.eyeButtonText}>{showOldPassword ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>New Password</Text>
+                    <View style={styles.passwordWrapper}>
+                      <TextInput 
+                        style={[styles.input, { paddingRight: 50 }]} 
+                        placeholder="input password"
+                        placeholderTextColor="#999"
+                        secureTextEntry={!showNewPassword}
+                        value={newPassword}
+                        onChangeText={setNewPassword}
+                        onFocus={() => setIsPasswordFocused(true)}   // <-- Shows checklist when clicked
+                        onBlur={() => setIsPasswordFocused(false)}   // <-- Hides checklist when clicking away
+                      />
+                      <TouchableOpacity style={styles.eyeButton} onPress={() => setShowNewPassword(!showNewPassword)}>
+                        <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Dynamic Password Requirements Box (Only visible when focused) */}
+                  {isPasswordFocused && (
+                    <View style={styles.requirementsBox}>
+                      <View style={styles.requirementsHeader}>
+                        <Text style={styles.requirementsHeaderText}>
+                          The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
+                        </Text>
+                      </View>
+                      <View style={styles.requirementsList}>
+                        <RequirementItem text="Number of characters" isValid={isLengthValid} />
+                        <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
+                        <RequirementItem text="Capital letter" isValid={hasUppercase} />
+                        <RequirementItem text="Number" isValid={hasNumber} />
+                        <RequirementItem text="Special character" isValid={hasSpecial} />
+                      </View>
+                    </View>
+                  )}
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Confirm New Password</Text>
+                    <View style={styles.passwordWrapper}>
+                      <TextInput 
+                        style={[styles.input, { paddingRight: 50 }]} 
+                        placeholder="input password"
+                        placeholderTextColor="#999"
+                        secureTextEntry={!showConfirmPassword}
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                      />
+                      <TouchableOpacity style={styles.eyeButton} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                        <Text style={styles.eyeButtonText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>New Password</Text>
-                  <View style={styles.passwordWrapper}>
-                    <TextInput 
-                      style={[styles.input, { paddingRight: 50 }]} 
-                      placeholder="input password"
-                      placeholderTextColor="#999"
-                      secureTextEntry={!showNewPassword}
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                    />
-                    <TouchableOpacity style={styles.eyeButton} onPress={() => setShowNewPassword(!showNewPassword)}>
-                      <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                  <Text style={styles.saveBtnText}>Save</Text>
+                </TouchableOpacity>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Confirm New Password</Text>
-                  <View style={styles.passwordWrapper}>
-                    <TextInput 
-                      style={[styles.input, { paddingRight: 50 }]} 
-                      placeholder="input password"
-                      placeholderTextColor="#999"
-                      secureTextEntry={!showConfirmPassword}
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                    />
-                    <TouchableOpacity style={styles.eyeButton} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                      <Text style={styles.eyeButtonText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>Save</Text>
-              </TouchableOpacity>
-
+              </ScrollView>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -182,7 +233,8 @@ const styles = StyleSheet.create({
   backIconBlue: { color: '#0865AD', fontSize: 24, lineHeight: 28, fontFamily: 'SourGummy-Bold' },
   topHeaderText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 24 },
   
-  bottomCard: { backgroundColor: '#FFFFFF', borderRadius: 40, marginHorizontal: 15, paddingHorizontal: 25, paddingTop: 40, paddingBottom: 40, position: 'relative' },
+  bottomCard: { backgroundColor: '#FFFFFF', borderRadius: 40, marginHorizontal: 15, paddingHorizontal: 25, paddingTop: 40, paddingBottom: 20, position: 'relative', flex: 0.9 },
+  scrollContent: { paddingBottom: 30 },
   
   overlappingBird: { position: 'absolute', top: 2, left: 8, width: 90, height: 90, zIndex: 10 },
   textContainer: { marginLeft: 75, marginBottom: 25 },
@@ -198,6 +250,16 @@ const styles = StyleSheet.create({
   
   eyeButton: { position: 'absolute', right: 15, height: '100%', justifyContent: 'center' },
   eyeButtonText: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD' },
+  
+  // --- Dynamic Requirements Styles ---
+  requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
+  requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
+  requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
+  requirementsList: { padding: 12, gap: 10 },
+  reqItem: { flexDirection: 'row', alignItems: 'center' },
+  reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
+  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
+  reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
   
   saveBtn: { backgroundColor: '#F5B041', alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 60, borderRadius: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   saveBtnText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
