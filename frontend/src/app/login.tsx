@@ -51,7 +51,7 @@ export default function LoginScreen() {
                 <Text style={styles.headerText}>Log In</Text>
               </View>
 
-              <Text style={styles.welcomeText}>Welcome back!</Text>
+              <Text style={styles.welcomeText}>Welcome Back!</Text>
               <Text style={styles.subText}>Sign in to your account.</Text>
 
               {/* Login as Therapist Button */}
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   backButton: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#0865AD', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   backIcon: { color: '#FFFFFF', fontSize: 18, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
   headerText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
-  welcomeText: { fontFamily: 'SourGummy-Medium', fontSize: 26, color: '#0865AD', marginBottom: 5 },
+  welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 26, color: '#0865AD', marginBottom: 5 },
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 20 },
   
   roleCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', width: '100%', padding: 15, borderRadius: 15, marginBottom: 15, borderWidth: 1, borderColor: '#E5E5E5', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
