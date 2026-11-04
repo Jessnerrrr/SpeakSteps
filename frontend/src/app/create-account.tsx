@@ -5,7 +5,7 @@ import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react
 
 export default function CreateAccountScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy.ttf'), 
+    'SourGummy': require('../../assets/SourGummy.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -15,7 +15,7 @@ export default function CreateAccountScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../assets/split-bg.png')}
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
@@ -25,7 +25,7 @@ export default function CreateAccountScreen() {
           {/* Top Section */}
           <View style={styles.topSection}>
             <Image 
-              source={require('../../assets/images/bird-logo.gif')} 
+              source={require('../../assets/bird-logo.gif')}
               style={styles.birdImage}
               contentFit="contain"
             />

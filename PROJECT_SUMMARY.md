@@ -35,13 +35,11 @@ The project uses **Expo Router v3+** with file-based routing:
 ```text
 SpeakSteps/frontend/
 ├── assets/
-│   ├── fonts/
-│   │   └── SourGummy.ttf             # Custom playful brand typography
-│   └── images/
-│       ├── bird-logo.gif             # Chirpy mascot animation
-│       ├── landing-bg-pattern.png    # Subtle background pattern
-│       ├── landing-logo.gif          # Main animated brand logo
-│       └── mic.png                   # Custom microphone asset
+│   ├── SourGummy.ttf                 # Custom playful brand typography
+│   ├── bird-logo.gif                 # Chirpy mascot animation
+│   ├── landing-bg-pattern.png        # Subtle background pattern
+│   ├── landing-logo.gif              # Main animated brand logo
+│   └── mic.png                       # Custom microphone asset
 ├── src/
 │   ├── app/                          # Expo Router file-based pages
 │   │   ├── _layout.tsx               # Root layout & Stack configuration

@@ -34,7 +34,7 @@ export default function PatientRegistrationScreen() {
   const [alertType, setAlertType] = useState<'error' | 'success'>('error');
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy.ttf'), 
+    'SourGummy': require('../../assets/SourGummy.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -108,7 +108,7 @@ export default function PatientRegistrationScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../assets/split-bg.png')}
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
@@ -116,7 +116,7 @@ export default function PatientRegistrationScreen() {
         <View style={styles.container}>
           
           <View style={styles.topSection}>
-            <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
+            <Image source={require('../../assets/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
             <View style={styles.brandTextContainer}>
               <Text style={styles.brandTitle}>SpeakSteps</Text>
               <Text style={styles.brandSubtitle}>Speech delay practice for children</Text>
@@ -150,7 +150,7 @@ export default function PatientRegistrationScreen() {
                   <Text style={[styles.dropdownPlaceholder, !parentDob && { color: '#999' }]}>
                     {parentDob ? parentDob.toLocaleDateString() : "Select Birthday"}
                   </Text>
-                  <Image source={require('../../assets/images/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
+                    <Image source={require('../../assets/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
                 </TouchableOpacity>
               </View>
 
@@ -209,7 +209,7 @@ export default function PatientRegistrationScreen() {
                   {profileImage ? (
                     <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
                   ) : (
-                    <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                    <Image source={require('../../assets/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                   )}
                 </TouchableOpacity>
               </View>
@@ -228,7 +228,7 @@ export default function PatientRegistrationScreen() {
                   <Text style={[styles.dropdownPlaceholder, !childDob && { color: '#999' }]}>
                     {childDob ? childDob.toLocaleDateString() : "Select Birthday"}
                   </Text>
-                  <Image source={require('../../assets/images/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
+                    <Image source={require('../../assets/calendar-icon.png')} style={styles.calendarIcon} contentFit="contain" />
                 </TouchableOpacity>
               </View>
 
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   eyeBtn: { paddingLeft: 10 },
   eyeText: { fontFamily: 'SourGummy', fontSize: 10, color: '#0865AD', fontWeight: 'bold' },
   
-  uploadButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 40, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  uploadButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 40, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, 
   uploadButtonWithImage: { height: 150 }, 
   uploadIconImage: { width: 24, height: 24 },
   uploadedImage: { width: '100%', height: '100%' },

@@ -21,7 +21,7 @@ export default function TherapistRegistrationScreen() {
   const [alertType, setAlertType] = useState<'error' | 'success'>('error');
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy.ttf'), 
+    'SourGummy': require('../../assets/SourGummy.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -78,7 +78,7 @@ export default function TherapistRegistrationScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../assets/split-bg.png')}
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
@@ -86,7 +86,7 @@ export default function TherapistRegistrationScreen() {
         <View style={styles.container}>
           
           <View style={styles.topSection}>
-            <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
+            <Image source={require('../../assets/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
             <View style={styles.brandTextContainer}>
               <Text style={styles.brandTitle}>SpeakSteps</Text>
               <Text style={styles.brandSubtitle}>Speech delay practice for children</Text>
@@ -144,7 +144,7 @@ export default function TherapistRegistrationScreen() {
                   {profileImage ? (
                     <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
                   ) : (
-                    <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                    <Image source={require('../../assets/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                   )}
                 </TouchableOpacity>
               </View>
@@ -172,7 +172,7 @@ export default function TherapistRegistrationScreen() {
                   {idImage ? (
                     <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
                   ) : (
-                    <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                    <Image source={require('../../assets/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                   )}
                 </TouchableOpacity>
               </View>

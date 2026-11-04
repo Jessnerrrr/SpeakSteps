@@ -7,7 +7,7 @@ import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } 
 export default function TherapistLoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy.ttf'), 
+    'SourGummy': require('../../assets/SourGummy.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -17,7 +17,7 @@ export default function TherapistLoginScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../assets/split-bg.png')}
         style={styles.background}
         imageStyle={{ opacity: 1 }} // Changed to 1 so the full color shows
         resizeMode="cover"
@@ -27,7 +27,7 @@ export default function TherapistLoginScreen() {
           {/* Top Section */}
           <View style={styles.topSection}>
             <Image 
-              source={require('../../assets/images/bird-logo.gif')} 
+              source={require('../../assets/bird-logo.gif')}
               style={styles.birdImage}
               contentFit="contain"
             />
@@ -85,7 +85,7 @@ export default function TherapistLoginScreen() {
             </View>
 
             {/* Sign In Button */}
-            <TouchableOpacity style={styles.signInBtn}>
+            <TouchableOpacity style={styles.signInBtn} onPress={() => router.replace('/sentences' as any)}>
               <Text style={styles.signInText}>Sign in</Text>
             </TouchableOpacity>
 

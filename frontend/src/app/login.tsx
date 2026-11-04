@@ -6,7 +6,7 @@ import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react
 export default function LoginScreen() {
   // Load the custom font from your assets folder
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy.ttf'), 
+    'SourGummy': require('../../assets/SourGummy.ttf'),
   });
 
   // Wait for the font to load before showing the screen
@@ -20,7 +20,7 @@ export default function LoginScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../assets/split-bg.png')}
         style={styles.background}
         imageStyle={{ opacity: 1 }} // Changed to 1 so the full color shows
         resizeMode="cover"
@@ -30,7 +30,7 @@ export default function LoginScreen() {
           {/* Top Section: Logo & Brand Side-by-Side */}
           <View style={styles.topSection}>
             <Image 
-              source={require('../../assets/images/bird-logo.gif')} 
+              source={require('../../assets/bird-logo.gif')}
               style={styles.birdImage}
               contentFit="contain"
             />

@@ -3,7 +3,6 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import {
   FlatList,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -80,13 +79,19 @@ function StarRating({ stars }: { stars: 0 | 1 | 2 | 3 }) {
 // ─── Sentence Card ────────────────────────────────────────────────────────────
 function SentenceCard({
   sentence,
+  index,
   onSelect,
 }: {
   sentence: Sentence;
+  index: number;
   onSelect: (s: Sentence) => void;
 }) {
   return (
     <TouchableOpacity style={styles.card} onPress={() => onSelect(sentence)}>
+      <View style={styles.cardTopline}>
+        <Text style={styles.cardNumber}>{String(index + 1).padStart(2, '0')}</Text>
+        <Text style={styles.cardAction}>PRACTICE</Text>
+      </View>
       <View style={styles.cardInner}>
         <Text style={styles.cardSound}>{sentence.sound}</Text>
         <Text style={styles.cardSyllable}>{sentence.syllable}</Text>
@@ -102,7 +107,7 @@ export default function SentencesScreen() {
   const [position, setPosition] = useState<Position>('Initial');
 
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../assets/fonts/SourGummy.ttf'),
+    SourGummy: require('../../assets/SourGummy.ttf'),
   });
   if (!fontsLoaded) return null;
 
@@ -125,16 +130,17 @@ export default function SentencesScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backIcon}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Sentences</Text>
+          <View style={styles.headerContent}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Text style={styles.backIcon}>‹</Text>
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.eyebrow}>SPEECH PRACTICE</Text>
+              <Text style={styles.headerTitle}>Sentence library</Text>
+            </View>
+          </View>
         </View>
-
-        <LanguageToggle value={language} onChange={setLanguage} />
-        <PositionTabs value={position} onChange={setPosition} />
 
         <FlatList
           data={items}
@@ -142,8 +148,23 @@ export default function SentencesScreen() {
           numColumns={2}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.gridRow}
-          renderItem={({ item }) => (
-            <SentenceCard sentence={item} onSelect={handleSelect} />
+          ListHeaderComponent={
+            <View style={styles.contentHeader}>
+              <Text style={styles.pageTitle}>Choose a sound to practice</Text>
+              <Text style={styles.pageSubtitle}>
+                Build confidence one clear sentence at a time.
+              </Text>
+              <Text style={styles.controlLabel}>Language</Text>
+              <LanguageToggle value={language} onChange={setLanguage} />
+              <View style={styles.positionHeading}>
+                <Text style={styles.controlLabel}>Sound position</Text>
+                <Text style={styles.promptCount}>{items.length} prompts</Text>
+              </View>
+              <PositionTabs value={position} onChange={setPosition} />
+            </View>
+          }
+          renderItem={({ item, index }) => (
+            <SentenceCard sentence={item} index={index} onSelect={handleSelect} />
           )}
         />
       </View>
@@ -154,12 +175,17 @@ export default function SentencesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F7FA' },
   header: {
+    backgroundColor: '#0865AD',
+    paddingTop: 56,
+    paddingBottom: 22,
+  },
+  headerContent: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 55,
     paddingHorizontal: 20,
-    paddingBottom: 12,
-    backgroundColor: '#0865AD',
   },
   backBtn: {
     width: 28,
@@ -171,50 +197,92 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold' },
-  headerTitle: { fontFamily: 'SourGummy', color: '#fff', fontSize: 20 },
+  eyebrow: {
+    color: '#FFB923',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    marginBottom: 3,
+  },
+  headerTitle: { fontFamily: 'SourGummy', color: '#fff', fontSize: 25 },
+
+  contentHeader: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    paddingTop: 28,
+    paddingHorizontal: 20,
+  },
+  pageTitle: {
+    color: '#0865AD',
+    fontFamily: 'SourGummy',
+    fontSize: 27,
+    lineHeight: 32,
+    marginBottom: 8,
+  },
+  pageSubtitle: { color: '#666', fontSize: 14, marginBottom: 22 },
+  controlLabel: {
+    color: '#0865AD',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  positionHeading: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  promptCount: { color: '#999', fontSize: 12, marginBottom: 8 },
 
   toggleRow: {
     flexDirection: 'row',
     backgroundColor: '#E8F4FB',
-    margin: 16,
-    borderRadius: 25,
-    padding: 4,
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 22,
   },
-  toggleBtn: { flex: 1, paddingVertical: 8, borderRadius: 20, alignItems: 'center' },
+  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
   toggleBtnActive: { backgroundColor: '#0865AD' },
   toggleText: { fontFamily: 'SourGummy', color: '#0865AD', fontSize: 14 },
   toggleTextActive: { color: '#fff' },
 
-  tabRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 12 },
+  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
   tab: {
-    paddingVertical: 6,
-    paddingHorizontal: 18,
-    borderRadius: 20,
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
     backgroundColor: '#E8F4FB',
   },
   tabActive: { backgroundColor: '#FFB923' },
   tabText: { fontFamily: 'SourGummy', color: '#0865AD', fontSize: 13 },
   tabTextActive: { color: '#fff' },
 
-  grid: { paddingHorizontal: 16, paddingBottom: 20 },
+  grid: { paddingHorizontal: 16, paddingBottom: 30 },
   gridRow: { justifyContent: 'space-between', marginBottom: 14 },
 
   card: {
     width: '48%',
     backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 15,
     borderWidth: 1,
     borderColor: '#CBE6F6',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowOpacity: 0.07,
+    shadowRadius: 5,
   },
-  cardInner: { marginBottom: 8 },
-  cardSound: { fontFamily: 'SourGummy', fontSize: 22, color: '#0865AD' },
-  cardSyllable: { fontFamily: 'SourGummy', fontSize: 14, color: '#555', marginTop: 2 },
+  cardTopline: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
+  cardNumber: { color: '#9AA4AA', fontSize: 11, fontWeight: '700' },
+  cardAction: { color: '#0865AD', fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
+  cardInner: { marginBottom: 18 },
+  cardSound: { fontFamily: 'SourGummy', fontSize: 28, color: '#0865AD' },
+  cardSyllable: { fontFamily: 'SourGummy', fontSize: 16, color: '#555', marginTop: 3 },
 
   starRow: { flexDirection: 'row', gap: 2 },
   starFilled: { color: '#FFB923', fontSize: 16 },

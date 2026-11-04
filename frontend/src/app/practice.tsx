@@ -27,7 +27,7 @@ export default function PracticeScreen() {
   const [recording, setRecording] = useState(false);
 
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../assets/fonts/SourGummy.ttf'),
+    SourGummy: require('../../assets/SourGummy.ttf'),
   });
   if (!fontsLoaded) return null;
 
@@ -52,7 +52,7 @@ export default function PracticeScreen() {
           {/* Sound Banner (Chirpy) */}
           <View style={styles.banner}>
             <Image
-              source={require('../../assets/images/bird-logo.gif')}
+              source={require('../../assets/bird-logo.gif')}
               style={styles.chirpy}
               contentFit="contain"
             />
@@ -82,7 +82,7 @@ export default function PracticeScreen() {
               activeOpacity={0.85}
             >
               <Image
-                source={require('../../assets/images/mic.png')}
+                source={require('../../assets/mic.png')}
                 style={styles.micIconImg}
                 contentFit="contain"
               />

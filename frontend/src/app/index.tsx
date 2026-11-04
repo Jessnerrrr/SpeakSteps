@@ -1,15 +1,20 @@
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router'; // <-- Added Stack here
+import { useEffect } from 'react';
 import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function App() {
+  useEffect(() => {
+    router.replace('/sentences' as any);
+  }, []);
+
   return (
     <>
       {/* This hides the default top header on the landing page */}
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/landing-bg-pattern.png')} 
+        source={require('../../assets/landing-bg-pattern.png')} 
         style={styles.background}
         imageStyle={{ opacity: 0.08 }}
         resizeMode="cover"
@@ -17,7 +22,7 @@ export default function App() {
         <View style={styles.container}>
           
           <Image 
-            source={require('../../assets/images/landing-logo.gif')} 
+            source={require('../../assets/landing-logo.gif')} 
             style={styles.logoImage}
             contentFit="contain" 
           />
@@ -26,13 +31,13 @@ export default function App() {
             
             <TouchableOpacity 
               style={[styles.button, styles.primaryButton]}
-              onPress={() => router.push('/login' as any)} 
+              onPress={() => router.push('/sentences' as any)} 
             >
               <Text style={styles.primaryButtonText}>Get Started</Text>
               <Text style={styles.playIcon}>▶</Text> 
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.button, styles.secondaryButton]}>
+            <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={() => router.push('/login' as any)}>
               <Text style={styles.secondaryButtonText}>About SpeakSteps</Text>
             </TouchableOpacity>
             
