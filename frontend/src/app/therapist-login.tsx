@@ -36,8 +36,9 @@ export default function TherapistLoginScreen() {
   const handleLogin = () => {
     setHasSubmitted(true);
     if (!email || !password) {
-      return; 
+      return;
     }
+    router.replace('/therapist' as never);
   };
 
   const handleRequestAccount = () => {
