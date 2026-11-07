@@ -28,7 +28,12 @@ export default function TeacherLoginScreen() {
 
   const handleLogin = () => {
     setHasSubmitted(true);
-    if (!email || !password) return; 
+    if (!email || !password) {
+      return; 
+    }
+    
+    // Connects the login screen to the teacher dashboard
+    router.push('/teacher-dashboard' as any);
   };
 
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
@@ -66,7 +71,11 @@ export default function TeacherLoginScreen() {
             </View>
 
             <View style={styles.bottomCard}>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+              <ScrollView 
+                keyboardShouldPersistTaps="handled" 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={styles.scrollContent}
+              >
                 
                 <View style={styles.cardHeader}>
                   <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

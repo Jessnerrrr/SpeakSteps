@@ -396,11 +396,12 @@ const INITIAL_REVIEWS: ReviewItem[] = [
 ];
 
 export default function TeacherDashboardScreen() {
-  const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/fonts/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/fonts/SourGummy-Bold.ttf'),
+ const [fontsLoaded] = useFonts({
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
+  
 
   // --- Main Navigation Tabs ---
   const [activeTab, setActiveTab] = useState<'home' | 'patients' | 'activities' | 'reviews'>('home');
