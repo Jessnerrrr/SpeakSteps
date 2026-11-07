@@ -18,21 +18,21 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
     {
       id: 'play',
       label: 'Play',
-      icon: 'phone-portrait-outline' as const, // Match the mobile/game device icon in screenshot
+      icon: 'phone-portrait-outline' as const, 
       activeIcon: 'phone-portrait' as const,
-      route: '/speech-check-in',
+      route: '/practice', // Fixed this route to point to practice.tsx!
     },
     {
       id: 'stars',
       label: 'Stars',
-      icon: 'star-half-outline' as const, // Star medal icon
+      icon: 'star-half-outline' as const, 
       activeIcon: 'star' as const,
       route: '/patient-stars',
     },
     {
       id: 'buddy',
       label: 'Buddy',
-      icon: 'happy-outline' as const, // Character face icon
+      icon: 'happy-outline' as const, 
       activeIcon: 'happy' as const,
       route: '/pick-buddy',
     },

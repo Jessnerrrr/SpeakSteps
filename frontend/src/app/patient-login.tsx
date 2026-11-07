@@ -4,26 +4,22 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
-// MOCK AUTH DATA CONNECTOR:
-// Replace with your real authentication API / provider when ready
-import { authenticateMockUser } from '@/data/auth-mock';
-
 export default function PatientLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
-
-  // NEW STATE: Tracks if the password input is clicked/focused
+  
+  // Tracks if the password input is clicked/focused
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/fonts/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/fonts/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded) return null; 
 
   // --- Real-time Password Validation Logic ---
   const isLengthValid = password.length >= 8 && password.length <= 20;
@@ -35,17 +31,12 @@ export default function PatientLoginScreen() {
   const handleLogin = () => {
     setHasSubmitted(true);
     if (!email || !password) {
-      return;
+      return; 
     }
-
-    // Connect mock auth: test account connects to patient dashboard
-    const auth = authenticateMockUser(email, password);
-    if (auth.success) {
-      router.push('/patient-dashboard' as any);
-    }
+    // Added routing to navigate to the dashboard after a successful login
+    router.push('/patient-dashboard' as any);
   };
 
-  // Reusable component for the checklist items
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
     <View style={styles.reqItem}>
       <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
@@ -55,23 +46,23 @@ export default function PatientLoginScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ headerShown: false }} /> 
 
-      <ImageBackground
-        source={require('../../assets/images/split-bg.png')}
+      <ImageBackground 
+        source={require('../../assets/images/split-bg.png')} 
         style={styles.background}
         imageStyle={{ opacity: 1 }}
         resizeMode="cover"
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={styles.container}>
-
+            
             <View style={styles.topSection}>
-              <Image
-                source={require('../../assets/images/bird-logo.gif')}
+              <Image 
+                source={require('../../assets/images/bird-logo.gif')} 
                 style={styles.birdImage}
                 contentFit="contain"
               />
@@ -81,8 +72,7 @@ export default function PatientLoginScreen() {
             </View>
 
             <View style={styles.bottomCard}>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 <View style={styles.cardHeader}>
                   <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Text style={styles.backIcon}>‹</Text>
@@ -91,19 +81,19 @@ export default function PatientLoginScreen() {
                 </View>
 
                 {/* Patient Kid GIF Icon */}
-                <Image
-                  source={require('../../assets/images/kid_yellow.gif')}
+                <Image 
+                  source={require('../../assets/images/kid_yellow.gif')} 
                   style={styles.gifIcon}
                   contentFit="cover"
                 />
-
+                
                 <Text style={styles.welcomeText}>Patient sign in</Text>
                 <Text style={styles.subText}>Welcome back! Sign in to start practicing.</Text>
 
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Email</Text>
-                  <TextInput
-                    style={[styles.input, hasSubmitted && !email && styles.errorBorder]}
+                  <TextInput 
+                    style={[styles.input, hasSubmitted && !email && styles.errorBorder]} 
                     placeholder="parent@gmail.com"
                     placeholderTextColor="#999"
                     keyboardType="email-address"
@@ -116,17 +106,17 @@ export default function PatientLoginScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Password</Text>
                   <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
-                    <TextInput
-                      style={styles.passwordInput}
+                    <TextInput 
+                      style={styles.passwordInput} 
                       placeholder="••••••••"
                       placeholderTextColor="#999"
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={setPassword}
-                      onFocus={() => setIsPasswordFocused(true)}
-                      onBlur={() => setIsPasswordFocused(false)}
+                      onFocus={() => setIsPasswordFocused(true)} 
+                      onBlur={() => setIsPasswordFocused(false)} 
                     />
-                    <TouchableOpacity
+                    <TouchableOpacity 
                       style={styles.showButton}
                       onPress={() => setShowPassword(!showPassword)}
                     >
@@ -173,15 +163,15 @@ export default function PatientLoginScreen() {
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: '#3487C6' },
   container: { flex: 1, justifyContent: 'space-between' },
-  topSection: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 40,
+  topSection: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingTop: 40, 
     paddingHorizontal: 20,
     transform: [{ translateX: -15 }],
-  },
+  },  
   birdImage: { width: 110, height: 110, marginRight: 15 },
   brandTextContainer: { justifyContent: 'center' },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 },
@@ -201,17 +191,14 @@ const styles = StyleSheet.create({
   passwordInput: { flex: 1, paddingHorizontal: 15, fontFamily: 'SourGummy', color: '#333' },
   showButton: { backgroundColor: '#CBE6F6', paddingVertical: 5, paddingHorizontal: 12, borderRadius: 15, marginRight: 8 },
   showButtonText: { color: '#0865AD', fontFamily: 'SourGummy-Bold', fontSize: 12 },
-
-  // --- Dynamic Requirements Styles ---
   requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
   requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
   requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
   requirementsList: { padding: 12, gap: 10 },
   reqItem: { flexDirection: 'row', alignItems: 'center' },
   reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
-  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 },
+  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
   reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
-
   signInBtn: { backgroundColor: '#0865AD', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   signInText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
   forgotPasswordText: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', textAlign: 'center', textDecorationLine: 'underline' },

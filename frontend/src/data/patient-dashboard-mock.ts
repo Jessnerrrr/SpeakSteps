@@ -44,7 +44,7 @@ export const MOCK_PATIENT_DASHBOARD: PatientDashboardData = {
   activeBuddy: {
     name: 'Chirpy',
     speechBubbleText: "Hi Mia! Let's play with Chirpy! 🎉",
-    avatarSource: null, // Set to require('@/assets/images/bird-logo.gif') later
+    avatarSource: null, // Set to require('../../assets/images/bird-logo.gif') later
   },
   stepsProgress: {
     earnedStars: 2,

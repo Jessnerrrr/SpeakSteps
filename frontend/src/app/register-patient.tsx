@@ -11,7 +11,7 @@ export default function PatientRegistrationScreen() {
   const [contactNo, setContactNo] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
   
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
@@ -19,7 +19,7 @@ export default function PatientRegistrationScreen() {
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
 
   const [studentId, setStudentId] = useState('');
-  const [idImage, setIdImage] = useState<string | null>(null);
+  const [idImage, setIdImage] = useState<string | undefined>(undefined);
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -30,9 +30,9 @@ export default function PatientRegistrationScreen() {
   const [alertType, setAlertType] = useState<'error' | 'success'>('error');
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'), 
-    'SourGummy-Medium': require('../../assets/fonts/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/fonts/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'), 
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -47,7 +47,6 @@ export default function PatientRegistrationScreen() {
     if (!result.canceled) setImageSetter(result.assets[0].uri);
   };
 
-  // --- Real-time Password Validation Logic ---
   const isLengthValid = password.length >= 8 && password.length <= 20;
   const hasLowercase = /[a-z]/.test(password);
   const hasUppercase = /[A-Z]/.test(password);
@@ -115,10 +114,7 @@ export default function PatientRegistrationScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <KeyboardAvoidingView 
-          style={{ flex: 1 }} 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.container}>
             
             <View style={styles.topSection}>
@@ -141,7 +137,6 @@ export default function PatientRegistrationScreen() {
                 <Text style={styles.welcomeText}>Create Patient Account</Text>
                 <Text style={styles.subText}>Fill up the form. Your child's Student ID must be on the Center's records.</Text>
 
-                {/* SECTION 1 */}
                 <View style={styles.sectionContainer}>
                   <Text style={styles.sectionTitle}>1 - Parent / Guardian</Text>
                   
@@ -198,7 +193,7 @@ export default function PatientRegistrationScreen() {
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Upload Profile Picture</Text>
-                    <TouchableOpacity style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage]} onPress={() => pickImage(setProfileImage)}>
+                    <TouchableOpacity style={[styles.uploadButton, profileImage ? styles.uploadButtonWithImage : null]} onPress={() => pickImage(setProfileImage)}>
                       {profileImage ? (
                         <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
                       ) : (
@@ -208,7 +203,6 @@ export default function PatientRegistrationScreen() {
                   </View>
                 </View>
 
-                {/* SECTION 2 */}
                 <View style={styles.sectionContainer}>
                   <Text style={styles.sectionTitle}>2 - Child's profile</Text>
 
@@ -240,7 +234,6 @@ export default function PatientRegistrationScreen() {
                   </View>
                 </View>
 
-                {/* SECTION 3 */}
                 <View style={styles.sectionContainer}>
                   <Text style={styles.sectionTitle}>3 - Verification</Text>
 
@@ -259,7 +252,7 @@ export default function PatientRegistrationScreen() {
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID <Text style={styles.asterisk}>*</Text></Text>
                     <TouchableOpacity 
-                      style={[styles.uploadButton, idImage && styles.uploadButtonWithImage, hasSubmitted && !idImage && styles.errorBorder]} 
+                      style={[styles.uploadButton, idImage ? styles.uploadButtonWithImage : null, hasSubmitted && !idImage && styles.errorBorder]} 
                       onPress={() => pickImage(setIdImage)}
                     >
                       {idImage ? (

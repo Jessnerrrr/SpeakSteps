@@ -20,7 +20,6 @@ import {
 } from 'react-native';
 
 // MOCK DATA IMPORT:
-// When ready for backend integration, replace MOCK_PATIENT_DASHBOARD with your API response hook
 import { MOCK_PATIENT_DASHBOARD } from '@/data/patient-dashboard-mock';
 import { BuddyStore, Buddy } from '@/data/buddy-store';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
@@ -28,9 +27,9 @@ import { authenticateMockUser } from '@/data/auth-mock';
 
 export default function PatientDashboardScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/fonts/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/fonts/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
 
   const [data] = useState(MOCK_PATIENT_DASHBOARD);
@@ -86,20 +85,14 @@ export default function PatientDashboardScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.safeArea}>
-        {/* =========================================================================
-            OUTER WATERMARKED LIGHT BLUE CANVAS
-            ========================================================================= */}
         <ImageBackground
           source={require('../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
         >
-          {/* =========================================================================
-              FLOATING MAIN DASHBOARD CARD CONTAINER (White sheet with soft blue tint)
-              ========================================================================= */}
           <View style={styles.dashboardCard}>
-            {/* TOP HEADER: "Hi, Mia! 👋", BELL & HAMBURGER */}
+            {/* TOP HEADER */}
             <View style={styles.topHeader}>
               <View style={styles.greetingRow}>
                 <Text style={styles.greetingText}>Hi, {data.childName}</Text>
@@ -107,7 +100,6 @@ export default function PatientDashboardScreen() {
               </View>
 
               <View style={styles.headerRightActions}>
-                {/* Notification Bell Circle */}
                 <TouchableOpacity
                   style={styles.bellButton}
                   activeOpacity={0.7}
@@ -116,7 +108,6 @@ export default function PatientDashboardScreen() {
                   <Ionicons name="notifications-outline" size={20} color="#F5A623" />
                 </TouchableOpacity>
 
-                {/* Triple Bar Hamburger / Close Menu Button */}
                 <TouchableOpacity
                   style={styles.menuButton}
                   activeOpacity={0.7}
@@ -131,9 +122,7 @@ export default function PatientDashboardScreen() {
               </View>
             </View>
 
-            {/* =====================================================================
-                PARENT MODE DROPDOWN PILL (Matches Reference Screen 1)
-                ===================================================================== */}
+            {/* PARENT MODE DROPDOWN PILL */}
             {isMenuOpen && (
               <>
                 <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
@@ -168,11 +157,8 @@ export default function PatientDashboardScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
-              {/* =====================================================================
-                  MASCOT & SPEECH BUBBLE ROW (Dynamically synchronized with BuddyStore)
-                  ===================================================================== */}
+              {/* MASCOT & SPEECH BUBBLE ROW */}
               <View style={styles.mascotSpeechRow}>
-                {/* Active Buddy Avatar Container */}
                 <TouchableOpacity
                   activeOpacity={0.8}
                   style={styles.mascotContainer}
@@ -188,7 +174,6 @@ export default function PatientDashboardScreen() {
                   />
                 </TouchableOpacity>
 
-                {/* Speech Bubble Pill with active companion phrase */}
                 <TouchableOpacity
                   activeOpacity={0.85}
                   style={styles.speechBubble}
@@ -200,9 +185,7 @@ export default function PatientDashboardScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* =====================================================================
-                  "MY STEPS" CARD (Exact Reference Gradient: #106AB0 -> #4DB3E9)
-                  ===================================================================== */}
+              {/* "MY STEPS" CARD */}
               <LinearGradient
                 colors={['#106AB0', '#2A8AC8', '#4DB3E9']}
                 locations={[0, 0.45, 1]}
@@ -212,7 +195,6 @@ export default function PatientDashboardScreen() {
               >
                 <Text style={styles.myStepsTitle}>My Steps</Text>
 
-                {/* Big Star Count: 2 + 3D Gold Star Asset (tightened spacing) */}
                 <View style={styles.starNumberRow}>
                   <Text style={styles.starNumberText}>{data.stepsProgress.earnedStars}</Text>
                   <Image
@@ -222,7 +204,6 @@ export default function PatientDashboardScreen() {
                   />
                 </View>
 
-                {/* Capsule Progress Bar Track */}
                 <View style={styles.capsuleProgressTrack}>
                   <View
                     style={[
@@ -232,15 +213,12 @@ export default function PatientDashboardScreen() {
                   />
                 </View>
 
-                {/* Activity Counter Subtitle */}
                 <Text style={styles.myStepsSubtext}>
                   {data.stepsProgress.completedActivities} of {data.stepsProgress.totalActivities} activities done
                 </Text>
               </LinearGradient>
 
-              {/* =====================================================================
-                  "MY ADVENTURE" STEPPER CONTAINER
-                  ===================================================================== */}
+              {/* "MY ADVENTURE" STEPPER CONTAINER */}
               <View style={styles.adventureContainer}>
                 <Text style={styles.adventureTitle}>My Adventure</Text>
 
@@ -250,11 +228,10 @@ export default function PatientDashboardScreen() {
                     return (
                       <View key={adv.id} style={styles.stepperItemWrapper}>
                         <View style={styles.stepperNodeRow}>
-                          {/* Circular Step Pill */}
                           <TouchableOpacity
                             style={[styles.stepCircle, { backgroundColor: adv.bgColor }]}
                             activeOpacity={0.8}
-                            onPress={() => router.push('/speech-check-in' as any)}
+                            onPress={() => router.push('/practice' as any)}
                           >
                             {adv.iconType === 'sounds' ? (
                               <Ionicons name="musical-notes" size={26} color="#FFFFFF" />
@@ -267,11 +244,8 @@ export default function PatientDashboardScreen() {
                             )}
                           </TouchableOpacity>
 
-                          {/* Connecting track line between circles */}
                           {!isLast && <View style={styles.stepConnectingLine} />}
                         </View>
-
-                        {/* Step Label below circle */}
                         <Text style={styles.stepLabel}>{adv.name}</Text>
                       </View>
                     );
@@ -279,13 +253,11 @@ export default function PatientDashboardScreen() {
                 </View>
               </View>
 
-              {/* =====================================================================
-                  "CONTINUE PRACTICE ▶" 3D GOLD CTA BUTTON
-                  ===================================================================== */}
+              {/* "CONTINUE PRACTICE ▶" BUTTON */}
               <TouchableOpacity
                 style={styles.continuePracticeBtn}
                 activeOpacity={0.85}
-                onPress={() => router.push('/speech-check-in' as any)}
+                onPress={() => router.push('/practice' as any)}
               >
                 <Text style={styles.continuePracticeText}>Continue Practice</Text>
                 <View style={styles.playArrowIcon}>
@@ -293,16 +265,13 @@ export default function PatientDashboardScreen() {
                 </View>
               </TouchableOpacity>
 
-              {/* =====================================================================
-                  QUICK ACCESS CARDS: My Activities & My Progress
-                  Using the imported Trophy and Rosette Medal artwork assets
-                  ===================================================================== */}
+              {/* QUICK ACCESS CARDS */}
               <View style={styles.bottomCardsRow}>
                 {/* My Activities Card */}
                 <TouchableOpacity
                   style={[styles.bottomCard, styles.activitiesCard]}
                   activeOpacity={0.85}
-                  onPress={() => router.push('/speech-check-in' as any)}
+                  onPress={() => router.push('/practice' as any)}
                 >
                   <View style={styles.cardIconWrapper}>
                     <Image
@@ -343,9 +312,7 @@ export default function PatientDashboardScreen() {
           </View>
         </ImageBackground>
 
-        {/* =========================================================================
-            GROWN-UP CHECK MODAL (Matches Reference Screen 2 & Credentials Check)
-            ========================================================================= */}
+        {/* GROWN-UP CHECK MODAL */}
         <Modal
           visible={isGrownUpModalVisible}
           transparent
@@ -365,7 +332,6 @@ export default function PatientDashboardScreen() {
                 <Text style={styles.modalTitle}>Grown-up check</Text>
                 <Text style={styles.modalQuestion}>What is 15 + 3?</Text>
 
-                {/* 4 Math Options as shown in reference */}
                 <View style={styles.mathOptionsGrid}>
                   {[16, 19, 18, 11].map((num) => (
                     <TouchableOpacity
@@ -379,13 +345,13 @@ export default function PatientDashboardScreen() {
                   ))}
                 </View>
 
-                {/* Credential Confirmation Section (Password) */}
                 <View style={styles.credentialDividerRow}>
                   <View style={styles.credDividerLine} />
                   <Text style={styles.credDividerText}>or parent password</Text>
                   <View style={styles.credDividerLine} />
                 </View>
 
+                {/* PASSWORD INPUT (Arrow Button Removed) */}
                 <View style={styles.passwordInputWrapper}>
                   <TextInput
                     style={styles.modalPasswordInput}
@@ -409,19 +375,22 @@ export default function PatientDashboardScreen() {
                       color="#0D68AC"
                     />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.modalSubmitButton}
-                    onPress={handleVerifyCredentials}
-                  >
-                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                  </TouchableOpacity>
                 </View>
 
                 {authError ? (
                   <Text style={styles.modalErrorText}>{authError}</Text>
                 ) : null}
 
-                {/* Blue Cancel Pill Button */}
+                {/* NEW "CONTINUE" BUTTON */}
+                <TouchableOpacity
+                  style={styles.modalContinueButton}
+                  activeOpacity={0.85}
+                  onPress={handleVerifyCredentials}
+                >
+                  <Text style={styles.modalContinueButtonText}>Continue</Text>
+                </TouchableOpacity>
+
+                {/* RE-STYLED "CANCEL" BUTTON (Secondary Style) */}
                 <TouchableOpacity
                   style={styles.modalCancelButton}
                   activeOpacity={0.85}
@@ -443,538 +412,86 @@ export default function PatientDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#8CBFE6',
-  },
-  background: {
-    flex: 1,
-    backgroundColor: '#8CBFE6',
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 6,
-  },
+  safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
+  background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
+  dashboardCard: { flex: 1, backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
+  
+  topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, backgroundColor: '#E7F2FA' },
+  greetingRow: { flexDirection: 'row', alignItems: 'center' },
+  greetingText: { fontFamily: 'SourGummy-Bold', fontSize: 30, color: '#0D68AC', letterSpacing: -0.5 },
+  waveEmoji: { fontSize: 28, marginLeft: 6 },
+  headerRightActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bellButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#FBD27C', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  menuButton: { padding: 2, justifyContent: 'center', alignItems: 'center' },
 
-  /* White Dashboard Outer Floating Card */
-  dashboardCard: {
-    flex: 1,
-    backgroundColor: '#E7F2FA',
-    borderRadius: 36,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: '#C7DFEE',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 6,
-  },
+  menuBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0, 0, 0, 0.15)', zIndex: 30 },
+  menuDropdownPill: { position: 'absolute', top: 66, right: 18, backgroundColor: '#FFFFFF', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8, borderWidth: 1.5, borderColor: '#D4E7F5', zIndex: 40 },
+  menuDropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  menuParentIcon: { width: 28, height: 28, borderRadius: 14 },
+  menuItemText: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#0D68AC' },
 
-  /* Top Header */
-  topHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: '#E7F2FA',
-  },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  greetingText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 30,
-    color: '#0D68AC',
-    letterSpacing: -0.5,
-  },
-  waveEmoji: {
-    fontSize: 28,
-    marginLeft: 6,
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  bellButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
-    borderColor: '#FBD27C',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  menuButton: {
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  modalKeyboardAvoid: { width: '100%', alignItems: 'center' },
+  grownUpModalCard: { width: '100%', maxWidth: 350, backgroundColor: '#FFFFFF', borderRadius: 32, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 10, borderWidth: 1.5, borderColor: '#C7DFEE' },
+  modalTitle: { fontFamily: 'SourGummy-Bold', fontSize: 24, color: '#0D68AC', textAlign: 'center', marginBottom: 4 },
+  modalQuestion: { fontFamily: 'SourGummy-Bold', fontSize: 18, color: '#0D68AC', textAlign: 'center', marginBottom: 16 },
+  mathOptionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%', gap: 12, marginBottom: 14 },
+  mathOptionButton: { width: '47%', height: 52, borderRadius: 18, borderWidth: 2, borderColor: '#CBE0EF', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2 },
+  mathOptionText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#0D68AC' },
+  credentialDividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginVertical: 10, gap: 8 },
+  credDividerLine: { flex: 1, height: 1, backgroundColor: '#E0EEF7' },
+  credDividerText: { fontFamily: 'SourGummy-Medium', fontSize: 11, color: '#8BA4B8' },
+  
+  passwordInputWrapper: { flexDirection: 'row', alignItems: 'center', width: '100%', height: 46, backgroundColor: '#F5F9FD', borderRadius: 14, borderWidth: 1.5, borderColor: '#CBE0EF', paddingHorizontal: 12, marginBottom: 6 },
+  modalPasswordInput: { flex: 1, fontFamily: 'SourGummy', fontSize: 13, color: '#0D68AC', paddingVertical: 4 },
+  modalEyeButton: { padding: 6 },
+  modalErrorText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#E74C3C', textAlign: 'center', marginBottom: 8 },
+  
+  /* NEW BUTTON STYLES */
+  modalContinueButton: { width: '100%', height: 48, backgroundColor: '#0865AD', borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 12, shadowColor: '#084878', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 },
+  modalContinueButtonText: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#FFFFFF' },
+  
+  modalCancelButton: { width: '100%', height: 48, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#E0EEF7', borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  modalCancelButtonText: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#8BA4B8' },
 
-  /* Dropdown Backdrop & Floating Menu Pill (Matches Reference Screen 1) */
-  menuBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-    zIndex: 30,
-  },
-  menuDropdownPill: {
-    position: 'absolute',
-    top: 66,
-    right: 18,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-    borderWidth: 1.5,
-    borderColor: '#D4E7F5',
-    zIndex: 40,
-  },
-  menuDropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  menuParentIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  menuItemText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 14,
-    color: '#0D68AC',
-  },
+  scrollContent: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 16 },
+  mascotSpeechRow: { flexDirection: 'row', alignItems: 'center', marginBottom: -16, zIndex: 10 },
+  mascotContainer: { position: 'relative', marginRight: 10, marginLeft: 4, width: 82, height: 82, justifyContent: 'flex-end', alignItems: 'center', overflow: 'visible' },
+  mascotImage: { width: 82, height: 82 },
+  mascotImageOther: { transform: [{ scale: 1.22 }], marginBottom: -4 },
+  speechBubble: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1.5, borderColor: '#D4E7F6', shadowColor: '#0865AD', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
+  speechBubbleText: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#0D68AC', lineHeight: 18 },
 
-  /* Grown-up Check Modal Styles (Matches Reference Screen 2) */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  modalKeyboardAvoid: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  grownUpModalCard: {
-    width: '100%',
-    maxWidth: 350,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 32,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 10,
-    borderWidth: 1.5,
-    borderColor: '#C7DFEE',
-  },
-  modalTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24,
-    color: '#0D68AC',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  modalQuestion: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 18,
-    color: '#0D68AC',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  mathOptionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 12,
-    marginBottom: 14,
-  },
-  mathOptionButton: {
-    width: '47%',
-    height: 52,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: '#CBE0EF',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  mathOptionText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 22,
-    color: '#0D68AC',
-  },
-  credentialDividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginVertical: 10,
-    gap: 8,
-  },
-  credDividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E0EEF7',
-  },
-  credDividerText: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 11,
-    color: '#8BA4B8',
-  },
-  passwordInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    height: 46,
-    backgroundColor: '#F5F9FD',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#CBE0EF',
-    paddingHorizontal: 12,
-    marginBottom: 6,
-  },
-  modalPasswordInput: {
-    flex: 1,
-    fontFamily: 'SourGummy',
-    fontSize: 13,
-    color: '#0D68AC',
-    paddingVertical: 4,
-  },
-  modalEyeButton: {
-    padding: 6,
-  },
-  modalSubmitButton: {
-    backgroundColor: '#0D68AC',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-  },
-  modalErrorText: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 12,
-    color: '#E74C3C',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalCancelButton: {
-    width: '100%',
-    height: 48,
-    backgroundColor: '#0865AD',
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: '#084878',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  modalCancelButtonText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 16,
-    color: '#FFFFFF',
-  },
+  myStepsCard: { borderRadius: 22, paddingVertical: 18, paddingHorizontal: 20, alignItems: 'center', marginBottom: 14, shadowColor: '#0865AD', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 5 },
+  myStepsTitle: { fontFamily: 'SourGummy-Bold', fontSize: 24, color: '#FFFFFF', marginBottom: 4 },
+  starNumberRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 10, gap: 3 },
+  starNumberText: { fontFamily: 'SourGummy-Bold', fontSize: 44, color: '#FFFFFF' },
+  starAssetImage: { width: 42, height: 42, marginTop: -2 },
+  capsuleProgressTrack: { width: '100%', height: 18, backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden', padding: 3, marginBottom: 8 },
+  capsuleProgressFill: { height: '100%', backgroundColor: '#F5A623', borderRadius: 10 },
+  myStepsSubtext: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.12)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
 
-  /* Main Scroll Content */
-  scrollContent: {
-    paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 16,
-  },
+  adventureContainer: { backgroundColor: '#FFFFFF', borderRadius: 22, paddingVertical: 16, paddingHorizontal: 16, marginBottom: 14, borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 5, elevation: 3 },
+  adventureTitle: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#0D68AC', textAlign: 'center', marginBottom: 14 },
+  stepperRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 4 },
+  stepperItemWrapper: { alignItems: 'center', flex: 1 },
+  stepperNodeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' },
+  stepCircle: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
+  stepAaText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#FFFFFF' },
+  stepQuotesText: { fontSize: 22, color: '#FFFFFF', fontWeight: 'bold' },
+  stepConnectingLine: { position: 'absolute', right: -14, width: 28, height: 6, backgroundColor: '#B6D7F2', borderRadius: 3, zIndex: -1 },
+  stepLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0D68AC', marginTop: 8 },
 
-  /* Mascot & Speech Bubble Row */
-  mascotSpeechRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: -16, // Peeks over the "My Steps" card
-    zIndex: 10,
-  },
-  mascotContainer: {
-    position: 'relative',
-    marginRight: 10,
-    marginLeft: 4,
-    width: 82,
-    height: 82,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    overflow: 'visible',
-  },
-  mascotImage: {
-    width: 82,
-    height: 82,
-  },
-  mascotImageOther: {
-    transform: [{ scale: 1.22 }],
-    marginBottom: -4,
-  },
-  speechBubble: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: '#D4E7F6',
-    shadowColor: '#0865AD',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  speechBubbleText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 13,
-    color: '#0D68AC',
-    lineHeight: 18,
-  },
+  continuePracticeBtn: { backgroundColor: '#F5A623', borderRadius: 28, paddingVertical: 15, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderBottomWidth: 5, borderBottomColor: '#C47B09', shadowColor: '#C47B09', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 5, elevation: 4 },
+  continuePracticeText: { fontFamily: 'SourGummy-Bold', fontSize: 21, color: '#FFFFFF', marginRight: 10, textShadowColor: 'rgba(0,0,0,0.15)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  playArrowIcon: { marginLeft: 2 },
 
-  /* "My Steps" Hero Card (Exact Sky-to-Cyan Gradient) */
-  myStepsCard: {
-    borderRadius: 22,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginBottom: 14,
-    shadowColor: '#0865AD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  myStepsTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24,
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  starNumberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    gap: 3, // Tightened gap between number and 3D star
-  },
-  starNumberText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 44,
-    color: '#FFFFFF',
-  },
-  starAssetImage: {
-    width: 42,
-    height: 42,
-    marginTop: -2,
-  },
-  capsuleProgressTrack: {
-    width: '100%',
-    height: 18,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    padding: 3,
-    marginBottom: 8,
-  },
-  capsuleProgressFill: {
-    height: '100%',
-    backgroundColor: '#F5A623',
-    borderRadius: 10,
-  },
-  myStepsSubtext: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 13,
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.12)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-
-  /* "My Adventure" Card */
-  adventureContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: '#C7DFEE',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  adventureTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 20,
-    color: '#0D68AC',
-    textAlign: 'center',
-    marginBottom: 14,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 4,
-  },
-  stepperItemWrapper: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  stepperNodeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  stepCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  stepAaText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 22,
-    color: '#FFFFFF',
-  },
-  stepQuotesText: {
-    fontSize: 22,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  stepConnectingLine: {
-    position: 'absolute',
-    right: -14,
-    width: 28,
-    height: 6,
-    backgroundColor: '#B6D7F2',
-    borderRadius: 3,
-    zIndex: -1,
-  },
-  stepLabel: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 12,
-    color: '#0D68AC',
-    marginTop: 8,
-  },
-
-  /* "Continue Practice ▶" 3D Pill Button */
-  continuePracticeBtn: {
-    backgroundColor: '#F5A623',
-    borderRadius: 28,
-    paddingVertical: 15,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-    borderBottomWidth: 5,
-    borderBottomColor: '#C47B09', // 3D depth border
-    shadowColor: '#C47B09',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    elevation: 4,
-  },
-  continuePracticeText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 21,
-    color: '#FFFFFF',
-    marginRight: 10,
-    textShadowColor: 'rgba(0,0,0,0.15)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  playArrowIcon: {
-    marginLeft: 2,
-  },
-
-  /* Bottom Dual Quick Action Cards */
-  bottomCardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 6,
-  },
-  bottomCard: {
-    flex: 1,
-    borderRadius: 22,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderBottomWidth: 5, // 3D depth border
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  activitiesCard: {
-    backgroundColor: '#A0C6E8',
-    borderColor: '#8AB7DF',
-    borderBottomColor: '#6B9DC9',
-  },
-  progressCard: {
-    backgroundColor: '#EFE0B6',
-    borderColor: '#E6D4A0',
-    borderBottomColor: '#CCA95B',
-  },
-  cardIconWrapper: {
-    marginBottom: 8,
-    height: 56,
-    width: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cardImageIllustration: {
-    width: 54,
-    height: 54,
-  },
-  cardHeading: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 16,
-    color: '#000000',
-    marginBottom: 2,
-  },
-  cardSubtext: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 12,
-    color: '#444444',
-  },
+  bottomCardsRow: { flexDirection: 'row', gap: 12, marginBottom: 6 },
+  bottomCard: { flex: 1, borderRadius: 22, paddingVertical: 14, paddingHorizontal: 10, alignItems: 'center', borderWidth: 1.5, borderBottomWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
+  activitiesCard: { backgroundColor: '#A0C6E8', borderColor: '#8AB7DF', borderBottomColor: '#6B9DC9' },
+  progressCard: { backgroundColor: '#EFE0B6', borderColor: '#E6D4A0', borderBottomColor: '#CCA95B' },
+  cardIconWrapper: { marginBottom: 8, height: 56, width: 56, justifyContent: 'center', alignItems: 'center' },
+  cardImageIllustration: { width: 54, height: 54 },
+  cardHeading: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#000000', marginBottom: 2 },
+  cardSubtext: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#444444' },
 });

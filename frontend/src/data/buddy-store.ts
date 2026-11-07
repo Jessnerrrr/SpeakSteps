@@ -29,7 +29,7 @@ export const BUDDY_ROSTER: Record<string, Buddy> = {
     cardBgColor: '#FCECC4',
     cardBorderColor: '#F0D597',
     cardDepthColor: '#E4C075',
-    image: require('@/assets/images/bird-logo.gif'),
+    image: require('../../assets/images/bird-logo.gif'),
   },
   leo: {
     id: 'leo',
@@ -41,7 +41,7 @@ export const BUDDY_ROSTER: Record<string, Buddy> = {
     cardBgColor: '#FCE3DF',
     cardBorderColor: '#F5C7C0',
     cardDepthColor: '#E6ABA2',
-    image: require('@/assets/images/buddies/leo.gif'),
+    image: require('../../assets/images/buddies/leo.gif'),
   },
   mimi: {
     id: 'mimi',
@@ -53,7 +53,7 @@ export const BUDDY_ROSTER: Record<string, Buddy> = {
     cardBgColor: '#FCE6D2',
     cardBorderColor: '#F2CEB0',
     cardDepthColor: '#E5B690',
-    image: require('@/assets/images/buddies/mimi.gif'),
+    image: require('../../assets/images/buddies/mimi.gif'),
   },
   lily: {
     id: 'lily',
@@ -65,7 +65,7 @@ export const BUDDY_ROSTER: Record<string, Buddy> = {
     cardBgColor: '#E0F7F6',
     cardBorderColor: '#C1ECE9',
     cardDepthColor: '#A1DCD8',
-    image: require('@/assets/images/buddies/lily.gif'),
+    image: require('../../assets/images/buddies/lily.gif'),
   },
   bubbles: {
     id: 'bubbles',
@@ -77,7 +77,7 @@ export const BUDDY_ROSTER: Record<string, Buddy> = {
     cardBgColor: '#D4F7F9',
     cardBorderColor: '#B5EEF2',
     cardDepthColor: '#96DFE4',
-    image: require('@/assets/images/buddies/bubbles.gif'),
+    image: require('../../assets/images/buddies/bubbles.gif'),
   },
   freddy: {
     id: 'freddy',
@@ -89,7 +89,7 @@ export const BUDDY_ROSTER: Record<string, Buddy> = {
     cardBgColor: '#DCF8D4',
     cardBorderColor: '#BDEEAF',
     cardDepthColor: '#9DDB8E',
-    image: require('@/assets/images/buddies/freddy.gif'),
+    image: require('../../assets/images/buddies/freddy.gif'),
   },
 };
 

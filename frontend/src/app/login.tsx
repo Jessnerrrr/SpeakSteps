@@ -5,9 +5,9 @@ import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoi
 
 export default function LoginScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/fonts/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/fonts/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -74,7 +74,7 @@ export default function LoginScreen() {
                   </View>
                 </TouchableOpacity>
 
-                {/* Login as Teacher Button (NEW) */}
+                {/* Login as Teacher Button */}
                 <TouchableOpacity 
                   style={styles.roleCard}
                   onPress={() => router.push('/teacher-login' as any)} 
@@ -156,10 +156,8 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -15 }], 
   },  
   birdImage: { width: 110, height: 110, marginRight: 15  }, 
-  
   brandTextContainer: { flex: 1, justifyContent: 'center' },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 }, 
-  
   bottomCard: { backgroundColor: '#FFFFFF', flex: 2.5, borderRadius: 40, marginHorizontal: 15, marginBottom: 30, paddingHorizontal: 25, paddingTop: 25, paddingBottom: 20 },
   scrollContent: { paddingBottom: 10 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
@@ -168,27 +166,18 @@ const styles = StyleSheet.create({
   headerText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 26, color: '#0865AD', marginBottom: 5 },
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 20 },
-  
   roleCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', width: '100%', padding: 15, borderRadius: 15, marginBottom: 12, borderWidth: 1, borderColor: '#E5E5E5', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  
   gifIcon: { width: 40, height: 40, borderRadius: 8, marginRight: 15 },
-  
   roleTextContainer: { flex: 1 },
   roleTitle: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#000' },
   roleSubtitle: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#888', marginTop: 2 },
-  
   arrowCircle: { backgroundColor: '#0865AD', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   arrowText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
-  
-  // New Styles for Footer Section
   dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 15 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E5E5' },
   dividerText: { marginHorizontal: 10, fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#999' },
-  
   footer: { width: '100%', alignItems: 'center', marginBottom: 10 },
-  
   createAccountBtn: { backgroundColor: '#0865AD', width: '100%', paddingVertical: 15, borderRadius: 15, alignItems: 'center', marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   createAccountBtnText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
-  
   adminLink: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', textDecorationLine: 'underline' },
 });

@@ -10,13 +10,11 @@ export default function TherapistRegistrationScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false); 
-  const [license, setLicense] = useState('');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [idImage, setIdImage] = useState<string | null>(null);
+  const [licenseNo, setLicenseNo] = useState('');
+  const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
+  const [idImage, setIdImage] = useState<string | undefined>(undefined);
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
-  
-  // NEW STATE: Tracks if the password input is clicked/focused
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const [alertVisible, setAlertVisible] = useState(false);
@@ -25,9 +23,9 @@ export default function TherapistRegistrationScreen() {
   const [alertType, setAlertType] = useState<'error' | 'success'>('error');
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'), 
-    'SourGummy-Medium': require('../../assets/fonts/SourGummy-Medium.ttf'), 
-    'SourGummy-Bold': require('../../assets/fonts/SourGummy-Bold.ttf'), 
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'), 
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'), 
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'), 
   });
 
   if (!fontsLoaded) return null; 
@@ -51,7 +49,6 @@ export default function TherapistRegistrationScreen() {
     if (!result.canceled) setIdImage(result.assets[0].uri);
   };
 
-  // --- Real-time Password Validation Logic ---
   const isLengthValid = password.length >= 8 && password.length <= 20;
   const hasLowercase = /[a-z]/.test(password);
   const hasUppercase = /[A-Z]/.test(password);
@@ -61,7 +58,7 @@ export default function TherapistRegistrationScreen() {
 
   const handleSubmit = () => {
     setHasSubmitted(true);
-    if (!fullName || !email || !password || !license || !profileImage || !idImage) {
+    if (!fullName || !email || !password || !licenseNo || !profileImage || !idImage) {
       setAlertTitle("Missing Details");
       setAlertMessage("Please fill in all the required fields and upload your photos before submitting.");
       setAlertType('error');
@@ -78,7 +75,7 @@ export default function TherapistRegistrationScreen() {
     }
 
     setAlertTitle("Success!");
-    setAlertMessage("Registered successfully, wait for the approval of the account.\n\n(Note: This pop-up will be removed once the UI integration is done, for now it is just for presentation.)");
+    setAlertMessage("Registered successfully, wait for the approval of the account.");
     setAlertType('success');
     setAlertVisible(true);
   };
@@ -92,10 +89,9 @@ export default function TherapistRegistrationScreen() {
 
   const handleLicenseInput = (text: string) => {
     const numericOnly = text.replace(/[^0-9]/g, '');
-    setLicense(numericOnly);
+    setLicenseNo(numericOnly);
   };
 
-  // Reusable component for the checklist items
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
     <View style={styles.reqItem}>
       <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
@@ -113,10 +109,7 @@ export default function TherapistRegistrationScreen() {
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <KeyboardAvoidingView 
-          style={{ flex: 1 }} 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.container}>
             
             <View style={styles.topSection}>
@@ -136,105 +129,104 @@ export default function TherapistRegistrationScreen() {
                   <Text style={styles.headerText}>Therapist Account</Text>
                 </View>
 
-                {/* Therapist Blue GIF Icon */}
-                <Image 
-                  source={require('../../assets/images/therapist_blue.gif')} 
-                  style={styles.gifIcon}
-                  contentFit="cover"
-                />
+                {/* Therapist GIF Icon */}
+                <Image source={require('../../assets/images/therapist_blue.gif')} style={styles.gifIcon} contentFit="cover" />
 
                 <Text style={styles.welcomeText}>Register as Therapist</Text>
-                <Text style={styles.subText}>Your license / therapy ID is checked by the Center before you can log in.</Text>
+                <Text style={styles.subText}>Licensed and ID check required</Text>
 
-                <Text style={styles.sectionTitle}>Personal Information</Text>
-                
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Full name</Text>
-                  <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
-                </View>
+                <View style={styles.sectionContainer}>
+                  <Text style={styles.sectionTitle}>Personal Information</Text>
+                  
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Full name</Text>
+                    <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
+                  </View>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Email</Text>
-                  <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
-                </View>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Email</Text>
+                    <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="therapist@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+                  </View>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Password</Text>
-                  <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
-                    <TextInput 
-                      style={styles.passwordInput} 
-                      placeholder="••••••••" 
-                      placeholderTextColor="#999" 
-                      secureTextEntry={!showPassword} 
-                      value={password} 
-                      onChangeText={setPassword}
-                      onFocus={() => setIsPasswordFocused(true)} 
-                      onBlur={() => setIsPasswordFocused(false)} 
-                    />
-                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                      <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Password</Text>
+                    <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
+                      <TextInput 
+                        style={styles.passwordInput} 
+                        placeholder="••••••••" 
+                        placeholderTextColor="#999" 
+                        secureTextEntry={!showPassword} 
+                        value={password} 
+                        onChangeText={setPassword}
+                        onFocus={() => setIsPasswordFocused(true)} 
+                        onBlur={() => setIsPasswordFocused(false)} 
+                      />
+                      <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                        <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {isPasswordFocused && (
+                    <View style={styles.requirementsBox}>
+                      <View style={styles.requirementsHeader}>
+                        <Text style={styles.requirementsHeaderText}>
+                          The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
+                        </Text>
+                      </View>
+                      <View style={styles.requirementsList}>
+                        <RequirementItem text="Number of characters" isValid={isLengthValid} />
+                        <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
+                        <RequirementItem text="Capital letter" isValid={hasUppercase} />
+                        <RequirementItem text="Number" isValid={hasNumber} />
+                        <RequirementItem text="Special character" isValid={hasSpecial} />
+                      </View>
+                    </View>
+                  )}
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Upload Profile Picture</Text>
+                    <TouchableOpacity 
+                      style={[styles.uploadButton, profileImage ? styles.uploadButtonWithImage : null, hasSubmitted && !profileImage && styles.errorBorder]} 
+                      onPress={pickProfileImage}
+                    >
+                      {profileImage ? (
+                        <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
+                      ) : (
+                        <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                      )}
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Dynamic Password Requirements Box (Only visible when focused) */}
-                {isPasswordFocused && (
-                  <View style={styles.requirementsBox}>
-                    <View style={styles.requirementsHeader}>
-                      <Text style={styles.requirementsHeaderText}>
-                        The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
-                      </Text>
-                    </View>
-                    <View style={styles.requirementsList}>
-                      <RequirementItem text="Number of characters" isValid={isLengthValid} />
-                      <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
-                      <RequirementItem text="Capital letter" isValid={hasUppercase} />
-                      <RequirementItem text="Number" isValid={hasNumber} />
-                      <RequirementItem text="Special character" isValid={hasSpecial} />
-                    </View>
+                <View style={styles.sectionContainer}>
+                  <Text style={styles.sectionTitle}>Professional Verification</Text>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>License no. <Text style={styles.asterisk}>*</Text></Text>
+                    <TextInput 
+                      style={[styles.input, hasSubmitted && !licenseNo && styles.errorBorder]} 
+                      placeholder="e.g. 1234567" 
+                      placeholderTextColor="#999" 
+                      keyboardType="numeric"
+                      value={licenseNo} 
+                      onChangeText={handleLicenseInput} 
+                    />
                   </View>
-                )}
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Upload Profile Picture</Text>
-                  <TouchableOpacity 
-                    style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage, hasSubmitted && !profileImage && styles.errorBorder]} 
-                    onPress={pickProfileImage}
-                  >
-                    {profileImage ? (
-                      <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
-                    ) : (
-                      <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.sectionTitle}>Professional Verification</Text>
-
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>License / Therapy ID no.</Text>
-                  <TextInput 
-                    style={[styles.input, hasSubmitted && !license && styles.errorBorder]} 
-                    placeholder="e.g. 1234567" 
-                    placeholderTextColor="#999" 
-                    keyboardType="numeric"
-                    value={license} 
-                    onChangeText={handleLicenseInput} 
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID *</Text>
-                  <TouchableOpacity 
-                    style={[styles.uploadButton, idImage && styles.uploadButtonWithImage, hasSubmitted && !idImage && styles.errorBorder]} 
-                    onPress={pickIdImage}
-                  >
-                    {idImage ? (
-                      <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
-                    ) : (
-                      <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
-                    )}
-                  </TouchableOpacity>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Photo of valid ID or PRC License <Text style={styles.asterisk}>*</Text></Text>
+                    <TouchableOpacity 
+                      style={[styles.uploadButton, idImage ? styles.uploadButtonWithImage : null, hasSubmitted && !idImage && styles.errorBorder]} 
+                      onPress={pickIdImage}
+                    >
+                      {idImage ? (
+                        <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
+                      ) : (
+                        <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
@@ -262,7 +254,6 @@ export default function TherapistRegistrationScreen() {
           </View>
         </View>
       </Modal>
-
     </>
   );
 }
@@ -270,15 +261,8 @@ export default function TherapistRegistrationScreen() {
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: '#3487C6' },
   container: { flex: 1, justifyContent: 'space-between' },
-topSection: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    paddingTop: 40, 
-    paddingHorizontal: 20,
-    transform: [{ translateX: -15 }], 
-  },  birdImage: { width: 110, height: 110, marginRight: 15 }, 
+  topSection: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingTop: 40, paddingHorizontal: 20, transform: [{ translateX: -15 }] }, 
+  birdImage: { width: 110, height: 110, marginRight: 15 }, 
   brandTextContainer: { justifyContent: 'center' },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 }, 
   bottomCard: { backgroundColor: '#FFFFFF', flex: 4, borderRadius: 40, marginHorizontal: 15, marginBottom: 15, paddingHorizontal: 25, paddingTop: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#CBE6F6' },
@@ -287,23 +271,19 @@ topSection: {
   backButton: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#0865AD', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   backIcon: { color: '#FFFFFF', fontSize: 18, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
   headerText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
-  
-  // GIF Icon added for consistency with the login screens
   gifIcon: { width: 40, height: 40, borderRadius: 8, marginBottom: 10 },
-
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#0865AD', marginBottom: 5 }, 
-  
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#666', marginBottom: 15 },
-  sectionTitle: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#0865AD', marginTop: 10, marginBottom: 10 },
+  sectionContainer: { borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 15, padding: 15, marginBottom: 15 },
+  sectionTitle: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#0865AD', marginBottom: 15 },
   inputContainer: { marginBottom: 12 },
   inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD', marginBottom: 4 },
+  asterisk: { color: '#E74C3C' },
   input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, paddingHorizontal: 15, height: 40, fontFamily: 'SourGummy', color: '#333', fontSize: 12 },
   passwordWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, paddingHorizontal: 15, height: 40 },
   passwordInput: { flex: 1, fontFamily: 'SourGummy', color: '#333', fontSize: 12, height: '100%' },
   eyeBtn: { paddingLeft: 10 },
   eyeText: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD' },
-
-  // --- Dynamic Requirements Styles ---
   requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
   requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
   requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
@@ -312,7 +292,6 @@ topSection: {
   reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
   reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
   reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
-
   uploadButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 40, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, 
   uploadButtonWithImage: { height: 150 }, 
   uploadIconImage: { width: 24, height: 24 },
@@ -323,7 +302,7 @@ topSection: {
   alertMessage: { fontFamily: 'SourGummy', fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 18 },
   alertBtn: { backgroundColor: '#0865AD', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 10 },
   alertBtnText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
-  submitBtn: { backgroundColor: '#0865AD', paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 15, marginBottom: 15 },
+  submitBtn: { backgroundColor: '#0865AD', paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 15 },
   submitText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
   loginLink: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD', textAlign: 'center', textDecorationLine: 'underline' },
   errorBorder: { borderColor: '#E74C3C', borderWidth: 1.5 },

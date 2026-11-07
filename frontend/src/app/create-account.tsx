@@ -5,9 +5,9 @@ import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoi
 
 export default function CreateAccountScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/fonts/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/fonts/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -74,7 +74,7 @@ export default function CreateAccountScreen() {
                   </View>
                 </TouchableOpacity>
 
-                {/* Register as Teacher Button (NEW) */}
+                {/* Register as Teacher Button */}
                 <TouchableOpacity 
                   style={styles.roleCard}
                   onPress={() => router.push('/register-teacher' as any)} 
