@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import type { Position } from '../types/sentences';
+import type { Position } from '../../types/sentences';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
 
 export default function PracticeScreen() {
@@ -28,15 +28,15 @@ export default function PracticeScreen() {
   const [recording, setRecording] = useState(false);
 
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../assets/SourGummy.ttf'),
+    SourGummy: require('../../../assets/SourGummy.ttf'),
   });
+
   if (!fontsLoaded) return null;
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
-
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -53,13 +53,15 @@ export default function PracticeScreen() {
           {/* Sound Banner (Chirpy) */}
           <View style={styles.banner}>
             <Image
-              source={require('../../assets/images/bird-logo.gif')}
+              source={require('../../../assets/images/bird-logo.gif')}
               style={styles.chirpy}
               contentFit="contain"
             />
             <View style={styles.bannerText}>
               <Text style={styles.bannerLabel}>Sounds · {position}</Text>
-              <Text style={styles.bannerSound}>{sound} {syllable}</Text>
+              <Text style={styles.bannerSound}>
+                {sound} {syllable}
+              </Text>
             </View>
           </View>
 
@@ -83,7 +85,7 @@ export default function PracticeScreen() {
               activeOpacity={0.85}
             >
               <Image
-                source={require('../../assets/images/mic.png')}
+                source={require('../../../assets/images/mic.png')}
                 style={styles.micIconImg}
                 contentFit="contain"
               />
@@ -102,7 +104,6 @@ export default function PracticeScreen() {
         <View style={styles.footerContainer}>
           <ChildBottomNav activeTab="play" />
         </View>
-
       </View>
     </>
   );

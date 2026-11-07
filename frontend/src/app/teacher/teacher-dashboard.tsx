@@ -397,9 +397,9 @@ const INITIAL_REVIEWS: ReviewItem[] = [
 
 export default function TeacherDashboardScreen() {
  const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
   
   // --- Main Navigation Tabs ---

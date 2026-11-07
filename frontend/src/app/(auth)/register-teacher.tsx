@@ -3,23 +3,16 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView } from 'react-native';
+import { ImageBackground, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
 
-export default function PatientRegistrationScreen() {
+export default function TeacherRegistrationScreen() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [contactNo, setContactNo] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
-  
-  const [childName, setChildName] = useState('');
-  const [childAge, setChildAge] = useState('');
-  const [startingLevel, setStartingLevel] = useState('');
-  const [showLevelDropdown, setShowLevelDropdown] = useState(false);
-
-  const [studentId, setStudentId] = useState('');
-  const [idImage, setIdImage] = useState<string | undefined>(undefined);
+  const [showPassword, setShowPassword] = useState(false); 
+  const [teacherId, setTeacherId] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [idImage, setIdImage] = useState<string | null>(null);
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -30,21 +23,30 @@ export default function PatientRegistrationScreen() {
   const [alertType, setAlertType] = useState<'error' | 'success'>('error');
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'), 
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'), 
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'), 
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'), 
   });
 
   if (!fontsLoaded) return null; 
 
-  const pickImage = async (setImageSetter: (uri: string) => void) => {
+  const pickProfileImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
     });
-    if (!result.canceled) setImageSetter(result.assets[0].uri);
+    if (!result.canceled) setProfileImage(result.assets[0].uri);
+  };
+
+  const pickIdImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
+    });
+    if (!result.canceled) setIdImage(result.assets[0].uri);
   };
 
   const isLengthValid = password.length >= 8 && password.length <= 20;
@@ -56,9 +58,9 @@ export default function PatientRegistrationScreen() {
 
   const handleSubmit = () => {
     setHasSubmitted(true);
-    if (!fullName || !email || !contactNo || !password || !childName || !childAge || !startingLevel || !studentId || !idImage) {
+    if (!fullName || !email || !password || !teacherId || !profileImage || !idImage) {
       setAlertTitle("Missing Details");
-      setAlertMessage("Please fill in all the required fields and upload the necessary photos before submitting.");
+      setAlertMessage("Please fill in all the required fields and upload your photos before submitting.");
       setAlertType('error');
       setAlertVisible(true);
       return; 
@@ -71,7 +73,7 @@ export default function PatientRegistrationScreen() {
       setAlertVisible(true);
       return;
     }
-    
+
     setAlertTitle("Success!");
     setAlertMessage("Registered successfully, wait for the approval of the account.");
     setAlertType('success');
@@ -85,16 +87,9 @@ export default function PatientRegistrationScreen() {
     }
   };
 
-  const levelOptions = ['Beginner (Sounds & Words)', 'Intermediate (Short Phrases)', 'Advanced (Sentences)'];
-
-  const handleStudentIdInput = (text: string) => {
+  const handleTeacherIdInput = (text: string) => {
     const numericOnly = text.replace(/[^0-9]/g, '');
-    setStudentId(numericOnly);
-  };
-
-  const handleContactInput = (text: string) => {
-    const numericOnly = text.replace(/[^0-9]/g, '');
-    setContactNo(numericOnly);
+    setTeacherId(numericOnly);
   };
 
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
@@ -109,16 +104,19 @@ export default function PatientRegistrationScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../../assets/images/split-bg.png')} 
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.container}>
             
             <View style={styles.topSection}>
-              <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
+              <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
               <View style={styles.brandTextContainer}>
                 <Text style={styles.brandTitle}>SpeakSteps</Text>
               </View>
@@ -131,32 +129,34 @@ export default function PatientRegistrationScreen() {
                   <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Text style={styles.backIcon}>‹</Text>
                   </TouchableOpacity>
-                  <Text style={styles.headerText}>Patient Account</Text>
+                  <Text style={styles.headerText}>Teacher Account</Text>
                 </View>
 
-                <Text style={styles.welcomeText}>Create Patient Account</Text>
-                <Text style={styles.subText}>Fill up the form. Your child's Student ID must be on the Center's records.</Text>
+                {/* Teacher GIF Icon */}
+                <Image 
+                  source={require('../../../assets/images/teacher-icon.gif')} 
+                  style={styles.gifIcon}
+                  contentFit="cover"
+                />
+
+                <Text style={styles.welcomeText}>Register as Teacher</Text>
+                <Text style={styles.subText}>Your Teacher ID must be on the Center's records.</Text>
 
                 <View style={styles.sectionContainer}>
-                  <Text style={styles.sectionTitle}>1 - Parent / Guardian</Text>
+                  <Text style={styles.sectionTitle}>Personal Information</Text>
                   
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Full name <Text style={styles.asterisk}>*</Text></Text>
+                    <Text style={styles.inputLabel}>Full name</Text>
                     <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Email <Text style={styles.asterisk}>*</Text></Text>
-                    <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+                    <Text style={styles.inputLabel}>Email</Text>
+                    <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="teacher@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Contact No. <Text style={styles.asterisk}>*</Text></Text>
-                    <TextInput style={[styles.input, hasSubmitted && !contactNo && styles.errorBorder]} placeholder="09**********" placeholderTextColor="#999" keyboardType="numeric" value={contactNo} onChangeText={handleContactInput} />
-                  </View>
-
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Password <Text style={styles.asterisk}>*</Text></Text>
+                    <Text style={styles.inputLabel}>Password</Text>
                     <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
                       <TextInput 
                         style={styles.passwordInput} 
@@ -193,79 +193,51 @@ export default function PatientRegistrationScreen() {
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Upload Profile Picture</Text>
-                    <TouchableOpacity style={[styles.uploadButton, profileImage ? styles.uploadButtonWithImage : null]} onPress={() => pickImage(setProfileImage)}>
+                    <TouchableOpacity 
+                      style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage, hasSubmitted && !profileImage && styles.errorBorder]} 
+                      onPress={pickProfileImage}
+                    >
                       {profileImage ? (
                         <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
                       ) : (
-                        <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                        <Image source={require('../../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                       )}
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 <View style={styles.sectionContainer}>
-                  <Text style={styles.sectionTitle}>2 - Child's profile</Text>
+                  <Text style={styles.sectionTitle}>Professional Verification</Text>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Child's name</Text>
-                    <TextInput style={[styles.input, hasSubmitted && !childName && styles.errorBorder]} placeholder="" placeholderTextColor="#999" value={childName} onChangeText={setChildName} />
-                  </View>
-
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Age</Text>
+                    <Text style={styles.inputLabel}>Teacher ID no. <Text style={styles.asterisk}>*</Text></Text>
                     <TextInput 
-                      style={[styles.input, hasSubmitted && !childAge && styles.errorBorder]} 
-                      placeholder="" 
+                      style={[styles.input, hasSubmitted && !teacherId && styles.errorBorder]} 
+                      placeholder="e.g. 1234567" 
                       placeholderTextColor="#999" 
                       keyboardType="numeric"
-                      value={childAge} 
-                      onChangeText={setChildAge} 
-                    />
-                  </View>
-
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Starting Level</Text>
-                    <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !startingLevel && styles.errorBorder]} onPress={() => setShowLevelDropdown(true)}>
-                      <Text style={styles.dropdownPlaceholder}>
-                        {startingLevel || ''}
-                      </Text>
-                      <Text style={styles.dropdownArrow}>▼</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.sectionContainer}>
-                  <Text style={styles.sectionTitle}>3 - Verification</Text>
-
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Student ID no. <Text style={styles.asterisk}>*</Text></Text>
-                    <TextInput 
-                      style={[styles.input, hasSubmitted && !studentId && styles.errorBorder]} 
-                      placeholder="" 
-                      placeholderTextColor="#999" 
-                      keyboardType="numeric"
-                      value={studentId} 
-                      onChangeText={handleStudentIdInput} 
+                      value={teacherId} 
+                      onChangeText={handleTeacherIdInput} 
                     />
                   </View>
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID <Text style={styles.asterisk}>*</Text></Text>
                     <TouchableOpacity 
-                      style={[styles.uploadButton, idImage ? styles.uploadButtonWithImage : null, hasSubmitted && !idImage && styles.errorBorder]} 
-                      onPress={() => pickImage(setIdImage)}
+                      style={[styles.uploadButton, idImage && styles.uploadButtonWithImage, hasSubmitted && !idImage && styles.errorBorder]} 
+                      onPress={pickIdImage}
                     >
                       {idImage ? (
                         <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
                       ) : (
-                        <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                        <Image source={require('../../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                       )}
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                  <Text style={styles.submitText}>Create Account</Text>
+                  <Text style={styles.submitText}>Submit for Approval</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => router.push('/login' as any)}>
@@ -289,20 +261,6 @@ export default function PatientRegistrationScreen() {
           </View>
         </View>
       </Modal>
-
-      <Modal visible={showLevelDropdown} transparent={true} animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowLevelDropdown(false)}>
-          <View style={styles.modalContent}>
-            {levelOptions.map((item) => (
-              <TouchableOpacity key={item} style={styles.modalItem} onPress={() => {
-                  setStartingLevel(item); setShowLevelDropdown(false);
-                }}>
-                <Text style={styles.modalItemText}>{item}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </>
   );
 }
@@ -320,13 +278,11 @@ const styles = StyleSheet.create({
   backButton: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#0865AD', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   backIcon: { color: '#FFFFFF', fontSize: 18, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
   headerText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
-  
+  gifIcon: { width: 40, height: 40, borderRadius: 8, marginBottom: 10 },
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#0865AD', marginBottom: 5 }, 
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#666', marginBottom: 15 },
-  
   sectionContainer: { borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 15, padding: 15, marginBottom: 15 },
   sectionTitle: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#0865AD', marginBottom: 15 },
-  
   inputContainer: { marginBottom: 12 },
   inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD', marginBottom: 4 },
   asterisk: { color: '#E74C3C' },
@@ -335,7 +291,6 @@ const styles = StyleSheet.create({
   passwordInput: { flex: 1, fontFamily: 'SourGummy', color: '#333', fontSize: 12, height: '100%' },
   eyeBtn: { paddingLeft: 10 },
   eyeText: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD' },
-
   requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
   requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
   requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
@@ -344,28 +299,17 @@ const styles = StyleSheet.create({
   reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
   reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
   reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
-
-  uploadButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 40, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  uploadButton: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 40, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }, 
   uploadButtonWithImage: { height: 150 }, 
   uploadIconImage: { width: 24, height: 24 },
-  uploadedImage: { width: '100%', height: '100%' },
-  
-  dropdownInput: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, paddingHorizontal: 15, height: 40 },
-  dropdownPlaceholder: { flex: 1, fontFamily: 'SourGummy', fontSize: 12, color: '#333' },
-  dropdownArrow: { color: '#0865AD', fontSize: 12 }, 
-  
+  uploadedImage: { width: '100%', height: '100%' }, 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '80%', maxHeight: '60%', backgroundColor: '#FFFFFF', borderRadius: 15, paddingVertical: 10, elevation: 5 },
-  modalItem: { paddingVertical: 15, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  modalItemText: { fontFamily: 'SourGummy-Medium', fontSize: 14, color: '#0865AD', textAlign: 'center' },
-  
   alertBox: { width: '80%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5 },
   alertTitle: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#0865AD', marginBottom: 10, textAlign: 'center' },
   alertMessage: { fontFamily: 'SourGummy', fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 18 },
   alertBtn: { backgroundColor: '#0865AD', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 10 },
   alertBtnText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
-  
-  submitBtn: { backgroundColor: '#0865AD', paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 15, marginBottom: 15 },
+  submitBtn: { backgroundColor: '#0865AD', paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 15 },
   submitText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
   loginLink: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD', textAlign: 'center', textDecorationLine: 'underline' },
   errorBorder: { borderColor: '#E74C3C', borderWidth: 1.5 },

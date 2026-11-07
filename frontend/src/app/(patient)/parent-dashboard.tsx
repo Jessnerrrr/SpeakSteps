@@ -19,9 +19,9 @@ import { ParentBottomNav } from '@/components/parent-bottom-nav';
 
 export default function ParentDashboardScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -41,7 +41,7 @@ export default function ParentDashboardScreen() {
             OUTER WATERMARKED LIGHT BLUE CANVAS
             ========================================================================= */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -95,11 +95,11 @@ export default function ParentDashboardScreen() {
                     activeOpacity={0.8}
                     onPress={() => {
                       setIsMenuOpen(false);
-                      router.push('/patient-dashboard' as any);
+                      router.push('/patient-stars' as any);
                     }}
                   >
                     <Image
-                      source={require('../../assets/images/child-avatar.png')}
+                      source={require('../../../assets/images/child-avatar.png')}
                       style={styles.menuChildAvatar}
                       contentFit="cover"
                     />
@@ -150,7 +150,7 @@ export default function ParentDashboardScreen() {
                 <View style={styles.starRow}>
                   <Text style={styles.starCountText}>{completedActivities}</Text>
                   <Image
-                    source={require('../../assets/images/star-3d.png')}
+                    source={require('../../../assets/images/star-3d.png')}
                     style={styles.starIcon}
                     contentFit="contain"
                   />
@@ -183,7 +183,7 @@ export default function ParentDashboardScreen() {
                   onPress={() => console.log('Child Profile')}
                 >
                   <Image
-                    source={require('../../assets/images/child-avatar.png')}
+                    source={require('../../../assets/images/child-avatar.png')}
                     style={styles.childProfileAvatar}
                     contentFit="cover"
                   />

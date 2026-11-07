@@ -21,9 +21,9 @@ export default function OtpVerificationScreen() {
   const [alertType, setAlertType] = useState('error');
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function OtpVerificationScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../../assets/images/split-bg.png')} 
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
@@ -150,7 +150,7 @@ export default function OtpVerificationScreen() {
 
                   <View style={styles.innerCircle}>
                     <Image 
-                      source={require('../../assets/images/otp-timer.gif')} 
+                      source={require('../../../assets/images/otp-timer.gif')} 
                       style={styles.centerGif}
                       contentFit="contain"
                     />

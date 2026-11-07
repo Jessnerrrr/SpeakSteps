@@ -21,9 +21,9 @@ import { ChildBottomNav } from '@/components/child-bottom-nav';
 
 export default function PatientStarsScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [data] = useState(MOCK_STARS_DATA);
@@ -42,7 +42,7 @@ export default function PatientStarsScreen() {
             OUTER WATERMARKED LIGHT BLUE CANVAS
             ========================================================================= */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -97,7 +97,7 @@ export default function PatientStarsScreen() {
                 <View style={styles.starNumberRow}>
                   <Text style={styles.starNumberText}>{data.totalStarsEarned}</Text>
                   <Image
-                    source={require('../../assets/images/star-3d.png')}
+                    source={require('../../../assets/images/star-3d.png')}
                     style={styles.starAssetImage}
                     contentFit="contain"
                   />
@@ -124,7 +124,7 @@ export default function PatientStarsScreen() {
                   ===================================================================== */}
               <View style={styles.motivationBannerRow}>
                 <Image
-                  source={require('../../assets/images/trophy.png')}
+                  source={require('../../../assets/images/trophy.png')}
                   style={styles.trophyIconImage}
                   contentFit="contain"
                 />

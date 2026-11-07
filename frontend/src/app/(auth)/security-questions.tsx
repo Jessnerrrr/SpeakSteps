@@ -21,9 +21,9 @@ export default function SecurityQuestionsScreen() {
   const [isDropdownVisible, setDropdownVisible] = useState(false);
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -38,7 +38,7 @@ export default function SecurityQuestionsScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../../assets/images/split-bg.png')} 
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"

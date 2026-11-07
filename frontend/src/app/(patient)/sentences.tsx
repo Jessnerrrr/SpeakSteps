@@ -8,9 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { sentences } from '../data/sentences';
-import type { Language, Position, Sentence } from '../types/sentences';
-import { POSITIONS } from '../types/sentences';
+// Fixed paths: only go up two levels to reach data and types from app/patient
+import { sentences } from '../../data/sentences';
+import type { Language, Position, Sentence } from '../../types/sentences';
+import { POSITIONS } from '../../types/sentences';
 
 // ─── Language Toggle ──────────────────────────────────────────────────────────
 function LanguageToggle({
@@ -107,8 +108,9 @@ export default function SentencesScreen() {
   const [position, setPosition] = useState<Position>('Initial');
 
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../assets/SourGummy.ttf'),
+    SourGummy: require('../../../assets/SourGummy.ttf'), // Font path requires three levels up from app/patient
   });
+  
   if (!fontsLoaded) return null;
 
   const items = sentences[language][position];

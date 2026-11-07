@@ -5,9 +5,9 @@ import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoi
 
 export default function ForgotPasswordScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -17,7 +17,7 @@ export default function ForgotPasswordScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../../assets/images/split-bg.png')} 
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
@@ -41,7 +41,7 @@ export default function ForgotPasswordScreen() {
               
               {/* Overlapping Bird Logo */}
               <Image 
-                source={require('../../assets/images/bird-logo.gif')} 
+                source={require('../../../assets/images/bird-logo.gif')} 
                 style={styles.overlappingBird}
                 contentFit="contain"
               />
@@ -60,7 +60,7 @@ export default function ForgotPasswordScreen() {
                 onPress={() => router.push('/multi-factor' as any)} 
               >
                 <View style={styles.iconBoxWhite}>
-                  <Image source={require('../../assets/images/shieldplus.png')} style={styles.placeholderIcon} />
+                  <Image source={require('../../../assets/images/shieldplus.png')} style={styles.placeholderIcon} />
                 </View>
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Multi-Factor Authenticator</Text>
@@ -75,7 +75,7 @@ export default function ForgotPasswordScreen() {
                 onPress={() => router.push('/security-questions' as any)} 
               >
                 <View style={styles.iconBoxWhite}>
-                  <Image source={require('../../assets/images/shieldquestion.png')} style={styles.placeholderIcon} />
+                  <Image source={require('../../../assets/images/shieldquestion.png')} style={styles.placeholderIcon} />
                 </View>
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Security Questions</Text>

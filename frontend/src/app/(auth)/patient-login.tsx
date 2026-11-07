@@ -14,9 +14,9 @@ export default function PatientLoginScreen() {
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   if (!fontsLoaded) return null; 
@@ -49,7 +49,7 @@ export default function PatientLoginScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../../assets/images/split-bg.png')} 
         style={styles.background}
         imageStyle={{ opacity: 1 }}
         resizeMode="cover"
@@ -62,7 +62,7 @@ export default function PatientLoginScreen() {
             
             <View style={styles.topSection}>
               <Image 
-                source={require('../../assets/images/bird-logo.gif')} 
+                source={require('../../../assets/images/bird-logo.gif')} 
                 style={styles.birdImage}
                 contentFit="contain"
               />
@@ -82,7 +82,7 @@ export default function PatientLoginScreen() {
 
                 {/* Patient Kid GIF Icon */}
                 <Image 
-                  source={require('../../assets/images/kid_yellow.gif')} 
+                  source={require('../../../assets/images/kid_yellow.gif')} 
                   style={styles.gifIcon}
                   contentFit="cover"
                 />

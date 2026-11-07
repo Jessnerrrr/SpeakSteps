@@ -19,9 +19,9 @@ import { ChildBottomNav } from '@/components/child-bottom-nav';
 
 export default function PickBuddyScreen() {
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [activeBuddy, setActiveBuddy] = useState<Buddy>(BuddyStore.getActiveBuddy());
@@ -46,7 +46,7 @@ export default function PickBuddyScreen() {
             OUTER WATERMARKED LIGHT BLUE CANVAS
             ========================================================================= */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -417,4 +417,3 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 });
-

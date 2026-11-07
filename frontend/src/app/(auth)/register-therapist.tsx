@@ -5,14 +5,14 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
 
-export default function TeacherRegistrationScreen() {
+export default function TherapistRegistrationScreen() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false); 
-  const [teacherId, setTeacherId] = useState('');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [idImage, setIdImage] = useState<string | null>(null);
+  const [licenseNo, setLicenseNo] = useState('');
+  const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
+  const [idImage, setIdImage] = useState<string | undefined>(undefined);
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -23,9 +23,9 @@ export default function TeacherRegistrationScreen() {
   const [alertType, setAlertType] = useState<'error' | 'success'>('error');
 
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'), 
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'), 
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'), 
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'), 
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'), 
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'), 
   });
 
   if (!fontsLoaded) return null; 
@@ -58,7 +58,7 @@ export default function TeacherRegistrationScreen() {
 
   const handleSubmit = () => {
     setHasSubmitted(true);
-    if (!fullName || !email || !password || !teacherId || !profileImage || !idImage) {
+    if (!fullName || !email || !password || !licenseNo || !profileImage || !idImage) {
       setAlertTitle("Missing Details");
       setAlertMessage("Please fill in all the required fields and upload your photos before submitting.");
       setAlertType('error');
@@ -87,9 +87,9 @@ export default function TeacherRegistrationScreen() {
     }
   };
 
-  const handleTeacherIdInput = (text: string) => {
+  const handleLicenseInput = (text: string) => {
     const numericOnly = text.replace(/[^0-9]/g, '');
-    setTeacherId(numericOnly);
+    setLicenseNo(numericOnly);
   };
 
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
@@ -104,19 +104,16 @@ export default function TeacherRegistrationScreen() {
       <Stack.Screen options={{ headerShown: false }} /> 
 
       <ImageBackground 
-        source={require('../../assets/images/split-bg.png')} 
+        source={require('../../../assets/images/split-bg.png')} 
         style={styles.background}
         imageStyle={{ opacity: 1 }} 
         resizeMode="cover"
       >
-        <KeyboardAvoidingView 
-          style={{ flex: 1 }} 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.container}>
             
             <View style={styles.topSection}>
-              <Image source={require('../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
+              <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.birdImage} contentFit="contain" />
               <View style={styles.brandTextContainer}>
                 <Text style={styles.brandTitle}>SpeakSteps</Text>
               </View>
@@ -129,18 +126,14 @@ export default function TeacherRegistrationScreen() {
                   <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Text style={styles.backIcon}>‹</Text>
                   </TouchableOpacity>
-                  <Text style={styles.headerText}>Teacher Account</Text>
+                  <Text style={styles.headerText}>Therapist Account</Text>
                 </View>
 
-                {/* Teacher GIF Icon */}
-                <Image 
-                  source={require('../../assets/images/teacher-icon.gif')} 
-                  style={styles.gifIcon}
-                  contentFit="cover"
-                />
+                {/* Therapist GIF Icon */}
+                <Image source={require('../../../assets/images/therapist_blue.gif')} style={styles.gifIcon} contentFit="cover" />
 
-                <Text style={styles.welcomeText}>Register as Teacher</Text>
-                <Text style={styles.subText}>Your Teacher ID must be on the Center's records.</Text>
+                <Text style={styles.welcomeText}>Register as Therapist</Text>
+                <Text style={styles.subText}>Licensed and ID check required</Text>
 
                 <View style={styles.sectionContainer}>
                   <Text style={styles.sectionTitle}>Personal Information</Text>
@@ -152,7 +145,7 @@ export default function TeacherRegistrationScreen() {
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Email</Text>
-                    <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="teacher@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+                    <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="therapist@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
                   </View>
 
                   <View style={styles.inputContainer}>
@@ -194,13 +187,13 @@ export default function TeacherRegistrationScreen() {
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Upload Profile Picture</Text>
                     <TouchableOpacity 
-                      style={[styles.uploadButton, profileImage && styles.uploadButtonWithImage, hasSubmitted && !profileImage && styles.errorBorder]} 
+                      style={[styles.uploadButton, profileImage ? styles.uploadButtonWithImage : null, hasSubmitted && !profileImage && styles.errorBorder]} 
                       onPress={pickProfileImage}
                     >
                       {profileImage ? (
                         <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
                       ) : (
-                        <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                        <Image source={require('../../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                       )}
                     </TouchableOpacity>
                   </View>
@@ -210,27 +203,27 @@ export default function TeacherRegistrationScreen() {
                   <Text style={styles.sectionTitle}>Professional Verification</Text>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Teacher ID no. <Text style={styles.asterisk}>*</Text></Text>
+                    <Text style={styles.inputLabel}>License no. <Text style={styles.asterisk}>*</Text></Text>
                     <TextInput 
-                      style={[styles.input, hasSubmitted && !teacherId && styles.errorBorder]} 
+                      style={[styles.input, hasSubmitted && !licenseNo && styles.errorBorder]} 
                       placeholder="e.g. 1234567" 
                       placeholderTextColor="#999" 
                       keyboardType="numeric"
-                      value={teacherId} 
-                      onChangeText={handleTeacherIdInput} 
+                      value={licenseNo} 
+                      onChangeText={handleLicenseInput} 
                     />
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID <Text style={styles.asterisk}>*</Text></Text>
+                    <Text style={styles.inputLabel}>Photo of valid ID or PRC License <Text style={styles.asterisk}>*</Text></Text>
                     <TouchableOpacity 
-                      style={[styles.uploadButton, idImage && styles.uploadButtonWithImage, hasSubmitted && !idImage && styles.errorBorder]} 
+                      style={[styles.uploadButton, idImage ? styles.uploadButtonWithImage : null, hasSubmitted && !idImage && styles.errorBorder]} 
                       onPress={pickIdImage}
                     >
                       {idImage ? (
                         <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
                       ) : (
-                        <Image source={require('../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
+                        <Image source={require('../../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                       )}
                     </TouchableOpacity>
                   </View>
