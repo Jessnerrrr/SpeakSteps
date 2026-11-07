@@ -231,7 +231,11 @@ export default function PatientDashboardScreen() {
                           <TouchableOpacity
                             style={[styles.stepCircle, { backgroundColor: adv.bgColor }]}
                             activeOpacity={0.8}
-                            onPress={() => router.push('/practice' as any)}
+                            onPress={() =>
+                              router.push(
+                                (adv.id === 'sentences' ? '/sentences' : '/practice') as any,
+                              )
+                            }
                           >
                             {adv.iconType === 'sounds' ? (
                               <Ionicons name="musical-notes" size={26} color="#FFFFFF" />
@@ -257,7 +261,7 @@ export default function PatientDashboardScreen() {
               <TouchableOpacity
                 style={styles.continuePracticeBtn}
                 activeOpacity={0.85}
-                onPress={() => router.push('/practice' as any)}
+                onPress={() => router.push('/sentences' as any)}
               >
                 <Text style={styles.continuePracticeText}>Continue Practice</Text>
                 <View style={styles.playArrowIcon}>
@@ -271,7 +275,7 @@ export default function PatientDashboardScreen() {
                 <TouchableOpacity
                   style={[styles.bottomCard, styles.activitiesCard]}
                   activeOpacity={0.85}
-                  onPress={() => router.push('/practice' as any)}
+                  onPress={() => router.push('/sentences' as any)}
                 >
                   <View style={styles.cardIconWrapper}>
                     <Image

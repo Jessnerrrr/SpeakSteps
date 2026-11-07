@@ -1,10 +1,14 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ImageBackground, Modal, StyleSheet, Text, View, TouchableOpacity, Pressable, Platform } from 'react-native';
 
 export default function App() {
+  useEffect(() => {
+    router.replace('/sentences' as any);
+  }, []);
+
   // State to control the About modal visibility
   const [aboutVisible, setAboutVisible] = useState(false);
 
