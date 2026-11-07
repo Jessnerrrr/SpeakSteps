@@ -11,7 +11,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useFonts } from 'expo-font';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
@@ -402,9 +402,10 @@ export default function TeacherDashboardScreen() {
     'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
   
-
   // --- Main Navigation Tabs ---
   const [activeTab, setActiveTab] = useState<'home' | 'patients' | 'activities' | 'reviews'>('home');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   // --- Patients Tab State ---
   const [patientSearch, setPatientSearch] = useState('');
@@ -573,7 +574,7 @@ export default function TeacherDashboardScreen() {
             <Text style={styles.backArrowText}>←</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => setIsMenuOpen(true)}>
             <Svg width="22" height="18" viewBox="0 0 24 18" fill="none">
               <Path d="M1 1.5H23M1 9H23M1 16.5H23" stroke="#1E293B" strokeWidth="2.5" strokeLinecap="round" />
             </Svg>
@@ -582,7 +583,7 @@ export default function TeacherDashboardScreen() {
 
         <Text style={styles.appTitle}>SpeakSteps</Text>
 
-        <TouchableOpacity style={styles.iconButton}>
+        <TouchableOpacity style={styles.iconButton} onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}>
           <View>
             <Svg width="22" height="24" viewBox="0 0 24 24" fill="none">
               <Path
@@ -2033,7 +2034,7 @@ export default function TeacherDashboardScreen() {
           {activeTab === 'home' && <View style={styles.activeTabIndicator} />}
           <Svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'home' ? '#0284C7' : 'none'}>
             <Path
-              d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"
+              d="M3 9.5L12 3L21 9.5V20C21 20.5523 21 20 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"
               stroke={activeTab === 'home' ? '#0284C7' : '#94A3B8'}
               strokeWidth="2"
               strokeLinecap="round"
@@ -2134,6 +2135,94 @@ export default function TeacherDashboardScreen() {
           <Text style={[styles.navLabel, activeTab === 'reviews' && styles.navLabelActive]}>Reviews</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ==========================================
+          --- TEACHER SIDE MENU MODAL ---
+          ========================================== */}
+      <Modal 
+        visible={isMenuOpen} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setIsMenuOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.4)', flexDirection: 'row' }}>
+          {/* Side Panel */}
+          <View style={{ width: 260, backgroundColor: '#FFFFFF', height: '100%', paddingVertical: 50, paddingHorizontal: 20, shadowColor: '#000', shadowOpacity: 0.2, elevation: 10 }}>
+            <TouchableOpacity onPress={() => setIsMenuOpen(false)} style={{ alignSelf: 'flex-end', padding: 8 }}>
+              <Text style={{ fontSize: 20, color: '#64748B', fontWeight: 'bold' }}>✕</Text>
+            </TouchableOpacity>
+            
+            <View style={{ marginTop: 20 }}>
+              <TouchableOpacity 
+                style={{ paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  triggerToast('Profile page coming soon!');
+                }}
+              >
+                <Text style={{ fontSize: 16, color: '#1E293B', fontWeight: '600' }}>Profile</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  triggerToast('Settings coming soon!');
+                }}
+              >
+                <Text style={{ fontSize: 16, color: '#1E293B', fontWeight: '600' }}>Settings</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ paddingVertical: 15, marginTop: 'auto' }}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  router.replace('/teacher-login' as never);
+                }}
+              >
+                <Text style={{ fontSize: 16, color: '#DC2626', fontWeight: '700' }}>Log out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Clickable backdrop to close menu */}
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setIsMenuOpen(false)} />
+        </View>
+      </Modal>
+
+      {/* ==========================================
+          --- TEACHER NOTIFICATION MODAL ---
+          ========================================== */}
+      <Modal 
+        visible={isNotificationsOpen} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setIsNotificationsOpen(false)}
+      >
+        <TouchableOpacity style={{ flex: 1 }} onPress={() => setIsNotificationsOpen(false)}>
+          <View style={{ position: 'absolute', top: 60, right: 16, width: 300, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, shadowColor: '#000', shadowOpacity: 0.15, shadowOffset: { width: 0, height: 4 }, elevation: 8 }}>
+            
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E293B' }}>Notifications</Text>
+              <Text style={{ fontSize: 12, color: '#0284C7', fontWeight: '600' }}>Mark all as read</Text>
+            </View>
+
+            <TouchableOpacity style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B' }}>New Recording Submitted</Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>Khyl Shervin Sude completed "Ready, set, /r/".</Text>
+              <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 6 }}>10 minutes ago</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B' }}>Home Practice Reminder</Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>Angelica Vega needs follow-up for "/l/ medial".</Text>
+              <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 6 }}>2 hours ago</Text>
+            </TouchableOpacity>
+
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
     </SafeAreaView>
   );
 }

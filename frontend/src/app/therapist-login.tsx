@@ -28,7 +28,11 @@ export default function TherapistLoginScreen() {
 
   const handleLogin = () => {
     setHasSubmitted(true);
-    if (!email || !password) return; 
+    if (!email || !password) {
+      return;
+    }
+    // Routes to the therapist dashboard
+    router.replace('/therapist' as never);
   };
 
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
@@ -59,7 +63,11 @@ export default function TherapistLoginScreen() {
             </View>
 
             <View style={styles.bottomCard}>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+              <ScrollView 
+                keyboardShouldPersistTaps="handled" 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={styles.scrollContent}
+              >
                 
                 <View style={styles.cardHeader}>
                   <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
