@@ -6,14 +6,10 @@ import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ImageBackground,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
@@ -22,8 +18,10 @@ import {
 // MOCK DATA IMPORT:
 import { MOCK_PATIENT_DASHBOARD } from '@/data/patient-dashboard-mock';
 import { BuddyStore, Buddy } from '@/data/buddy-store';
+import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
-import { authenticateMockUser } from '@/data/auth-mock';
+import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
+import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 
 export default function PatientDashboardScreen() {
   const [fontsLoaded] = useFonts({
@@ -34,11 +32,10 @@ export default function PatientDashboardScreen() {
 
   const [data] = useState(MOCK_PATIENT_DASHBOARD);
   const [activeBuddy, setActiveBuddy] = useState<Buddy>(BuddyStore.getActiveBuddy());
+  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
-  const [parentPassword, setParentPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState('');
+  const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   // Listen to active buddy changes from "Pick My Buddy" screen
   useEffect(() => {
@@ -48,32 +45,13 @@ export default function PatientDashboardScreen() {
     return unsubscribe;
   }, []);
 
-  const handleVerifyCredentials = () => {
-    if (!parentPassword.trim()) {
-      setAuthError('Please enter your parent password.');
-      return;
-    }
-    const result = authenticateMockUser('parent@gmail.com', parentPassword);
-    if (result.success || parentPassword === 'password123' || parentPassword === '123') {
-      setAuthError('');
-      setParentPassword('');
-      setIsGrownUpModalVisible(false);
-      router.push('/parent-dashboard' as any);
-    } else {
-      setAuthError('Incorrect password. Please try again.');
-    }
-  };
-
-  const handleMathAnswer = (answer: number) => {
-    if (answer === 18) {
-      setAuthError('');
-      setParentPassword('');
-      setIsGrownUpModalVisible(false);
-      router.push('/parent-dashboard' as any);
-    } else {
-      setAuthError('That is not quite right. Try again!');
-    }
-  };
+  // Listen to child profile changes from Parent Mode
+  useEffect(() => {
+    const unsubscribe = ChildProfileStore.subscribe((updatedProfile) => {
+      setChildProfile(updatedProfile);
+    });
+    return unsubscribe;
+  }, []);
 
   if (!fontsLoaded) return null;
 
@@ -95,7 +73,7 @@ export default function PatientDashboardScreen() {
             {/* TOP HEADER */}
             <View style={styles.topHeader}>
               <View style={styles.greetingRow}>
-                <Text style={styles.greetingText}>Hi, {data.childName}</Text>
+                <Text style={styles.greetingText}>Hi, {childProfile.displayName}!</Text>
                 <Text style={styles.waveEmoji}>{data.greetingEmoji}</Text>
               </View>
 
@@ -104,8 +82,9 @@ export default function PatientDashboardScreen() {
                   style={styles.bellButton}
                   activeOpacity={0.7}
                   onPress={() => console.log('Notifications')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="notifications-outline" size={20} color="#F5A623" />
+                  <Ionicons name="notifications-outline" size={16} color="#F5A623" />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -122,21 +101,22 @@ export default function PatientDashboardScreen() {
               </View>
             </View>
 
-            {/* PARENT MODE DROPDOWN PILL */}
+            {/* =====================================================================
+                CHILD MODE DROPDOWN MENU (Parent Mode & Sign Out)
+                ===================================================================== */}
             {isMenuOpen && (
               <>
                 <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
                   <View style={styles.menuBackdrop} />
                 </TouchableWithoutFeedback>
 
-                <View style={styles.menuDropdownPill}>
+                <View style={styles.menuDropdownCard}>
+                  {/* Row 1: Parent mode */}
                   <TouchableOpacity
-                    style={styles.menuDropdownItem}
+                    style={styles.menuItemRow}
                     activeOpacity={0.8}
                     onPress={() => {
                       setIsMenuOpen(false);
-                      setAuthError('');
-                      setParentPassword('');
                       setIsGrownUpModalVisible(true);
                     }}
                   >
@@ -146,6 +126,25 @@ export default function PatientDashboardScreen() {
                       contentFit="cover"
                     />
                     <Text style={styles.menuItemText}>Parent mode</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+                  </TouchableOpacity>
+
+                  {/* Soft Divider */}
+                  <View style={styles.menuDivider} />
+
+                  {/* Row 2: Sign out */}
+                  <TouchableOpacity
+                    style={styles.menuItemRow}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setIsMenuOpen(false);
+                      setIsSignOutModalVisible(true);
+                    }}
+                  >
+                    <View style={styles.logoutIconBadge}>
+                      <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
+                    </View>
+                    <Text style={styles.menuItemText}>Sign out</Text>
                     <Ionicons name="chevron-forward" size={16} color="#F5A623" />
                   </TouchableOpacity>
                 </View>
@@ -316,101 +315,30 @@ export default function PatientDashboardScreen() {
           </View>
         </ImageBackground>
 
-        {/* GROWN-UP CHECK MODAL */}
-        <Modal
+        {/* =========================================================================
+            GROWN-UP CHECK MODAL (Password-Only Verification)
+            ========================================================================= */}
+        <GrownUpCheckModal
           visible={isGrownUpModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => {
+          onClose={() => setIsGrownUpModalVisible(false)}
+          onSuccess={() => {
             setIsGrownUpModalVisible(false);
-            setAuthError('');
-            setParentPassword('');
+            router.push('/parent-dashboard' as any);
           }}
-        >
-          <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={styles.modalKeyboardAvoid}
-            >
-              <View style={styles.grownUpModalCard}>
-                <Text style={styles.modalTitle}>Grown-up check</Text>
-                <Text style={styles.modalQuestion}>What is 15 + 3?</Text>
+        />
 
-                <View style={styles.mathOptionsGrid}>
-                  {[16, 19, 18, 11].map((num) => (
-                    <TouchableOpacity
-                      key={num}
-                      style={styles.mathOptionButton}
-                      activeOpacity={0.8}
-                      onPress={() => handleMathAnswer(num)}
-                    >
-                      <Text style={styles.mathOptionText}>{num}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <View style={styles.credentialDividerRow}>
-                  <View style={styles.credDividerLine} />
-                  <Text style={styles.credDividerText}>or parent password</Text>
-                  <View style={styles.credDividerLine} />
-                </View>
-
-                {/* PASSWORD INPUT (Arrow Button Removed) */}
-                <View style={styles.passwordInputWrapper}>
-                  <TextInput
-                    style={styles.modalPasswordInput}
-                    placeholder="Enter parent password"
-                    placeholderTextColor="#9AAFC0"
-                    secureTextEntry={!showPassword}
-                    value={parentPassword}
-                    onChangeText={(t) => {
-                      setParentPassword(t);
-                      if (authError) setAuthError('');
-                    }}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    style={styles.modalEyeButton}
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color="#0D68AC"
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {authError ? (
-                  <Text style={styles.modalErrorText}>{authError}</Text>
-                ) : null}
-
-                {/* NEW "CONTINUE" BUTTON */}
-                <TouchableOpacity
-                  style={styles.modalContinueButton}
-                  activeOpacity={0.85}
-                  onPress={handleVerifyCredentials}
-                >
-                  <Text style={styles.modalContinueButtonText}>Continue</Text>
-                </TouchableOpacity>
-
-                {/* RE-STYLED "CANCEL" BUTTON (Secondary Style) */}
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    setIsGrownUpModalVisible(false);
-                    setAuthError('');
-                    setParentPassword('');
-                  }}
-                >
-                  <Text style={styles.modalCancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </View>
-        </Modal>
-      </SafeAreaView>
+        {/* =========================================================================
+            SIGN OUT CONFIRMATION MODAL (Cancel / Sign Out)
+            ========================================================================= */}
+        <SignOutConfirmModal
+          visible={isSignOutModalVisible}
+          onClose={() => setIsSignOutModalVisible(false)}
+          onConfirm={() => {
+            setIsSignOutModalVisible(false);
+            router.replace('/patient-login' as any);
+          }}
+        />
+      </SafeAreaView >
     </>
   );
 }
@@ -419,44 +347,112 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   dashboardCard: { flex: 1, backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
-  
-  topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, backgroundColor: '#E7F2FA' },
-  greetingRow: { flexDirection: 'row', alignItems: 'center' },
-  greetingText: { fontFamily: 'SourGummy-Bold', fontSize: 30, color: '#0D68AC', letterSpacing: -0.5 },
-  waveEmoji: { fontSize: 28, marginLeft: 6 },
-  headerRightActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  bellButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, borderColor: '#FBD27C', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
-  menuButton: { padding: 2, justifyContent: 'center', alignItems: 'center' },
 
-  menuBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0, 0, 0, 0.15)', zIndex: 30 },
-  menuDropdownPill: { position: 'absolute', top: 66, right: 18, backgroundColor: '#FFFFFF', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8, borderWidth: 1.5, borderColor: '#D4E7F5', zIndex: 40 },
-  menuDropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  menuParentIcon: { width: 28, height: 28, borderRadius: 14 },
-  menuItemText: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#0D68AC' },
+  /* Top Header */
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#E7F2FA',
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  greetingText: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 30,
+    color: '#0D68AC',
+    letterSpacing: -0.5,
+  },
+  waveEmoji: {
+    fontSize: 28,
+    marginLeft: 6,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  bellButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FBD27C',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2.5,
+    elevation: 2,
+  },
+  menuButton: {
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  modalKeyboardAvoid: { width: '100%', alignItems: 'center' },
-  grownUpModalCard: { width: '100%', maxWidth: 350, backgroundColor: '#FFFFFF', borderRadius: 32, paddingVertical: 24, paddingHorizontal: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 10, borderWidth: 1.5, borderColor: '#C7DFEE' },
-  modalTitle: { fontFamily: 'SourGummy-Bold', fontSize: 24, color: '#0D68AC', textAlign: 'center', marginBottom: 4 },
-  modalQuestion: { fontFamily: 'SourGummy-Bold', fontSize: 18, color: '#0D68AC', textAlign: 'center', marginBottom: 16 },
-  mathOptionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%', gap: 12, marginBottom: 14 },
-  mathOptionButton: { width: '47%', height: 52, borderRadius: 18, borderWidth: 2, borderColor: '#CBE0EF', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 2 },
-  mathOptionText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#0D68AC' },
-  credentialDividerRow: { flexDirection: 'row', alignItems: 'center', width: '100%', marginVertical: 10, gap: 8 },
-  credDividerLine: { flex: 1, height: 1, backgroundColor: '#E0EEF7' },
-  credDividerText: { fontFamily: 'SourGummy-Medium', fontSize: 11, color: '#8BA4B8' },
-  
-  passwordInputWrapper: { flexDirection: 'row', alignItems: 'center', width: '100%', height: 46, backgroundColor: '#F5F9FD', borderRadius: 14, borderWidth: 1.5, borderColor: '#CBE0EF', paddingHorizontal: 12, marginBottom: 6 },
-  modalPasswordInput: { flex: 1, fontFamily: 'SourGummy', fontSize: 13, color: '#0D68AC', paddingVertical: 4 },
-  modalEyeButton: { padding: 6 },
-  modalErrorText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#E74C3C', textAlign: 'center', marginBottom: 8 },
-  
-  /* NEW BUTTON STYLES */
-  modalContinueButton: { width: '100%', height: 48, backgroundColor: '#0865AD', borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 12, shadowColor: '#084878', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 },
-  modalContinueButtonText: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#FFFFFF' },
-  
-  modalCancelButton: { width: '100%', height: 48, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#E0EEF7', borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
-  modalCancelButtonText: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#8BA4B8' },
+  /* Dropdown Backdrop & Floating Menu Card */
+  menuBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    zIndex: 30,
+  },
+  menuDropdownCard: {
+    position: 'absolute',
+    top: 66,
+    right: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#D4E7F5',
+    zIndex: 40,
+    minWidth: 190,
+  },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  menuParentIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  menuItemText: {
+    flex: 1,
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 13,
+    color: '#0D68AC',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#EDF4F9',
+    marginVertical: 4,
+  },
+  logoutIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0D68AC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   scrollContent: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 16 },
   mascotSpeechRow: { flexDirection: 'row', alignItems: 'center', marginBottom: -16, zIndex: 10 },

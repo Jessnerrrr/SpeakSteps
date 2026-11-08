@@ -25,7 +25,7 @@ export default function AppTabs() {
             <TabButton>Home</TabButton>
           </TabTrigger>
           <TabTrigger name="sentences" href="/sentences" asChild>
-            <TabButton>Explore</TabButton>
+            <TabButton>Sentences</TabButton>
           </TabTrigger>
         </CustomTabList>
       </TabList>
@@ -35,7 +35,7 @@ export default function AppTabs() {
 
 export function TabButton({ children, isFocused, ref: _ref, ...props }: TabTriggerSlotProps) {
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
+    <Pressable {...(props as any)} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
         type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
         style={styles.tabButtonView}>

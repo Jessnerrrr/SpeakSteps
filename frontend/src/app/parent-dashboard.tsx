@@ -3,7 +3,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -16,6 +16,9 @@ import {
 } from 'react-native';
 
 import { ParentBottomNav } from '@/components/parent-bottom-nav';
+import { ParentHeader } from '@/components/parent-header';
+import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
+import { AssignedActivity, TaskStore } from '@/data/parent-tasks-mock';
 
 export default function ParentDashboardScreen() {
   const [fontsLoaded] = useFonts({
@@ -24,13 +27,24 @@ export default function ParentDashboardScreen() {
     'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
+  const activities = TaskStore.getActivities();
+
+  // Subscribe to live child profile updates
+  useEffect(() => {
+    const unsubscribe = ChildProfileStore.subscribe((updatedProfile) => {
+      setChildProfile(updatedProfile);
+    });
+    return unsubscribe;
+  }, []);
 
   if (!fontsLoaded) return null;
 
-  const totalActivities = 6;
-  const completedActivities = 2;
-  const progressPercentage = (completedActivities / totalActivities) * 100;
+  const totalActivities = activities.length;
+  const completedActivities = activities.filter((t) => t.status === 'completed').length;
+  const pendingActivities = activities.filter((t) => t.status === 'pending').length;
+  const totalAttempts = activities.reduce((sum, t) => sum + (t.attempts || 0), 0);
+  const progressPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
 
   return (
     <>
@@ -50,84 +64,11 @@ export default function ParentDashboardScreen() {
               FLOATING MAIN PARENT DASHBOARD CARD CONTAINER
               ========================================================================= */}
           <View style={styles.parentCardContainer}>
-            {/* TOP HEADER: "Parent / Guardian", BELL & HAMBURGER */}
-            <View style={styles.topHeader}>
-              <Text style={styles.headerTitle}>Parent / Guardian</Text>
-
-              <View style={styles.headerRightActions}>
-                {/* Notification Bell Circle */}
-                <TouchableOpacity
-                  style={styles.bellButton}
-                  activeOpacity={0.7}
-                  onPress={() => console.log('Notifications')}
-                >
-                  <Ionicons name="notifications-outline" size={20} color="#F5A623" />
-                </TouchableOpacity>
-
-                {/* Triple Bar Hamburger / Close Menu Button */}
-                <TouchableOpacity
-                  style={styles.menuButton}
-                  activeOpacity={0.7}
-                  onPress={() => setIsMenuOpen(!isMenuOpen)}
-                >
-                  <Ionicons
-                    name={isMenuOpen ? 'close' : 'menu'}
-                    size={34}
-                    color="#0D68AC"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* =====================================================================
-                PARENT MODE SWITCHER DROPDOWN (Matches Reference Screen 4)
-                ===================================================================== */}
-            {isMenuOpen && (
-              <>
-                <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
-                  <View style={styles.menuBackdrop} />
-                </TouchableWithoutFeedback>
-
-                <View style={styles.menuDropdownCard}>
-                  {/* Row 1: Switch to child mode */}
-                  <TouchableOpacity
-                    style={styles.menuItemRow}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setIsMenuOpen(false);
-                      router.push('/patient-dashboard' as any);
-                    }}
-                  >
-                    <Image
-                      source={require('../../assets/images/child-avatar.png')}
-                      style={styles.menuChildAvatar}
-                      contentFit="cover"
-                    />
-                    <Text style={styles.menuItemText}>Switch to child mode</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#F5A623" />
-                  </TouchableOpacity>
-
-                  {/* Soft Divider */}
-                  <View style={styles.menuDivider} />
-
-                  {/* Row 2: Log out */}
-                  <TouchableOpacity
-                    style={styles.menuItemRow}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setIsMenuOpen(false);
-                      router.replace('/patient-login' as any);
-                    }}
-                  >
-                    <View style={styles.logoutIconBadge}>
-                      <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
-                    </View>
-                    <Text style={styles.menuItemText}>Log out</Text>
-                    <Ionicons name="chevron-forward" size={16} color="#F5A623" />
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
+            {/* UNIFIED PARENT HEADER & PROTECTED MENU */}
+            <ParentHeader
+              title="Parent / Guardian"
+              showBack={false}
+            />
 
             {/* SCROLLABLE MAIN CONTENT */}
             <ScrollView
@@ -144,7 +85,7 @@ export default function ParentDashboardScreen() {
                 end={{ x: 0, y: 1 }}
                 style={styles.progressHeroCard}
               >
-                <Text style={styles.heroTitle}>Mia's Progress</Text>
+                <Text style={styles.heroTitle}>{childProfile.displayName}'s Progress</Text>
 
                 {/* Stars earned badge */}
                 <View style={styles.starRow}>
@@ -168,7 +109,7 @@ export default function ParentDashboardScreen() {
 
                 {/* Subtext info */}
                 <Text style={styles.heroSubText}>
-                  {completedActivities} of {totalActivities} activities done | 0 Attempts
+                  {completedActivities} of {totalActivities} activities done | {totalAttempts} Attempts
                 </Text>
               </LinearGradient>
 
@@ -180,28 +121,28 @@ export default function ParentDashboardScreen() {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   style={styles.childProfileCard}
-                  onPress={() => console.log('Child Profile')}
+                  onPress={() => router.push('/child-profile' as any)}
                 >
                   <Image
-                    source={require('../../assets/images/child-avatar.png')}
+                    source={childProfile.avatar}
                     style={styles.childProfileAvatar}
                     contentFit="cover"
                   />
                   <Text style={styles.cardTitle}>Child Profile</Text>
-                  <Text style={styles.cardSubText}>Mia Santos</Text>
+                  <Text style={styles.cardSubText}>{childProfile.fullName}</Text>
                 </TouchableOpacity>
 
                 {/* Assigned Activities Card */}
                 <TouchableOpacity
                   activeOpacity={0.85}
                   style={styles.assignedCard}
-                  onPress={() => console.log('Assigned Tasks')}
+                  onPress={() => router.push('/parent-tasks' as any)}
                 >
                   <View style={styles.assignedIconBadge}>
                     <Ionicons name="list" size={24} color="#FFFFFF" />
                   </View>
                   <Text style={styles.cardTitle}>Assigned</Text>
-                  <Text style={styles.cardSubText}>0 Pending</Text>
+                  <Text style={styles.cardSubText}>{pendingActivities} Pending</Text>
                 </TouchableOpacity>
               </View>
 
@@ -211,7 +152,7 @@ export default function ParentDashboardScreen() {
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={styles.progressReportBanner}
-                onPress={() => console.log('Detailed Progress')}
+                onPress={() => router.push('/parent-progress' as any)}
               >
                 <View style={styles.progressReportIconBadge}>
                   <Ionicons name="file-tray-full" size={22} color="#FFFFFF" />
@@ -219,7 +160,7 @@ export default function ParentDashboardScreen() {
                 <View style={styles.progressReportTextWrapper}>
                   <Text style={styles.progressReportTitle}>Progress</Text>
                   <Text style={styles.progressReportSubtitle}>
-                    View Mia's progress report
+                    View {childProfile.displayName}'s progress report
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={22} color="#3EA88A" />
@@ -308,18 +249,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bellButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: '#FBD27C',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1.5 },
     shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowRadius: 2.5,
     elevation: 2,
   },
   menuButton: {

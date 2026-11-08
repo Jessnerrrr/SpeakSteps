@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import {
   ImageBackground,
@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 
@@ -18,6 +19,8 @@ import {
 // When ready for backend integration, replace MOCK_STARS_DATA with your API response hook
 import { MOCK_STARS_DATA } from '@/data/stars-mock';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
+import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 
 export default function PatientStarsScreen() {
   const [fontsLoaded] = useFonts({
@@ -27,6 +30,9 @@ export default function PatientStarsScreen() {
   });
 
   const [data] = useState(MOCK_STARS_DATA);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
+  const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   if (!fontsLoaded) return null;
 
@@ -61,20 +67,75 @@ export default function PatientStarsScreen() {
                   style={styles.bellButton}
                   activeOpacity={0.7}
                   onPress={() => console.log('Notifications')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="notifications-outline" size={20} color="#F5A623" />
+                  <Ionicons name="notifications-outline" size={16} color="#F5A623" />
                 </TouchableOpacity>
 
-                {/* Triple Bar Hamburger Menu */}
+                {/* Triple Bar Hamburger / Close Menu Button */}
                 <TouchableOpacity
                   style={styles.menuButton}
                   activeOpacity={0.7}
-                  onPress={() => console.log('Menu')}
+                  onPress={() => setIsMenuOpen(!isMenuOpen)}
                 >
-                  <Ionicons name="menu" size={34} color="#0D68AC" />
+                  <Ionicons
+                    name={isMenuOpen ? 'close' : 'menu'}
+                    size={34}
+                    color="#0D68AC"
+                  />
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* =====================================================================
+                CHILD MODE DROPDOWN MENU (Parent Mode & Sign Out)
+                ===================================================================== */}
+            {isMenuOpen && (
+              <>
+                <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
+                  <View style={styles.menuBackdrop} />
+                </TouchableWithoutFeedback>
+
+                <View style={styles.menuDropdownCard}>
+                  {/* Row 1: Parent mode */}
+                  <TouchableOpacity
+                    style={styles.menuItemRow}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setIsMenuOpen(false);
+                      setIsGrownUpModalVisible(true);
+                    }}
+                  >
+                    <Image
+                      source={require('../../assets/images/parent-mode-icon.png')}
+                      style={styles.menuParentIcon}
+                      contentFit="cover"
+                    />
+                    <Text style={styles.menuItemText}>Parent mode</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+                  </TouchableOpacity>
+
+                  {/* Soft Divider */}
+                  <View style={styles.menuDivider} />
+
+                  {/* Row 2: Sign out */}
+                  <TouchableOpacity
+                    style={styles.menuItemRow}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setIsMenuOpen(false);
+                      setIsSignOutModalVisible(true);
+                    }}
+                  >
+                    <View style={styles.logoutIconBadge}>
+                      <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
+                    </View>
+                    <Text style={styles.menuItemText}>Sign out</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
 
             {/* SCROLLABLE MAIN CONTENT */}
             <ScrollView
@@ -187,6 +248,30 @@ export default function PatientStarsScreen() {
             <ChildBottomNav activeTab="stars" />
           </View>
         </ImageBackground>
+
+        {/* =========================================================================
+            GROWN-UP CHECK MODAL (Password-Only Verification)
+            ========================================================================= */}
+        <GrownUpCheckModal
+          visible={isGrownUpModalVisible}
+          onClose={() => setIsGrownUpModalVisible(false)}
+          onSuccess={() => {
+            setIsGrownUpModalVisible(false);
+            router.push('/parent-dashboard' as any);
+          }}
+        />
+
+        {/* =========================================================================
+            SIGN OUT CONFIRMATION MODAL (Cancel / Sign Out)
+            ========================================================================= */}
+        <SignOutConfirmModal
+          visible={isSignOutModalVisible}
+          onClose={() => setIsSignOutModalVisible(false)}
+          onConfirm={() => {
+            setIsSignOutModalVisible(false);
+            router.replace('/patient-login' as any);
+          }}
+        />
       </SafeAreaView>
     </>
   );
@@ -242,18 +327,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bellButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: '#FBD27C',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1.5 },
     shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowRadius: 2.5,
     elevation: 2,
   },
   menuButton: {
@@ -417,5 +502,60 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#8FA5B8',
     marginLeft: 2,
+  },
+  /* Dropdown Backdrop & Floating Menu Card */
+  menuBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    zIndex: 30,
+  },
+  menuDropdownCard: {
+    position: 'absolute',
+    top: 66,
+    right: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#D4E7F5',
+    zIndex: 40,
+    minWidth: 190,
+  },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  menuParentIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  menuItemText: {
+    flex: 1,
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 13,
+    color: '#0D68AC',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#EDF4F9',
+    marginVertical: 4,
+  },
+  logoutIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0D68AC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -1,13 +1,15 @@
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  BackHandler,
   FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ChildBottomNav } from '@/components/child-bottom-nav';
 import { sentences } from '../data/sentences';
 import type { Language, Position, Sentence } from '../types/sentences';
 import { POSITIONS } from '../types/sentences';
@@ -109,6 +111,25 @@ export default function SentencesScreen() {
   const [fontsLoaded] = useFonts({
     SourGummy: require('../../assets/SourGummy.ttf'),
   });
+
+  // Handle back button: explicitly returns to the Child Dashboard (/patient-dashboard)
+  const handleBack = () => {
+    router.replace('/patient-dashboard' as any);
+  };
+
+  // Intercept hardware back button on Android so it safely remains in Child Mode
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress
+    );
+    return () => subscription.remove();
+  }, []);
+
   if (!fontsLoaded) return null;
 
   const items = sentences[language][position];
@@ -132,7 +153,12 @@ export default function SentencesScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity
+              onPress={handleBack}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Back to child dashboard"
+            >
               <Text style={styles.backIcon}>‹</Text>
             </TouchableOpacity>
             <View>
@@ -167,6 +193,9 @@ export default function SentencesScreen() {
             <SentenceCard sentence={item} index={index} onSelect={handleSelect} />
           )}
         />
+
+        {/* Global Child Bottom Navigation Bar */}
+        <ChildBottomNav activeTab="play" />
       </View>
     </>
   );
