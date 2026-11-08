@@ -3,9 +3,13 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { ImageBackground, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 
 export default function TeacherRegistrationScreen() {
+  // Responsive Hooks
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -122,7 +126,8 @@ export default function TeacherRegistrationScreen() {
               </View>
             </View>
 
-            <View style={styles.bottomCard}>
+            {/* Tablet Width Constraint applied to the Main Card */}
+            <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 
                 <View style={styles.cardHeader}>
@@ -132,7 +137,6 @@ export default function TeacherRegistrationScreen() {
                   <Text style={styles.headerText}>Teacher Account</Text>
                 </View>
 
-                {/* Teacher GIF Icon */}
                 <Image 
                   source={require('../../../assets/images/teacher-icon.gif')} 
                   style={styles.gifIcon}
@@ -272,7 +276,26 @@ const styles = StyleSheet.create({
   birdImage: { width: 110, height: 110, marginRight: 15 }, 
   brandTextContainer: { justifyContent: 'center' },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 }, 
-  bottomCard: { backgroundColor: '#FFFFFF', flex: 4, borderRadius: 40, marginHorizontal: 15, marginBottom: 15, paddingHorizontal: 25, paddingTop: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#CBE6F6' },
+  
+  bottomCard: { 
+    backgroundColor: '#FFFFFF', 
+    flex: 4, 
+    borderRadius: 40, 
+    marginHorizontal: 15, 
+    marginBottom: 15, 
+    paddingHorizontal: 25, 
+    paddingTop: 20, 
+    overflow: 'hidden', 
+    borderWidth: 1, 
+    borderColor: '#CBE6F6' 
+  },
+  // Responsive Tablet Constraint
+  bottomCardTablet: {
+    maxWidth: 550,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
   scrollContent: { paddingBottom: 30 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
   backButton: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#0865AD', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
@@ -304,7 +327,7 @@ const styles = StyleSheet.create({
   uploadIconImage: { width: 24, height: 24 },
   uploadedImage: { width: '100%', height: '100%' }, 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  alertBox: { width: '80%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5 },
+  alertBox: { width: '80%', maxWidth: 400, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5 },
   alertTitle: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#0865AD', marginBottom: 10, textAlign: 'center' },
   alertMessage: { fontFamily: 'SourGummy', fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 18 },
   alertBtn: { backgroundColor: '#0865AD', paddingVertical: 10, paddingHorizontal: 30, borderRadius: 10 },

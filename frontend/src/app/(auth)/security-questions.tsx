@@ -1,21 +1,23 @@
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, FlatList, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 
 const SECURITY_QUESTIONS = [
   "What is the name of your first-grade teacher?",
   "What is the middle name of your father?",
   "On what street did you grow up?",
-  "What is the first and last name of your first boyfriend or girlfriend?",
   "What was the name of your elementary school?",
   "Where did you meet your spouse?",
   "In what town was your father born?",
   "In what town was your mother born?",
-  "What was the first and last name of your first boss?",
 ];
 
 export default function SecurityQuestionsScreen() {
+  // Responsive Hooks
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const [question, setQuestion] = useState('Select a question...');
   const [answer, setAnswer] = useState('');
   const [isDropdownVisible, setDropdownVisible] = useState(false);
@@ -57,7 +59,8 @@ export default function SecurityQuestionsScreen() {
 
           {/* Centered Floating Card Layout */}
           <View style={styles.container}>
-            <View style={styles.bottomCard}>
+            {/* Tablet Width Constraint applied here */}
+            <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               
               <Text style={styles.welcomeText}>Security Questions</Text>
               <Text style={styles.subText}>Pick 1 security question to answer</Text>
@@ -106,7 +109,8 @@ export default function SecurityQuestionsScreen() {
             activeOpacity={1} 
             onPress={() => setDropdownVisible(false)}
           >
-            <View style={styles.dropdownMenu}>
+            {/* Tablet Width Constraint applied to the dropdown modal to match the card width */}
+            <View style={[styles.dropdownMenu, isTablet && styles.dropdownMenuTablet]}>
               <FlatList
                 data={SECURITY_QUESTIONS}
                 keyExtractor={(item, index) => index.toString()}
@@ -138,7 +142,13 @@ const styles = StyleSheet.create({
   topHeaderText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 24 },
   
   bottomCard: { backgroundColor: '#FFFFFF', borderRadius: 40, marginHorizontal: 15, paddingHorizontal: 25, paddingTop: 40, paddingBottom: 40 },
-  
+  // Responsive Tablet Constraint
+  bottomCardTablet: {
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#0865AD', marginBottom: 5 },
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 25 },
   
@@ -159,6 +169,10 @@ const styles = StyleSheet.create({
   /* Modal Menu Styles */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)', justifyContent: 'center', alignItems: 'center' },
   dropdownMenu: { backgroundColor: '#FFFFFF', width: '85%', maxHeight: '50%', borderRadius: 15, paddingVertical: 10, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
+  // Modal Dropdown Responsive Tablet Constraint
+  dropdownMenuTablet: {
+    maxWidth: 450,
+  },
   dropdownItem: { paddingVertical: 15, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   dropdownItemText: { fontFamily: 'SourGummy', fontSize: 13, color: '#333' }
 });

@@ -8,8 +8,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import type { Position } from '../../types/sentences';
+import type { Position } from '../types/sentences';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
 
 export default function PracticeScreen() {
@@ -27,22 +28,37 @@ export default function PracticeScreen() {
 
   const [recording, setRecording] = useState(false);
 
-  const [fontsLoaded] = useFonts({
-    SourGummy: require('../../../assets/SourGummy.ttf'),
-  });
+  // Responsive Hooks
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
 
+  const [fontsLoaded] = useFonts({
+    SourGummy: require('../../assets/SourGummy.ttf'),
+  });
+  
   if (!fontsLoaded) return null;
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/sentences' as any);
+    }
+  };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
+
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backIcon}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Practice</Text>
+          <View style={[styles.headerContent, isTablet && styles.contentMax]}>
+            <TouchableOpacity onPress={handleBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
+              <Text style={styles.backIcon}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Practice</Text>
+          </View>
         </View>
 
         <ScrollView
@@ -50,60 +66,64 @@ export default function PracticeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Sound Banner (Chirpy) */}
-          <View style={styles.banner}>
-            <Image
-              source={require('../../../assets/images/bird-logo.gif')}
-              style={styles.chirpy}
-              contentFit="contain"
-            />
-            <View style={styles.bannerText}>
-              <Text style={styles.bannerLabel}>Sounds · {position}</Text>
-              <Text style={styles.bannerSound}>
-                {sound} {syllable}
-              </Text>
-            </View>
-          </View>
-
-          {/* Video Card */}
-          <View style={styles.videoCard}>
-            <View style={styles.videoPlaceholder}>
-              <Text style={styles.videoPlaceholderText}>▶</Text>
-            </View>
-            <Text style={styles.videoHint}>Watch the video how to say the word</Text>
-            <TouchableOpacity style={styles.watchAgainBtn}>
-              <Text style={styles.watchAgainText}>▶  Watch again</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Mic Section */}
-          <View style={styles.micSection}>
-            <TouchableOpacity
-              style={[styles.micBtn, recording && styles.micBtnActive]}
-              onPressIn={() => setRecording(true)}
-              onPressOut={() => setRecording(false)}
-              activeOpacity={0.85}
-            >
+          {/* Centering Wrapper for tablet responsiveness */}
+          <View style={[styles.centerWrapper, isTablet && styles.contentMax]}>
+            
+            {/* Sound Banner (Chirpy) */}
+            <View style={styles.banner}>
               <Image
-                source={require('../../../assets/images/mic.png')}
-                style={styles.micIconImg}
+                source={require('../../assets/images/bird-logo.gif')}
+                style={styles.chirpy}
                 contentFit="contain"
               />
-            </TouchableOpacity>
-            <Text style={styles.micLabel}>Ask your child to say it</Text>
-            <Text style={styles.micHint}>Long press the mic to record your voice</Text>
-          </View>
+              <View style={styles.bannerText}>
+                <Text style={styles.bannerLabel}>Sounds · {position}</Text>
+                <Text style={styles.bannerSound}>{sound} {syllable}</Text>
+              </View>
+            </View>
 
-          {/* Submit Button */}
-          <TouchableOpacity style={styles.submitBtn} onPress={() => router.back()}>
-            <Text style={styles.submitText}>Submit</Text>
-          </TouchableOpacity>
+            {/* Video Card */}
+            <View style={styles.videoCard}>
+              <View style={styles.videoPlaceholder}>
+                <Text style={styles.videoPlaceholderText}>▶</Text>
+              </View>
+              <Text style={styles.videoHint}>Watch the video how to say the word</Text>
+              <TouchableOpacity style={styles.watchAgainBtn} activeOpacity={0.8}>
+                <Text style={styles.watchAgainText}>▶  Watch again</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Mic Section */}
+            <View style={styles.micSection}>
+              <TouchableOpacity
+                style={[styles.micBtn, recording && styles.micBtnActive]}
+                onPressIn={() => setRecording(true)}
+                onPressOut={() => setRecording(false)}
+                activeOpacity={0.85}
+              >
+                <Image
+                  source={require('../../assets/images/mic.png')}
+                  style={styles.micIconImg}
+                  contentFit="contain"
+                />
+              </TouchableOpacity>
+              <Text style={styles.micLabel}>Ask your child to say it</Text>
+              <Text style={styles.micHint}>Long press the mic to record your voice</Text>
+            </View>
+
+            {/* Submit Button */}
+            <TouchableOpacity style={styles.submitBtn} activeOpacity={0.8} onPress={() => router.back()}>
+              <Text style={styles.submitText}>Submit</Text>
+            </TouchableOpacity>
+
+          </View>
         </ScrollView>
 
         {/* Global Footer Navigation Component */}
         <View style={styles.footerContainer}>
           <ChildBottomNav activeTab="play" />
         </View>
+
       </View>
     </>
   );
@@ -114,13 +134,26 @@ const styles = StyleSheet.create({
   scrollContainer: { flex: 1 },
   scrollContent: { paddingBottom: 24 },
 
+  // Added wrappers for responsiveness
+  centerWrapper: {
+    width: '100%',
+    alignSelf: 'center',
+  },
+  contentMax: {
+    maxWidth: 760, 
+    width: '100%',
+    alignSelf: 'center'
+  },
+
   header: {
+    backgroundColor: '#0865AD',
+    paddingTop: 55,
+    paddingBottom: 12,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 55,
     paddingHorizontal: 20,
-    paddingBottom: 12,
-    backgroundColor: '#0865AD',
   },
   backBtn: {
     width: 28,
@@ -131,7 +164,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold' },
+  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold', textAlign: 'center' },
   headerTitle: { fontFamily: 'SourGummy', color: '#fff', fontSize: 20 },
 
   banner: {

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ImageBackground,
@@ -11,20 +11,30 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import { BUDDY_ROSTER, BuddyStore, Buddy } from '@/data/buddy-store';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
+import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 
 export default function PickBuddyScreen() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
 
   const [activeBuddy, setActiveBuddy] = useState<Buddy>(BuddyStore.getActiveBuddy());
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
+  const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribe = BuddyStore.subscribe((updatedBuddy) => {
@@ -46,15 +56,15 @@ export default function PickBuddyScreen() {
             OUTER WATERMARKED LIGHT BLUE CANVAS
             ========================================================================= */}
         <ImageBackground
-          source={require('../../../assets/images/split-bg.png')}
+          source={require('../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
         >
           {/* =========================================================================
-              FLOATING MAIN BUDDY CARD CONTAINER (White sheet with soft blue tint)
+              FLOATING MAIN BUDDY CARD CONTAINER (Responsive Max Width)
               ========================================================================= */}
-          <View style={styles.buddyCardContainer}>
+          <View style={[styles.buddyCardContainer, isTablet && styles.buddyCardTablet]}>
             {/* TOP HEADER: "Pick my buddy", BELL & HAMBURGER */}
             <View style={styles.topHeader}>
               <Text style={styles.headerTitle}>Pick my buddy</Text>
@@ -65,20 +75,75 @@ export default function PickBuddyScreen() {
                   style={styles.bellButton}
                   activeOpacity={0.7}
                   onPress={() => console.log('Notifications')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="notifications-outline" size={20} color="#F5A623" />
+                  <Ionicons name="notifications-outline" size={16} color="#F5A623" />
                 </TouchableOpacity>
 
-                {/* Triple Bar Hamburger Menu */}
+                {/* Triple Bar Hamburger / Close Menu Button */}
                 <TouchableOpacity
                   style={styles.menuButton}
                   activeOpacity={0.7}
-                  onPress={() => console.log('Menu')}
+                  onPress={() => setIsMenuOpen(!isMenuOpen)}
                 >
-                  <Ionicons name="menu" size={34} color="#0D68AC" />
+                  <Ionicons
+                    name={isMenuOpen ? 'close' : 'menu'}
+                    size={34}
+                    color="#0D68AC"
+                  />
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* =====================================================================
+                CHILD MODE DROPDOWN MENU (Parent Mode & Sign Out)
+                ===================================================================== */}
+            {isMenuOpen && (
+              <>
+                <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
+                  <View style={styles.menuBackdrop} />
+                </TouchableWithoutFeedback>
+
+                <View style={styles.menuDropdownCard}>
+                  {/* Row 1: Parent mode */}
+                  <TouchableOpacity
+                    style={styles.menuItemRow}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setIsMenuOpen(false);
+                      setIsGrownUpModalVisible(true);
+                    }}
+                  >
+                    <Image
+                      source={require('../../assets/images/parent-mode-icon.png')}
+                      style={styles.menuParentIcon}
+                      contentFit="cover"
+                    />
+                    <Text style={styles.menuItemText}>Parent mode</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+                  </TouchableOpacity>
+
+                  {/* Soft Divider */}
+                  <View style={styles.menuDivider} />
+
+                  {/* Row 2: Sign out */}
+                  <TouchableOpacity
+                    style={styles.menuItemRow}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setIsMenuOpen(false);
+                      setIsSignOutModalVisible(true);
+                    }}
+                  >
+                    <View style={styles.logoutIconBadge}>
+                      <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
+                    </View>
+                    <Text style={styles.menuItemText}>Sign out</Text>
+                    <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
 
             {/* SCROLLABLE MAIN CONTENT */}
             <ScrollView
@@ -183,6 +248,30 @@ export default function PickBuddyScreen() {
             <ChildBottomNav activeTab="buddy" />
           </View>
         </ImageBackground>
+
+        {/* =========================================================================
+            GROWN-UP CHECK MODAL (Password-Only Verification)
+            ========================================================================= */}
+        <GrownUpCheckModal
+          visible={isGrownUpModalVisible}
+          onClose={() => setIsGrownUpModalVisible(false)}
+          onSuccess={() => {
+            setIsGrownUpModalVisible(false);
+            router.push('/parent-dashboard' as any);
+          }}
+        />
+
+        {/* =========================================================================
+            SIGN OUT CONFIRMATION MODAL (Cancel / Sign Out)
+            ========================================================================= */}
+        <SignOutConfirmModal
+          visible={isSignOutModalVisible}
+          onClose={() => setIsSignOutModalVisible(false)}
+          onConfirm={() => {
+            setIsSignOutModalVisible(false);
+            router.replace('/patient-login' as any);
+          }}
+        />
       </SafeAreaView>
     </>
   );
@@ -204,6 +293,7 @@ const styles = StyleSheet.create({
   /* White Buddy Outer Floating Card */
   buddyCardContainer: {
     flex: 1,
+    width: '100%',
     backgroundColor: '#E7F2FA',
     borderRadius: 36,
     overflow: 'hidden',
@@ -214,6 +304,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 10,
     elevation: 6,
+  },
+  /* Responsive Constraint for Tablets */
+  buddyCardTablet: {
+    maxWidth: 600,
+    alignSelf: 'center',
   },
 
   /* Top Header */
@@ -240,18 +335,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bellButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: '#FBD27C',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1.5 },
     shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowRadius: 2.5,
     elevation: 2,
   },
   menuButton: {
@@ -345,14 +440,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   buddyTile: {
-    width: '48%',
+    width: '48%', // Automatically scales based on container width
     borderRadius: 20,
     paddingVertical: 14,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderBottomWidth: 5, // 3D depth border
+    borderBottomWidth: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
@@ -415,5 +510,65 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#7C8B9E',
     marginTop: 1,
+  },
+  
+  /* Dropdown Backdrop & Floating Menu Card */
+  menuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    zIndex: 30,
+  },
+  menuDropdownCard: {
+    position: 'absolute',
+    top: 66,
+    right: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#D4E7F5',
+    zIndex: 40,
+    minWidth: 190,
+  },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  menuParentIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  menuItemText: {
+    flex: 1,
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 13,
+    color: '#0D68AC',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#EDF4F9',
+    marginVertical: 4,
+  },
+  logoutIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0D68AC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

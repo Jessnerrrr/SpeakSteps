@@ -1,17 +1,19 @@
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  BackHandler,
   FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions
 } from 'react-native';
-// Fixed paths: only go up two levels to reach data and types from app/patient
-import { sentences } from '../../data/sentences';
-import type { Language, Position, Sentence } from '../../types/sentences';
-import { POSITIONS } from '../../types/sentences';
+import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { sentences } from '../data/sentences';
+import type { Language, Position, Sentence } from '../types/sentences';
+import { POSITIONS } from '../types/sentences';
 
 // ─── Language Toggle ──────────────────────────────────────────────────────────
 function LanguageToggle({
@@ -82,13 +84,15 @@ function SentenceCard({
   sentence,
   index,
   onSelect,
+  cardWidth,
 }: {
   sentence: Sentence;
   index: number;
   onSelect: (s: Sentence) => void;
+  cardWidth: number | string;
 }) {
   return (
-    <TouchableOpacity style={styles.card} onPress={() => onSelect(sentence)}>
+    <TouchableOpacity style={[styles.card, { width: cardWidth }]} onPress={() => onSelect(sentence)}>
       <View style={styles.cardTopline}>
         <Text style={styles.cardNumber}>{String(index + 1).padStart(2, '0')}</Text>
         <Text style={styles.cardAction}>PRACTICE</Text>
@@ -107,10 +111,35 @@ export default function SentencesScreen() {
   const [language, setLanguage] = useState<Language>('English');
   const [position, setPosition] = useState<Position>('Initial');
 
+  // Responsive Hooks
+  const { width } = useWindowDimensions();
+  // We constrain the central content to 760px on wide screens.
+  // The grid padding is 16*2 = 32px. We calculate exactly how wide each of the two cards should be.
+  const contentWidth = Math.min(width, 760); 
+  const availableGridWidth = contentWidth - 32; 
+  // Subtracting 14 for the gap between the two columns
+  const cardWidth = (availableGridWidth - 14) / 2;
+
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../../assets/SourGummy.ttf'), // Font path requires three levels up from app/patient
+    SourGummy: require('../../assets/SourGummy.ttf'),
   });
-  
+
+  const handleBack = () => {
+    router.replace('/patient-dashboard' as any);
+  };
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress
+    );
+    return () => subscription.remove();
+  }, []);
+
   if (!fontsLoaded) return null;
 
   const items = sentences[language][position];
@@ -134,7 +163,12 @@ export default function SentencesScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity
+              onPress={handleBack}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Back to child dashboard"
+            >
               <Text style={styles.backIcon}>‹</Text>
             </TouchableOpacity>
             <View>
@@ -144,31 +178,36 @@ export default function SentencesScreen() {
           </View>
         </View>
 
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.gridRow}
-          ListHeaderComponent={
-            <View style={styles.contentHeader}>
-              <Text style={styles.pageTitle}>Choose a sound to practice</Text>
-              <Text style={styles.pageSubtitle}>
-                Build confidence one clear sentence at a time.
-              </Text>
-              <Text style={styles.controlLabel}>Language</Text>
-              <LanguageToggle value={language} onChange={setLanguage} />
-              <View style={styles.positionHeading}>
-                <Text style={styles.controlLabel}>Sound position</Text>
-                <Text style={styles.promptCount}>{items.length} prompts</Text>
+        {/* Central Content Wrapper limits width on tablets */}
+        <View style={styles.centerWrapper}>
+          <FlatList
+            data={items}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            contentContainerStyle={styles.grid}
+            columnWrapperStyle={styles.gridRow}
+            ListHeaderComponent={
+              <View style={styles.contentHeader}>
+                <Text style={styles.pageTitle}>Choose a sound to practice</Text>
+                <Text style={styles.pageSubtitle}>
+                  Build confidence one clear sentence at a time.
+                </Text>
+                <Text style={styles.controlLabel}>Language</Text>
+                <LanguageToggle value={language} onChange={setLanguage} />
+                <View style={styles.positionHeading}>
+                  <Text style={styles.controlLabel}>Sound position</Text>
+                  <Text style={styles.promptCount}>{items.length} prompts</Text>
+                </View>
+                <PositionTabs value={position} onChange={setPosition} />
               </View>
-              <PositionTabs value={position} onChange={setPosition} />
-            </View>
-          }
-          renderItem={({ item, index }) => (
-            <SentenceCard sentence={item} index={index} onSelect={handleSelect} />
-          )}
-        />
+            }
+            renderItem={({ item, index }) => (
+              <SentenceCard sentence={item} index={index} onSelect={handleSelect} cardWidth={cardWidth} />
+            )}
+          />
+        </View>
+
+        <ChildBottomNav activeTab="play" />
       </View>
     </>
   );
@@ -176,6 +215,15 @@ export default function SentencesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F7FA' },
+  
+  // Centering wrapper for tablets
+  centerWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+  },
+
   header: {
     backgroundColor: '#0865AD',
     paddingTop: 56,
@@ -198,7 +246,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold' },
+  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold', textAlign: 'center' },
   eyebrow: {
     color: '#FFB923',
     fontSize: 11,
@@ -210,10 +258,7 @@ const styles = StyleSheet.create({
 
   contentHeader: {
     width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
     paddingTop: 28,
-    paddingHorizontal: 20,
   },
   pageTitle: {
     color: '#0865AD',
@@ -267,7 +312,7 @@ const styles = StyleSheet.create({
   gridRow: { justifyContent: 'space-between', marginBottom: 14 },
 
   card: {
-    width: '48%',
+    // Dynamic width applied inline via props
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 15,

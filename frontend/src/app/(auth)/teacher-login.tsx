@@ -2,9 +2,13 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
 
 export default function TeacherLoginScreen() {
+  // Responsive Hooks
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,14 +30,21 @@ export default function TeacherLoginScreen() {
   const hasNumber = /\d/.test(password);
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(password);
 
+  // --- STRICT VALIDATION LOGIC ---
   const handleLogin = () => {
     setHasSubmitted(true);
-    if (!email || !password) {
+    
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Missing Fields", "Please enter both Email and Password.");
       return; 
     }
     
-    // Connects the login screen to the teacher dashboard
-    router.push('/teacher-dashboard' as any);
+    if (email.trim().toLowerCase() === 'teacher@speaksteps.com' && password === 'Teacher@123') {
+      // Connects the login screen to the teacher dashboard
+      router.push('/teacher-dashboard' as any);
+    } else {
+      Alert.alert("Login Failed", "Invalid Email or Password. Please try again.");
+    }
   };
 
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
@@ -70,7 +81,8 @@ export default function TeacherLoginScreen() {
               </View>
             </View>
 
-            <View style={styles.bottomCard}>
+            {/* Tablet Width Constraint applied here */}
+            <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               <ScrollView 
                 keyboardShouldPersistTaps="handled" 
                 showsVerticalScrollIndicator={false} 
@@ -170,7 +182,15 @@ const styles = StyleSheet.create({
   birdImage: { width: 110, height: 110, marginRight: 15 },
   brandTextContainer: { justifyContent: 'center' },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 },
+  
   bottomCard: { backgroundColor: '#FFFFFF', flex: 2.5, borderRadius: 40, marginHorizontal: 15, marginBottom: 30, paddingHorizontal: 25, paddingTop: 25, paddingBottom: 20 },
+  // Responsive Tablet Constraint
+  bottomCardTablet: {
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
   scrollContent: { paddingBottom: 20 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   backButton: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#0865AD', justifyContent: 'center', alignItems: 'center', marginRight: 10 },

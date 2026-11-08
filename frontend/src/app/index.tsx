@@ -1,22 +1,37 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
-import { router, Stack } from 'expo-router';
+import { router, Stack, Redirect } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, Modal, StyleSheet, Text, View, TouchableOpacity, Pressable, Platform } from 'react-native';
+import { 
+  ImageBackground, 
+  Modal, 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableOpacity, 
+  Pressable, 
+  Platform,
+  useWindowDimensions 
+} from 'react-native';
 
 export default function App() {
-  // State to control the About modal visibility
   const [aboutVisible, setAboutVisible] = useState(false);
-
-  // States to control hover effects (works on Web)
   const [hoverGetStarted, setHoverGetStarted] = useState(false);
   const [hoverAbout, setHoverAbout] = useState(false);
+
+  // Responsive hook to get the device's current width
+  const { width } = useWindowDimensions();
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
     'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
   });
+
+  // --- WEB REDIRECT LOGIC ---
+  if (Platform.OS === 'web') {
+    return <Redirect href="/(admin)/admin-login" />;
+  }
 
   if (!fontsLoaded) return null;
 
@@ -32,15 +47,19 @@ export default function App() {
       >
         <View style={styles.container}>
           
+          {/* Dynamic Logo: Takes up 80% of screen width, but never larger than 350px */}
           <Image 
             source={require('../../assets/images/landing-logo.gif')} 
-            style={styles.logoImage}
+            style={[
+              styles.logoImage, 
+              { width: width * 0.8, maxWidth: 350 }
+            ]}
             contentFit="contain" 
           />
 
           <View style={styles.buttonContainer}>
             
-            {/* Get Started Button with Hover & Press Effects */}
+            {/* Get Started Button */}
             <Pressable 
               onHoverIn={() => setHoverGetStarted(true)}
               onHoverOut={() => setHoverGetStarted(false)}
@@ -56,7 +75,7 @@ export default function App() {
               <Text style={styles.playIcon}>▶</Text> 
             </Pressable>
 
-            {/* About Button with Hover & Press Effects */}
+            {/* About Button */}
             <Pressable 
               onHoverIn={() => setHoverAbout(true)}
               onHoverOut={() => setHoverAbout(false)}
@@ -74,7 +93,7 @@ export default function App() {
           </View>
         </View>
 
-        {/* Custom About SpeakSteps Alert Modal with Fade Transition */}
+        {/* Custom About SpeakSteps Alert Modal */}
         <Modal visible={aboutVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.alertBox}>
@@ -90,7 +109,6 @@ export default function App() {
                 SpeakSteps helps children with speech delay practice sounds, words, phrases and sentences. Therapists assign activities, parents guide practice at home, and children play and speak.
               </Text>
               
-              {/* Closes the modal with a smooth fade-out */}
               <TouchableOpacity style={styles.alertBtn} onPress={() => setAboutVisible(false)}>
                 <Text style={styles.alertBtnText}>Got it!</Text>
               </TouchableOpacity>
@@ -116,8 +134,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoImage: {
-    width: 340, 
-    height: 340,
+    aspectRatio: 1, // Locks the image to a perfect square to prevent distortion
     marginBottom: 40,
   },
   buttonContainer: {
@@ -126,9 +143,10 @@ const styles = StyleSheet.create({
     gap: 15, 
   },
   
-  // Base button styles
+  // Base button styles - Uses % and maxWidth to adapt to any phone screen
   button: {
-    width: '80%',
+    width: '85%',
+    maxWidth: 350,
     paddingVertical: 15,
     borderRadius: 30, 
     flexDirection: 'row',
@@ -141,7 +159,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   
-  // Interactive Effects
   hoverEffect: {
     ...Platform.select({
       web: {
@@ -162,14 +179,13 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontFamily: 'SourGummy-Bold',
     color: '#FFFFFF',
-    fontSize: 24, // Expanded font size
-    // Removed marginRight to perfectly center text + icon as a single group
+    fontSize: 22, // Slightly reduced to ensure it fits perfectly on narrow phones like the SE 
   },
   playIcon: {
     color: '#0865AD',
-    fontSize: 34, // Expanded icon size
-    marginLeft: 10, // Added clean spacing between text and icon
-    marginTop: -2, // Slight visual adjustment to align the triangle center with the text center
+    fontSize: 30, 
+    marginLeft: 10, 
+    marginTop: -2, 
   },
   
   secondaryButton: {
@@ -186,11 +202,13 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: 'rgba(0, 0, 0, 0.5)', 
     justifyContent: 'center', 
-    alignItems: 'center' 
+    alignItems: 'center',
+    paddingHorizontal: 20, // Prevents the modal from touching the exact edges of small screens
   },
   alertBox: { 
     backgroundColor: '#FFFFFF', 
-    width: '80%', 
+    width: '90%', 
+    maxWidth: 400, // Caps the width on tablets/iPads
     borderRadius: 20, 
     padding: 25, 
     alignItems: 'center', 

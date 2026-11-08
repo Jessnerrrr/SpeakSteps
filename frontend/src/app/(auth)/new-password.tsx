@@ -2,9 +2,13 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
 
 export default function NewPasswordScreen() {
+  // Responsive Hooks
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -107,7 +111,8 @@ export default function NewPasswordScreen() {
           </View>
 
           <View style={styles.container}>
-            <View style={styles.bottomCard}>
+            {/* Tablet Width Constraint applied here */}
+            <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               
               <Image 
                 source={require('../../../assets/images/bird-logo.gif')} 
@@ -234,6 +239,14 @@ const styles = StyleSheet.create({
   topHeaderText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 24 },
   
   bottomCard: { backgroundColor: '#FFFFFF', borderRadius: 40, marginHorizontal: 15, paddingHorizontal: 25, paddingTop: 40, paddingBottom: 20, position: 'relative', flex: 0.9 },
+  
+  // Tablet Responsive Constraint
+  bottomCardTablet: {
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
   scrollContent: { paddingBottom: 30 },
   
   overlappingBird: { position: 'absolute', top: 2, left: 8, width: 90, height: 90, zIndex: 10 },
@@ -266,7 +279,7 @@ const styles = StyleSheet.create({
 
   // Custom Modal Alert Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
-  alertBox: { backgroundColor: '#FFFFFF', width: '75%', borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
+  alertBox: { backgroundColor: '#FFFFFF', width: '75%', maxWidth: 400, borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
   alertTitle: { fontFamily: 'SourGummy-Bold', fontSize: 22, marginBottom: 10, textAlign: 'center' },
   alertMessage: { fontFamily: 'SourGummy-Medium', fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 18 },
   alertBtn: { backgroundColor: '#0865AD', paddingVertical: 10, paddingHorizontal: 40, borderRadius: 10 },

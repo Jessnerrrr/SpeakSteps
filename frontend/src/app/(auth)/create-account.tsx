@@ -1,9 +1,13 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import React from 'react';
 
 export default function CreateAccountScreen() {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
@@ -41,7 +45,7 @@ export default function CreateAccountScreen() {
             </View>
 
             {/* Bottom Section: White Card */}
-            <View style={styles.bottomCard}>
+            <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 
                 {/* Back Button Header */}
@@ -58,6 +62,7 @@ export default function CreateAccountScreen() {
                 {/* Register as Therapist Button */}
                 <TouchableOpacity 
                   style={styles.roleCard}
+                  activeOpacity={0.7}
                   onPress={() => router.push('/register-therapist' as any)} 
                 >
                   <Image 
@@ -77,6 +82,7 @@ export default function CreateAccountScreen() {
                 {/* Register as Teacher Button */}
                 <TouchableOpacity 
                   style={styles.roleCard}
+                  activeOpacity={0.7}
                   onPress={() => router.push('/register-teacher' as any)} 
                 >
                   <Image 
@@ -96,6 +102,7 @@ export default function CreateAccountScreen() {
                 {/* Create Patient Account Button */}
                 <TouchableOpacity 
                   style={styles.roleCard}
+                  activeOpacity={0.7}
                   onPress={() => router.push('/register-patient' as any)} 
                 >
                   <Image 
@@ -143,19 +150,51 @@ const styles = StyleSheet.create({
   }, 
   
   birdImage: { width: 110, height: 110, marginRight: 15 }, 
-  brandTextContainer: { flex: 1, justifyContent: 'center' },
+  brandTextContainer: { flex: 1, justifyContent: 'center', maxWidth: 200 },
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 }, 
   
-  bottomCard: { backgroundColor: '#FFFFFF', flex: 2.5, borderRadius: 40, marginHorizontal: 15, marginBottom: 30, paddingHorizontal: 25, paddingTop: 25, paddingBottom: 20 },
-  scrollContent: { paddingBottom: 10 },
+  // Base mobile card
+  bottomCard: { 
+    backgroundColor: '#FFFFFF', 
+    flex: 2.5, 
+    borderRadius: 40, 
+    marginHorizontal: '5%', // Scalable margin instead of fixed pixels
+    marginBottom: 30, 
+    paddingHorizontal: 25, 
+    paddingTop: 25, 
+    paddingBottom: 20 
+  },
+  // Tablet override to stop stretching
+  bottomCardTablet: {
+    maxWidth: 500,
+    width: '100%',
+    alignSelf: 'center'
+  },
+  
+  scrollContent: { paddingBottom: 10, flexGrow: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   backButton: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#0865AD', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  backIcon: { color: '#FFFFFF', fontSize: 18, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
+  backIcon: { color: '#FFFFFF', fontSize: 18, lineHeight: 22, fontFamily: 'SourGummy-Bold', textAlign: 'center' },
   headerText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 26, color: '#0865AD', marginBottom: 5 },
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 20 },
   
-  roleCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', width: '100%', padding: 15, borderRadius: 15, marginBottom: 12, borderWidth: 1, borderColor: '#E5E5E5', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
+  roleCard: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#FFFFFF', 
+    width: '100%', 
+    padding: 15, 
+    borderRadius: 15, 
+    marginBottom: 12, 
+    borderWidth: 1, 
+    borderColor: '#E5E5E5', 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 2 
+  },
   
   gifIcon: { width: 40, height: 40, borderRadius: 8, marginRight: 15 },
   
@@ -164,8 +203,8 @@ const styles = StyleSheet.create({
   roleSubtitle: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#888', marginTop: 2 },
   
   arrowCircle: { backgroundColor: '#0865AD', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  arrowText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontFamily: 'SourGummy-Bold' },
+  arrowText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontFamily: 'SourGummy-Bold', textAlign: 'center' },
   
-  footer: { width: '100%', alignItems: 'center', marginTop: 15, marginBottom: 10 },
-  loginLink: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', textDecorationLine: 'underline' },
+  footer: { width: '100%', alignItems: 'center', marginTop: 'auto', paddingTop: 15, marginBottom: 10 },
+  loginLink: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#0865AD', textDecorationLine: 'underline' },
 });

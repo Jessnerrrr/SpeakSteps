@@ -59,4 +59,3 @@ export function authenticateMockUser(email: string, password: string): { success
 
   return { success: true, user };
 }
-

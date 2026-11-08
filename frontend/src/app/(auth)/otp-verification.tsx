@@ -2,10 +2,14 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 export default function OtpVerificationScreen() {
+  // Responsive Hooks
+  const { width } = useWindowDimensions();
+  const isTablet = width > 600;
+
   const { email } = useLocalSearchParams();
   
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -118,7 +122,8 @@ export default function OtpVerificationScreen() {
           </View>
 
           <View style={styles.container}>
-            <View style={styles.bottomCard}>
+            {/* Tablet Width Constraint applied here */}
+            <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               
               <View style={styles.animationContainer}>
                 <View style={styles.circleWrapper}>
@@ -241,7 +246,13 @@ const styles = StyleSheet.create({
   topHeaderText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 24 },
   
   bottomCard: { backgroundColor: '#FFFFFF', borderRadius: 40, marginHorizontal: 15, paddingHorizontal: 25, paddingTop: 40, paddingBottom: 40 },
-  
+  // Responsive Tablet Constraint
+  bottomCardTablet: {
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
   // Animation & Timer Styles
   animationContainer: { alignItems: 'center', marginBottom: 20, marginTop: -20 },
   circleWrapper: { width: 140, height: 140, justifyContent: 'center', alignItems: 'center', marginBottom: 15, position: 'relative' },
@@ -272,7 +283,7 @@ const styles = StyleSheet.create({
   resendBtnText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 14 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
-  alertBox: { backgroundColor: '#FFFFFF', width: '75%', borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
+  alertBox: { backgroundColor: '#FFFFFF', width: '75%', maxWidth: 400, borderRadius: 20, padding: 25, alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
   alertTitle: { fontFamily: 'SourGummy-Bold', fontSize: 22, marginBottom: 10, textAlign: 'center' },
   alertMessage: { fontFamily: 'SourGummy-Medium', fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 18 },
   alertBtn: { paddingVertical: 10, paddingHorizontal: 40, borderRadius: 10 },

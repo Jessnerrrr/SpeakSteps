@@ -65,4 +65,3 @@ export const MOCK_STARS_DATA: StarsScreenData = {
     },
   ],
 };
-
