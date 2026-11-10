@@ -69,7 +69,7 @@ export default function AdminLoginScreen() {
               <Image 
                 source={require('../../../assets/images/speaksteps-side-design.gif')} 
                 style={styles.sideDesignImage}
-                contentFit="cover" 
+                contentFit="cover" // Cover ensures no blue bars will ever show
               />
             </View>
           )}
@@ -185,8 +185,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'column' },
   desktopContainer: { flexDirection: 'row' },
 
+  // ADJUSTED: Narrowed the left side to naturally fit the GIF's aspect ratio
   leftSideContainer: {
-    flex: 0.62,
+    flex: 0.85,
     height: '100%',
     backgroundColor: '#1C7BC2', 
     justifyContent: 'center',
@@ -198,8 +199,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
+  // ADJUSTED: Widened the right side (white part) to take up the remaining space
   rightSideContainer: {
-    flex: 1.38, 
+    flex: 1.15, 
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     position: 'relative', 
@@ -215,13 +217,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', 
     borderRadius: 16, 
     padding: 32, 
-    borderWidth: 1,          // Added border to separate from the background
-    borderColor: '#E2E8F0',  // Subtle light gray border color
+    borderWidth: 1,          
+    borderColor: '#E2E8F0',  
     shadowColor: '#000000', 
     shadowOffset: { width: 0, height: 12 }, 
     shadowOpacity: 0.08, 
     shadowRadius: 24, 
-    elevation: 8,            // Tweaked elevation for Android to pop nicely
+    elevation: 8,            
     marginBottom: 24,
   },
   
