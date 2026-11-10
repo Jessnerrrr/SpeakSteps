@@ -16,7 +16,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-// Switched to relative paths
+// FIXED IMPORTS: 2 levels up to reach src/components and src/data
 import { MOCK_STARS_DATA } from '../../data/stars-mock';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
 import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
@@ -26,10 +26,11 @@ export default function PatientStarsScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [data] = useState(MOCK_STARS_DATA);
@@ -46,7 +47,8 @@ export default function PatientStarsScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
-        <ImageBackground source={require('../../assets/images/split-bg.png')} style={styles.background} imageStyle={{ opacity: 0.25 }} resizeMode="cover">
+        {/* FIXED IMAGE PATH: 3 levels up to reach root assets */}
+        <ImageBackground source={require('../../../assets/images/split-bg.png')} style={styles.background} imageStyle={{ opacity: 0.25 }} resizeMode="cover">
           
           <View style={[styles.starsCard, isTablet && styles.starsCardTablet]}>
             <View style={styles.topHeader}>
@@ -70,7 +72,8 @@ export default function PatientStarsScreen() {
 
                 <View style={styles.menuDropdownCard}>
                   <TouchableOpacity style={styles.menuItemRow} activeOpacity={0.8} onPress={() => { setIsMenuOpen(false); setIsGrownUpModalVisible(true); }}>
-                    <Image source={require('../../assets/images/parent-mode-icon.png')} style={styles.menuParentIcon} contentFit="cover" />
+                    {/* FIXED IMAGE PATH */}
+                    <Image source={require('../../../assets/images/parent-mode-icon.png')} style={styles.menuParentIcon} contentFit="cover" />
                     <Text style={styles.menuItemText}>Parent mode</Text>
                     <Ionicons name="chevron-forward" size={16} color="#F5A623" />
                   </TouchableOpacity>
@@ -93,7 +96,8 @@ export default function PatientStarsScreen() {
                 <Text style={styles.collectingStarsTitle}>COLLECTING STARS</Text>
                 <View style={styles.starNumberRow}>
                   <Text style={styles.starNumberText}>{data.totalStarsEarned}</Text>
-                  <Image source={require('../../assets/images/star-3d.png')} style={styles.starAssetImage} contentFit="contain" />
+                  {/* FIXED IMAGE PATH */}
+                  <Image source={require('../../../assets/images/star-3d.png')} style={styles.starAssetImage} contentFit="contain" />
                 </View>
                 <View style={styles.capsuleProgressTrack}>
                   <View style={[styles.capsuleProgressFill, { width: `${Math.min(totalProgressPercentage, 100)}%` }]} />
@@ -102,7 +106,8 @@ export default function PatientStarsScreen() {
               </LinearGradient>
 
               <View style={styles.motivationBannerRow}>
-                <Image source={require('../../assets/images/trophy.png')} style={styles.trophyIconImage} contentFit="contain" />
+                {/* FIXED IMAGE PATH */}
+                <Image source={require('../../../assets/images/trophy.png')} style={styles.trophyIconImage} contentFit="contain" />
                 <Text style={styles.motivationBannerText}>Win stars by practicing!</Text>
               </View>
 
@@ -150,6 +155,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   starsCard: { flex: 1, width: '100%', backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
+  
+  // Tablet Responsive Constraint
   starsCardTablet: { maxWidth: 600, alignSelf: 'center' },
   
   topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, backgroundColor: '#E7F2FA' },

@@ -16,7 +16,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 
-// FIXED IMPORTS: Using relative paths instead of @/
+// FIXED IMPORTS: 2 levels up to reach src/components and src/data
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import {
@@ -80,10 +80,11 @@ export default function ParentTherapistFeedbackScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('All');
@@ -110,8 +111,9 @@ export default function ParentTherapistFeedbackScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
+        {/* FIXED IMAGE PATH: 3 levels up */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -340,6 +342,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
+  // Added Tablet MaxWidth Constraint
   mainContainerTablet: {
     maxWidth: 600,
     alignSelf: 'center',

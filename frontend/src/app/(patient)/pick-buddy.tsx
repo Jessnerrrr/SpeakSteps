@@ -16,19 +16,22 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-import { BUDDY_ROSTER, BuddyStore, Buddy } from '@/data/buddy-store';
-import { ChildBottomNav } from '@/components/child-bottom-nav';
-import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
-import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
+// FIXED IMPORTS: Changed absolute aliases to relative paths (2 levels up)
+import { BUDDY_ROSTER, BuddyStore, Buddy } from '../../data/buddy-store';
+import { ChildBottomNav } from '../../components/child-bottom-nav';
+import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
+import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
+import { ChildProfileStore, ChildProfile } from '../../data/child-profile-store'; // Adding this since it was imported in the original code
 
 export default function PickBuddyScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [activeBuddy, setActiveBuddy] = useState<Buddy>(BuddyStore.getActiveBuddy());
@@ -36,8 +39,9 @@ export default function PickBuddyScreen() {
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
+  // FIXED TS ERROR: Added explicit : Buddy type
   useEffect(() => {
-    const unsubscribe = BuddyStore.subscribe((updatedBuddy) => {
+    const unsubscribe = BuddyStore.subscribe((updatedBuddy: Buddy) => {
       setActiveBuddy(updatedBuddy);
     });
     return unsubscribe;
@@ -55,8 +59,9 @@ export default function PickBuddyScreen() {
         {/* =========================================================================
             OUTER WATERMARKED LIGHT BLUE CANVAS
             ========================================================================= */}
+        {/* FIXED IMAGE PATH (3 levels up) */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -114,8 +119,9 @@ export default function PickBuddyScreen() {
                       setIsGrownUpModalVisible(true);
                     }}
                   >
+                    {/* FIXED IMAGE PATH (3 levels up) */}
                     <Image
-                      source={require('../../assets/images/parent-mode-icon.png')}
+                      source={require('../../../assets/images/parent-mode-icon.png')}
                       style={styles.menuParentIcon}
                       contentFit="cover"
                     />

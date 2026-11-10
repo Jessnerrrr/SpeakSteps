@@ -10,10 +10,11 @@ import {
   View,
   useWindowDimensions
 } from 'react-native';
-import { ChildBottomNav } from '@/components/child-bottom-nav';
-import { sentences } from '../data/sentences';
-import type { Language, Position, Sentence } from '../types/sentences';
-import { POSITIONS } from '../types/sentences';
+// FIXED IMPORTS: 2 levels up to reach src/components
+import { ChildBottomNav } from '../../components/child-bottom-nav';
+import { sentences } from '../../data/sentences';
+import type { Language, Position, Sentence } from '../../types/sentences';
+import { POSITIONS } from '../../types/sentences';
 
 // ─── Language Toggle ──────────────────────────────────────────────────────────
 function LanguageToggle({
@@ -120,8 +121,9 @@ export default function SentencesScreen() {
   // Subtracting 14 for the gap between the two columns
   const cardWidth = (availableGridWidth - 14) / 2;
 
+  // FIXED FONT PATH: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../assets/SourGummy.ttf'),
+    SourGummy: require('../../../assets/SourGummy.ttf'),
   });
 
   const handleBack = () => {

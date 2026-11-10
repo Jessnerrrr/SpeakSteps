@@ -27,10 +27,11 @@ export default function ParentActivityDetailsScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS (3 levels up)
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const params = useLocalSearchParams<{ id?: string }>();
@@ -79,8 +80,9 @@ export default function ParentActivityDetailsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={styles.safeArea}>
+        {/* FIXED IMAGE PATH (3 levels up) */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -232,8 +234,9 @@ export default function ParentActivityDetailsScreen() {
                 onPress={handleHelpChildToPractice}
               >
                 <View style={styles.parentAvatarBadge}>
+                  {/* FIXED IMAGE PATH (3 levels up) */}
                   <Image
-                    source={require('../../assets/images/parent-mode-icon.png')}
+                    source={require('../../../assets/images/parent-mode-icon.png')}
                     style={styles.parentAvatarImage}
                     contentFit="cover"
                   />
@@ -351,7 +354,6 @@ const styles = StyleSheet.create({
   },
 
   /* Dropdown Backdrop & Floating Menu */
-  /* Dropdown Backdrop & Floating Menu */
   menuBackdrop: {
     position: 'absolute',
     top: 0,
@@ -361,7 +363,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.15)',
     zIndex: 30,
   },
-  
   menuDropdownCard: {
     position: 'absolute',
     top: 66,

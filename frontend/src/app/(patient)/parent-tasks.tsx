@@ -15,10 +15,11 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-import { ParentBottomNav } from '@/components/parent-bottom-nav';
-import { ParentHeader } from '@/components/parent-header';
-import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
-import { AssignedActivity, TaskStore } from '@/data/parent-tasks-mock';
+// FIXED IMPORTS: 2 levels up to reach src/components and src/data
+import { ParentBottomNav } from '../../components/parent-bottom-nav';
+import { ParentHeader } from '../../components/parent-header';
+import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
+import { AssignedActivity, TaskStore } from '../../data/parent-tasks-mock';
 
 type FilterType = 'all' | 'pending' | 'completed';
 
@@ -26,11 +27,12 @@ export default function ParentTasksScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS: 3 levels up to reach root assets
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
-  });
+      'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+      'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+      'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
+    });
 
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const activities = TaskStore.getActivities();
@@ -74,8 +76,9 @@ export default function ParentTasksScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
+        {/* FIXED IMAGE PATH: 3 levels up to reach root assets */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"

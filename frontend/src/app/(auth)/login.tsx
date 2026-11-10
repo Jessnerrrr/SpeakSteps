@@ -17,16 +17,21 @@ import {
   useWindowDimensions
 } from 'react-native';
 
+// UPDATED: Added specific test accounts for the Patient login flow
 const TEMP_ACCOUNTS = {
   Therapist: { email: 'therapist@speaksteps.com', password: 'Therapist@123' },
   Teacher: { email: 'teacher@speaksteps.com', password: 'Teacher@123' },
-  Patient: { email: 'patient@speaksteps.com', password: 'Patient@123' },
+  'Patient (New)': { email: 'new@speaksteps.com', password: 'Patient@123' },
+  'Patient (Old)': { email: 'old@speaksteps.com', password: 'Patient@123' },
 };
+
+// Extracted role type from TEMP_ACCOUNTS keys
+type RoleKey = keyof typeof TEMP_ACCOUNTS;
 
 export default function LoginScreen() {
   // Modal & Captcha States
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [selectedRole, setSelectedRole] = useState< 'Therapist' | 'Teacher' | 'Patient' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<RoleKey | null>(null);
   const [captchaStatus, setCaptchaStatus] = useState<'idle' | 'verifying' | 'success'>('idle');
 
   // Responsive hook to scale layouts
@@ -55,7 +60,7 @@ export default function LoginScreen() {
     }, 300);
   };
 
-  const handleSelectRole = (role: 'Therapist' | 'Teacher' | 'Patient') => {
+  const handleSelectRole = (role: RoleKey) => {
     setSelectedRole(role);
     setCaptchaStatus('idle');
   };
@@ -195,7 +200,7 @@ export default function LoginScreen() {
             {!selectedRole && (
               <View style={styles.roleList}>
                 <Text style={styles.modalSubtitle}>Select a role to view its credentials.</Text>
-                {(Object.keys(TEMP_ACCOUNTS) as Array<keyof typeof TEMP_ACCOUNTS>).map((role) => (
+                {(Object.keys(TEMP_ACCOUNTS) as Array<RoleKey>).map((role) => (
                   <TouchableOpacity key={role} style={styles.modalRoleBtn} onPress={() => handleSelectRole(role)}>
                     <Text style={styles.modalRoleText}>{role}</Text>
                     <Ionicons name="chevron-forward" size={18} color="#0865AD" />

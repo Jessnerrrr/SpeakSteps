@@ -16,7 +16,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-// Switched to relative paths to fix module resolution errors
+// FIXED IMPORTS: 2 levels up to reach src/data and src/components
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
@@ -28,10 +28,11 @@ export default function ParentDashboardScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
@@ -41,7 +42,6 @@ export default function ParentDashboardScreen() {
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
-  // Added explicit ChildProfile typing to fix ts(7006)
   useEffect(() => {
     const unsubscribe = ChildProfileStore.subscribe((updatedProfile: ChildProfile) => {
       setChildProfile(updatedProfile);
@@ -52,8 +52,6 @@ export default function ParentDashboardScreen() {
   if (!fontsLoaded) return null;
 
   const totalActivities = activities.length;
-  
-  // Added explicit AssignedActivity typing to fix ts(7006) implicit 'any' errors
   const completedActivities = activities.filter((t: AssignedActivity) => t.status === 'completed').length;
   const pendingActivities = activities.filter((t: AssignedActivity) => t.status === 'pending').length;
   const totalAttempts = activities.reduce((sum: number, t: AssignedActivity) => sum + (t.attempts || 0), 0);
@@ -63,8 +61,9 @@ export default function ParentDashboardScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
+        {/* FIXED IMAGE PATH: 3 levels up */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -83,7 +82,8 @@ export default function ParentDashboardScreen() {
                 <Text style={styles.heroTitle}>{childProfile.displayName}'s Progress</Text>
                 <View style={styles.starRow}>
                   <Text style={styles.starCountText}>{completedActivities}</Text>
-                  <Image source={require('../../assets/images/star-3d.png')} style={styles.starIcon} contentFit="contain" />
+                  {/* FIXED IMAGE PATH */}
+                  <Image source={require('../../../assets/images/star-3d.png')} style={styles.starIcon} contentFit="contain" />
                 </View>
                 <View style={styles.progressTrackContainer}>
                   <View style={[styles.progressBarFill, { width: `${progressPercentage}%` }]} />
@@ -150,7 +150,9 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   parentCardContainer: { flex: 1, width: '100%', backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6, position: 'relative' },
-  parentCardTablet: { maxWidth: 600, alignSelf: 'center' },
+  
+  parentCardTablet: { maxWidth: 600, alignSelf: 'center', width: '100%' },
+  
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, gap: 14 },
   
   progressHeroCard: { borderRadius: 22, paddingVertical: 18, paddingHorizontal: 18, shadowColor: '#0865AD', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 5 },

@@ -15,14 +15,15 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-import { ParentBottomNav } from '@/components/parent-bottom-nav';
-import { ParentHeader } from '@/components/parent-header';
-import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
+// CORRECTED RELATIVE PATHS
+import { ParentBottomNav } from '../../components/parent-bottom-nav';
+import { ParentHeader } from '../../components/parent-header';
+import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
 import {
   CategoryProgress,
   INITIAL_PROGRESS_DATA,
   ProgressSummary,
-} from '@/data/parent-progress-mock';
+} from '../../data/parent-progress-mock';
 
 type FilterKey = 'overall' | 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
 
@@ -30,10 +31,11 @@ export default function ParentProgressScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS: 3 levels up to reach root assets
   const [fontsLoaded] = useFonts({
-    'SourGummy': require('../../assets/SourGummy-Regular.ttf'),
-    'SourGummy-Medium': require('../../assets/SourGummy-Medium.ttf'),
-    'SourGummy-Bold': require('../../assets/SourGummy-Bold.ttf'),
+    'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
@@ -122,8 +124,9 @@ export default function ParentProgressScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.safeArea}>
+        {/* FIXED IMAGE PATH */}
         <ImageBackground
-          source={require('../../assets/images/split-bg.png')}
+          source={require('../../../assets/images/split-bg.png')}
           style={styles.background}
           imageStyle={{ opacity: 0.25 }}
           resizeMode="cover"
@@ -787,124 +790,5 @@ const styles = StyleSheet.create({
     fontFamily: 'SourGummy-Bold',
     fontSize: 18,
     color: '#0D68AC',
-  },
-
-  /* Feedback Modal */
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-  },
-  modalBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(5, 34, 58, 0.45)',
-  },
-  dialogCard: {
-    width: '100%',
-    maxWidth: 345,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 26,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-    borderWidth: 1.5,
-    borderColor: '#D4E8F8',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  dialogHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  dialogIconWrapper: {
-    marginRight: 8,
-  },
-  dialogTitle: {
-    flex: 1,
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 20,
-    color: '#0D68AC',
-  },
-  dialogCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F8FC',
-    borderWidth: 1,
-    borderColor: '#D4E7F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dialogSubtitle: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 12,
-    color: '#7C93A8',
-    marginBottom: 14,
-  },
-  feedbackScroll: {
-    maxHeight: 240,
-    marginBottom: 16,
-  },
-  feedbackItemCard: {
-    backgroundColor: '#F5F9FD',
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2F0FA',
-    marginBottom: 10,
-    gap: 4,
-  },
-  feedbackItemTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  feedbackTherapist: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 13,
-    color: '#0D68AC',
-  },
-  feedbackDate: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 11,
-    color: '#7C93A8',
-  },
-  feedbackItemTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 13,
-    color: '#F5A623',
-    marginTop: 2,
-  },
-  feedbackComments: {
-    fontFamily: 'SourGummy-Regular',
-    fontSize: 12,
-    color: '#556E82',
-    lineHeight: 16,
-  },
-  dialogActionButton: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: '#106AB0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#106AB0',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  dialogActionButtonText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 16,
-    color: '#FFFFFF',
   },
 });

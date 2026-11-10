@@ -10,8 +10,10 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import type { Position } from '../types/sentences';
-import { ChildBottomNav } from '@/components/child-bottom-nav';
+
+// FIXED IMPORTS: 2 levels up to reach src/types and src/components
+import type { Position } from '../../types/sentences';
+import { ChildBottomNav } from '../../components/child-bottom-nav';
 
 export default function PracticeScreen() {
   const params = useLocalSearchParams<{
@@ -32,8 +34,9 @@ export default function PracticeScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
+  // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../assets/SourGummy.ttf'),
+    SourGummy: require('../../../assets/SourGummy.ttf'),
   });
   
   if (!fontsLoaded) return null;
@@ -71,8 +74,9 @@ export default function PracticeScreen() {
             
             {/* Sound Banner (Chirpy) */}
             <View style={styles.banner}>
+              {/* FIXED IMAGE PATH (3 levels up) */}
               <Image
-                source={require('../../assets/images/bird-logo.gif')}
+                source={require('../../../assets/images/bird-logo.gif')}
                 style={styles.chirpy}
                 contentFit="contain"
               />
@@ -101,8 +105,9 @@ export default function PracticeScreen() {
                 onPressOut={() => setRecording(false)}
                 activeOpacity={0.85}
               >
+                {/* FIXED IMAGE PATH (3 levels up) */}
                 <Image
-                  source={require('../../assets/images/mic.png')}
+                  source={require('../../../assets/images/mic.png')}
                   style={styles.micIconImg}
                   contentFit="contain"
                 />

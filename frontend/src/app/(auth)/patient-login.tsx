@@ -2,7 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
 
 export default function PatientLoginScreen() {
   // Responsive Hooks
@@ -12,7 +12,10 @@ export default function PatientLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Form States
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [loginError, setLoginError] = useState('');
   
   // Tracks if the password input is clicked/focused
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -35,18 +38,38 @@ export default function PatientLoginScreen() {
   // --- STRICT VALIDATION LOGIC ---
   const handleLogin = () => {
     setHasSubmitted(true);
+    setLoginError(''); // Reset error on new attempt
     
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing Fields", "Please enter both Email and Password.");
+      setLoginError('Please enter both Email and Password.');
       return; 
     }
     
-    if (email.trim().toLowerCase() === 'patient@speaksteps.com' && password === 'Patient@123') {
-      // Navigate to the dashboard after a successful login
+    const emailLower = email.trim().toLowerCase();
+
+    // Account 1: NEW Patient -> Goes to Speech Check-in
+    if (emailLower === 'new@speaksteps.com' && password === 'Patient@123') {
+      router.push('/speech-checkin' as any);
+    } 
+    // Account 2: OLD Patient -> Goes straight to Patient Dashboard
+    else if (emailLower === 'old@speaksteps.com' && password === 'Patient@123') {
       router.push('/patient-dashboard' as any);
-    } else {
-      Alert.alert("Login Failed", "Invalid Email or Password. Please try again.");
+    } 
+    // Invalid Login
+    else {
+      setLoginError('Invalid email or password');
     }
+  };
+
+  // Helper to clear error when user types
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    setLoginError('');
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    setLoginError('');
   };
 
   const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
@@ -103,29 +126,37 @@ export default function PatientLoginScreen() {
                 <Text style={styles.welcomeText}>Patient sign in</Text>
                 <Text style={styles.subText}>Welcome back! Sign in to start practicing.</Text>
 
+                {/* Email Input */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Email</Text>
                   <TextInput 
-                    style={[styles.input, hasSubmitted && !email && styles.errorBorder]} 
-                    placeholder="parent@gmail.com"
+                    style={[
+                      styles.input, 
+                      (hasSubmitted && !email) || loginError ? styles.errorBorder : null
+                    ]} 
+                    placeholder="new@speaksteps.com"
                     placeholderTextColor="#999"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={handleEmailChange}
                   />
                 </View>
 
+                {/* Password Input */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Password</Text>
-                  <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
+                  <View style={[
+                    styles.passwordWrapper, 
+                    (hasSubmitted && !password) || loginError ? styles.errorBorder : null
+                  ]}>
                     <TextInput 
                       style={styles.passwordInput} 
                       placeholder="••••••••"
                       placeholderTextColor="#999"
                       secureTextEntry={!showPassword}
                       value={password}
-                      onChangeText={setPassword}
+                      onChangeText={handlePasswordChange}
                       onFocus={() => setIsPasswordFocused(true)} 
                       onBlur={() => setIsPasswordFocused(false)} 
                     />
@@ -137,6 +168,13 @@ export default function PatientLoginScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Inline Error Message aligned with System UI */}
+                {!!loginError && (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>⚠ {loginError}</Text>
+                  </View>
+                )}
 
                 {/* Only renders the box if the password input is focused */}
                 {isPasswordFocused && (
@@ -216,11 +254,62 @@ const styles = StyleSheet.create({
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 20 },
   inputContainer: { marginBottom: 15 },
   inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', marginBottom: 5 },
-  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, paddingHorizontal: 15, height: 45, fontFamily: 'SourGummy', color: '#333', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  passwordWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 45, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
+  
+  input: { 
+    backgroundColor: '#FFFFFF', 
+    borderWidth: 1.5, 
+    borderColor: '#CBE6F6', 
+    borderRadius: 10, 
+    paddingHorizontal: 15, 
+    height: 45, 
+    fontFamily: 'SourGummy', 
+    color: '#333', 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 2 
+  },
+  passwordWrapper: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#FFFFFF', 
+    borderWidth: 1.5, 
+    borderColor: '#CBE6F6', 
+    borderRadius: 10, 
+    height: 45, 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 2 
+  },
+  
   passwordInput: { flex: 1, paddingHorizontal: 15, fontFamily: 'SourGummy', color: '#333' },
   showButton: { backgroundColor: '#CBE6F6', paddingVertical: 5, paddingHorizontal: 12, borderRadius: 15, marginRight: 8 },
   showButtonText: { color: '#0865AD', fontFamily: 'SourGummy-Bold', fontSize: 12 },
+  
+  // Custom Error UI Styling
+  errorBorder: { 
+    borderColor: '#E74C3C', 
+    borderWidth: 2,
+    backgroundColor: '#FDEDEC' 
+  },
+  errorContainer: {
+    backgroundColor: '#FDEDEC',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#F5B7B1',
+    alignItems: 'center'
+  },
+  errorText: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 13,
+    color: '#C0392B',
+  },
+
   requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
   requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
   requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
@@ -229,8 +318,8 @@ const styles = StyleSheet.create({
   reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
   reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
   reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
-  signInBtn: { backgroundColor: '#0865AD', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
+  
+  signInBtn: { backgroundColor: '#0865AD', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginTop: 5, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   signInText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
   forgotPasswordText: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', textAlign: 'center', textDecorationLine: 'underline' },
-  errorBorder: { borderColor: '#E74C3C', borderWidth: 1.5 },
 });
