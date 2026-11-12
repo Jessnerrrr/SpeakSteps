@@ -20,14 +20,14 @@ export function ParentBottomNav({ activeTab = 'home' }: ParentBottomNavProps) {
       label: 'Tasks',
       icon: 'list-outline' as const,
       activeIcon: 'list' as const,
-      route: '',
+      route: '/parent-tasks',
     },
     {
       id: 'progress',
       label: 'Progress',
       icon: 'stats-chart-outline' as const,
       activeIcon: 'stats-chart' as const,
-      route: '',
+      route: '/parent-progress',
     },
   ];
 

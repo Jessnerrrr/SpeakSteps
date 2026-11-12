@@ -52,7 +52,7 @@ export default function SoundCheckScreen() {
       setCurrentIndex(currentIndex + 1);
       setIsRecording(false);
     } else {
-      router.push('/speech-checkin-result');
+      router.push('/speech-checkin-result' as any);
     }
   };
 

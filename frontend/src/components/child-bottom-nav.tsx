@@ -20,7 +20,7 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
       label: 'Play',
       icon: 'phone-portrait-outline' as const, 
       activeIcon: 'phone-portrait' as const,
-      route: '/practice', // Fixed this route to point to practice.tsx!
+      route: '/sentences',
     },
     {
       id: 'stars',

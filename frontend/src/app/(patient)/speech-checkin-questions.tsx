@@ -77,7 +77,7 @@ export default function SpeechCheckInQuestionsScreen() {
         setSelectedOption(null);
       } else {
         // Connected: Navigates to the Sound Check screen after step 7!
-        router.push('/sound-check');
+        router.push('/sound-check' as any);
       }
     }, 250);
   };

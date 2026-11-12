@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 
 import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
 import { ChildModeConfirmModal } from '@/components/child-mode-confirm-modal';
+import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 
 export interface ParentHeaderProps {
@@ -112,16 +113,11 @@ export function ParentHeader({
         {/* Right Actions: Notification Bell + Hamburger Menu */}
         <View style={styles.headerRightActions}>
           {showBell && (
-            <TouchableOpacity
-              style={styles.bellButton}
-              activeOpacity={0.7}
-              onPress={onBellPress ? onBellPress : () => console.log('Notifications')}
-              accessibilityRole="button"
-              accessibilityLabel="View notifications"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="notifications-outline" size={16} color="#F5A623" />
-            </TouchableOpacity>
+            <NotificationBellButton
+              audience="parent"
+              onPressOverride={onBellPress}
+              onBeforeOpen={() => setIsMenuOpen(false)}
+            />
           )}
 
           <TouchableOpacity
@@ -255,21 +251,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  bellButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#FBD27C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#F5A623',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
   },
   menuButton: {
     width: 36,

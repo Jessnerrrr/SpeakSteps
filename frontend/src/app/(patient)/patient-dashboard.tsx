@@ -16,13 +16,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-// FIXED IMPORTS: 2 levels up to reach src/data and src/components
-import { MOCK_PATIENT_DASHBOARD } from '../../data/patient-dashboard-mock';
-import { BuddyStore, Buddy } from '../../data/buddy-store';
-import { ChildProfileStore, ChildProfile } from '../../data/child-profile-store';
-import { ChildBottomNav } from '../../components/child-bottom-nav';
-import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
-import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
+// MOCK DATA IMPORT:
+import { MOCK_PATIENT_DASHBOARD } from '@/data/patient-dashboard-mock';
+import { BuddyStore, Buddy } from '@/data/buddy-store';
+import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
+import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
+import { NotificationBellButton } from '@/components/notification-popover';
+import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 
 export default function PatientDashboardScreen() {
   const { width } = useWindowDimensions();
@@ -50,7 +51,7 @@ export default function PatientDashboardScreen() {
     return unsubscribe;
   }, []);
 
-  // FIXED TS ERROR: Added explicit : ChildProfile type
+  // Listen to child profile changes from Parent Mode
   useEffect(() => {
     const unsubscribe = ChildProfileStore.subscribe((updatedProfile: ChildProfile) => {
       setChildProfile(updatedProfile);
@@ -84,14 +85,10 @@ export default function PatientDashboardScreen() {
               </View>
 
               <View style={styles.headerRightActions}>
-                <TouchableOpacity
-                  style={styles.bellButton}
-                  activeOpacity={0.7}
-                  onPress={() => console.log('Notifications')}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="notifications-outline" size={16} color="#F5A623" />
-                </TouchableOpacity>
+                <NotificationBellButton
+                  audience="child"
+                  onBeforeOpen={() => setIsMenuOpen(false)}
+                />
 
                 <TouchableOpacity
                   style={styles.menuButton}
@@ -358,7 +355,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   dashboardCard: { flex: 1, backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
-  
   // Tablet Responsive Constraint
   dashboardCardTablet: { maxWidth: 600, alignSelf: 'center', width: '100%' },
 
@@ -391,21 +387,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  bellButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#FBD27C',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2.5,
-    elevation: 2,
-  },
   menuButton: {
     padding: 2,
     justifyContent: 'center',
@@ -414,11 +395,7 @@ const styles = StyleSheet.create({
 
   /* Dropdown Backdrop & Floating Menu Card */
   menuBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.15)',
     zIndex: 30,
   },

@@ -81,7 +81,7 @@ export default function SpeechCheckInScreen() {
           <TouchableOpacity 
             style={styles.startButton}
             activeOpacity={0.85}
-            onPress={() => router.push('/speech-checkin-questions')}
+            onPress={() => router.push('/speech-checkin-questions' as any)}
           >
             <Text style={styles.startButtonText}>Start Check-in</Text>
           </TouchableOpacity>

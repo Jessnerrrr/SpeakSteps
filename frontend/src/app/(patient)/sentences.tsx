@@ -10,11 +10,10 @@ import {
   View,
   useWindowDimensions
 } from 'react-native';
-// FIXED IMPORTS: 2 levels up to reach src/components
-import { ChildBottomNav } from '../../components/child-bottom-nav';
-import { sentences } from '../../data/sentences';
-import type { Language, Position, Sentence } from '../../types/sentences';
-import { POSITIONS } from '../../types/sentences';
+import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { sentences } from '@/data/sentences';
+import type { Language, Position, Sentence } from '@/types/sentences';
+import { POSITIONS } from '@/types/sentences';
 
 // ─── Language Toggle ──────────────────────────────────────────────────────────
 function LanguageToggle({
@@ -126,10 +125,12 @@ export default function SentencesScreen() {
     SourGummy: require('../../../assets/SourGummy.ttf'),
   });
 
+  // Handle back button: explicitly returns to the Child Dashboard (/patient-dashboard)
   const handleBack = () => {
     router.replace('/patient-dashboard' as any);
   };
 
+  // Intercept hardware back button on Android so it safely remains in Child Mode
   useEffect(() => {
     const onBackPress = () => {
       handleBack();
@@ -209,6 +210,7 @@ export default function SentencesScreen() {
           />
         </View>
 
+        {/* Global Child Bottom Navigation Bar */}
         <ChildBottomNav activeTab="play" />
       </View>
     </>

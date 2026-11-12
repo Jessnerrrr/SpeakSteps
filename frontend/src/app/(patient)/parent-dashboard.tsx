@@ -16,13 +16,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-// FIXED IMPORTS: 2 levels up to reach src/data and src/components
-import { ParentBottomNav } from '../../components/parent-bottom-nav';
-import { ParentHeader } from '../../components/parent-header';
-import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
-import { AssignedActivity, TaskStore } from '../../data/parent-tasks-mock';
-import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
-import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
+import { ParentBottomNav } from '@/components/parent-bottom-nav';
+import { ParentHeader } from '@/components/parent-header';
+import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
+import { AssignedActivity, TaskStore } from '@/data/parent-tasks-mock';
 
 export default function ParentDashboardScreen() {
   const { width } = useWindowDimensions();
@@ -37,10 +34,6 @@ export default function ParentDashboardScreen() {
 
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const activities = TaskStore.getActivities();
-
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
-  const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribe = ChildProfileStore.subscribe((updatedProfile: ChildProfile) => {
@@ -138,9 +131,6 @@ export default function ParentDashboardScreen() {
             <ParentBottomNav activeTab="home" />
           </View>
         </ImageBackground>
-
-        <GrownUpCheckModal visible={isGrownUpModalVisible} onClose={() => setIsGrownUpModalVisible(false)} onSuccess={() => { setIsGrownUpModalVisible(false); router.push('/parent-dashboard' as any); }} />
-        <SignOutConfirmModal visible={isSignOutModalVisible} onClose={() => setIsSignOutModalVisible(false)} onConfirm={() => { setIsSignOutModalVisible(false); router.replace('/patient-login' as any); }} />
       </SafeAreaView>
     </>
   );
