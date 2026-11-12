@@ -866,3 +866,4 @@ const styles = StyleSheet.create({
     color: '#7C93A8',
   },
 });
+

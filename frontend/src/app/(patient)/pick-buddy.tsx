@@ -19,6 +19,7 @@ import {
 import { BUDDY_ROSTER, BuddyStore, Buddy } from '@/data/buddy-store';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
 import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
+import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
 
@@ -75,14 +76,10 @@ export default function PickBuddyScreen() {
 
               <View style={styles.headerRightActions}>
                 {/* Notification Bell Circle */}
-                <TouchableOpacity
-                  style={styles.bellButton}
-                  activeOpacity={0.7}
-                  onPress={() => console.log('Notifications')}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="notifications-outline" size={16} color="#F5A623" />
-                </TouchableOpacity>
+                <NotificationBellButton
+                  audience="child"
+                  onBeforeOpen={() => setIsMenuOpen(false)}
+                />
 
                 {/* Triple Bar Hamburger / Close Menu Button */}
                 <TouchableOpacity
@@ -337,21 +334,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  bellButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#FBD27C',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2.5,
-    elevation: 2,
   },
   menuButton: {
     padding: 2,
