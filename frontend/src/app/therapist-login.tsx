@@ -38,6 +38,7 @@ export default function TherapistLoginScreen() {
     if (!email || !password) {
       return; 
     }
+    router.replace('/teacher-dashboard' as any);
   };
 
   const handleRequestAccount = () => {

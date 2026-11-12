@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,11 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
+  Switch,
+  Pressable,
+  useColorScheme,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useFonts } from 'expo-font';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
@@ -395,6 +398,77 @@ const INITIAL_REVIEWS: ReviewItem[] = [
   },
 ];
 
+// Mock Notifications matching Screenshot 1 Right
+const INITIAL_NOTIFICATIONS = [
+  {
+    id: 'notif-1',
+    name: 'Khyll',
+    action: 'submitted an audio recording',
+    detail: '/r/ Isolated Sounds (Target: 35% accuracy)',
+    time: '5m ago',
+    unread: true,
+  },
+  {
+    id: 'notif-2',
+    name: 'Angelica',
+    action: 'completed Sentences practice',
+    detail: 'Achieved 80% accuracy score on Sibilant /s/ targets',
+    time: '1h ago',
+    unread: true,
+  },
+  {
+    id: 'notif-3',
+    name: 'Jhonas',
+    action: 'submitted Syllables home practice',
+    detail: '15/20 correct trials recorded by parent',
+    time: '3h ago',
+    unread: true,
+  },
+  {
+    id: 'notif-4',
+    name: 'Mcgravy',
+    action: 'completed Phrases practice',
+    detail: 'Achieved 75% accuracy rate',
+    time: 'Today at 09:09 AM',
+    unread: false,
+  },
+];
+
+// Theme Colors Palette Generator
+const getThemeColors = (isDark: boolean) => ({
+  isDark,
+  bg: isDark ? '#0B1120' : '#FFFFFF',
+  bgSecondary: isDark ? '#0F172A' : '#F8FAFC',
+  card: isDark ? '#1E293B' : '#FFFFFF',
+  cardSubtle: isDark ? '#0F172A' : '#F8FAFC',
+  border: isDark ? '#334155' : '#E2E8F0',
+  borderLight: isDark ? '#1E293B' : '#F1F5F9',
+  text: isDark ? '#F8FAFC' : '#1E293B',
+  textSub: isDark ? '#94A3B8' : '#64748B',
+  textMuted: isDark ? '#64748B' : '#94A3B8',
+  heading: isDark ? '#38BDF8' : '#0369A1',
+  primary: '#0284C7',
+  primaryLight: isDark ? '#082F49' : '#CFFAFE',
+  hamburger: isDark ? '#F8FAFC' : '#1E293B',
+  inputBg: isDark ? '#0B1120' : '#FFFFFF',
+  inputText: isDark ? '#F8FAFC' : '#1E293B',
+  segmentBg: isDark ? '#0B1120' : '#FFFFFF',
+  logoutBtnBg: isDark ? '#334155' : '#CBD5E1',
+  logoutBtnText: isDark ? '#F8FAFC' : '#1E293B',
+  divider: isDark ? '#334155' : '#F1F5F9',
+  modalOverlay: isDark ? 'rgba(0, 0, 0, 0.75)' : 'rgba(15, 23, 42, 0.65)',
+  menuOverlay: isDark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(15, 23, 42, 0.25)',
+  peachCardBg: isDark ? '#2D1B11' : '#FFF7ED',
+  peachCardBorder: isDark ? '#7C2D12' : '#FED7AA',
+  peachPillBg: isDark ? '#431407' : '#FFEDD5',
+  peachPillText: isDark ? '#FDBA74' : '#C2410C',
+  peachText: isDark ? '#FB923C' : '#C2410C',
+  yellowCardBg: isDark ? '#2D2305' : '#FFFBEB',
+  yellowCardBorder: isDark ? '#78350F' : '#FEF3C7',
+  bottomNavBg: isDark ? '#1E293B' : '#FFFFFF',
+  bottomNavBorder: isDark ? '#334155' : '#E2E8F0',
+});
+
 export default function TeacherDashboardScreen() {
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../assets/fonts/SourGummy-Regular.ttf'),
@@ -404,6 +478,44 @@ export default function TeacherDashboardScreen() {
 
   // --- Main Navigation Tabs ---
   const [activeTab, setActiveTab] = useState<'home' | 'patients' | 'activities' | 'reviews'>('home');
+
+  // --- Three Lines (Hamburger) Menu, Profile, Settings & Notifications State ---
+  const [showMenu, setShowMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+
+  // Therapist Profile Data
+  const [therapistProfile, setTherapistProfile] = useState({
+    name: 'Dr. Ameer Andres, SLP-CCC',
+    title: 'Speech-Language Pathologist',
+    license: 'SLP-PH-2024-8821',
+    clinic: 'SpeakSteps',
+    contact: '+63 9000 000 000',
+    email: 'ameer@speakstep.com',
+  });
+  const [editProfileForm, setEditProfileForm] = useState({ ...therapistProfile });
+
+  // Settings Toggles & Theme (Screenshot 1 Left)
+  const [newRecordingsToggle, setNewRecordingsToggle] = useState(true);
+  const [followUpAlertsToggle, setFollowUpAlertsToggle] = useState(true);
+  const [themeMode, setThemeMode] = useState<'Auto' | 'Light' | 'Dark'>('Auto');
+
+  // --- Dynamic Color Theme Resolution (Functional Light & Dark) ---
+  const systemColorScheme = useColorScheme();
+  const isDark = themeMode === 'Auto' ? systemColorScheme === 'dark' : themeMode === 'Dark';
+  const colors = useMemo(() => getThemeColors(isDark), [isDark]);
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Password fields state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // --- Patients Tab State ---
   const [patientSearch, setPatientSearch] = useState('');
@@ -548,19 +660,55 @@ export default function TeacherDashboardScreen() {
     triggerToast(`Review submitted for ${item.studentName}!`);
   };
 
+  // --- Profile, Settings & Logout Handlers ---
+  const handleSaveProfile = () => {
+    setTherapistProfile({ ...editProfileForm });
+    setShowEditProfileModal(false);
+    triggerToast('Profile updated successfully!');
+  };
+
+  const handleChangePassword = () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      triggerToast('Please fill out all password fields.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      triggerToast('New passwords do not match.');
+      return;
+    }
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowChangePasswordModal(false);
+    triggerToast('Password changed successfully!');
+  };
+
+  const handleLogout = () => {
+    setShowLogoutConfirm(false);
+    setShowMenu(false);
+    setShowSettingsModal(false);
+    triggerToast('Logged out successfully.');
+    router.replace('/login' as any);
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications(notifications.map((n) => ({ ...n, unread: false })));
+    triggerToast('All notifications marked as read.');
+  };
+
   return (
-    <SafeAreaView style={styles.safeContainer}>
+    <SafeAreaView style={[styles.safeContainer, { backgroundColor: colors.bg }]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* ==========================================
           --- GLOBAL TOP HEADER ---
           ========================================== */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
         {/* If inside subviews (preview, edit, assign), show Back Arrow; else Hamburger */}
         {activeTab === 'activities' && activitiesView !== 'library' ? (
           <TouchableOpacity
-            style={styles.backCircleBtn}
+            style={[styles.backCircleBtn, { borderColor: colors.border }]}
             onPress={() => {
               if (activitiesView === 'edit' && editStep > 1) {
                 setEditStep((editStep - 1) as any);
@@ -569,19 +717,33 @@ export default function TeacherDashboardScreen() {
               }
             }}
           >
-            <Text style={styles.backArrowText}>←</Text>
+            <Text style={[styles.backArrowText, { color: colors.text }]}>←</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            activeOpacity={0.7}
+            onPress={() => {
+              setShowNotificationsDropdown(false);
+              setShowMenu(!showMenu);
+            }}
+          >
             <Svg width="22" height="18" viewBox="0 0 24 18" fill="none">
-              <Path d="M1 1.5H23M1 9H23M1 16.5H23" stroke="#1E293B" strokeWidth="2.5" strokeLinecap="round" />
+              <Path d="M1 1.5H23M1 9H23M1 16.5H23" stroke={colors.hamburger} strokeWidth="2.5" strokeLinecap="round" />
             </Svg>
           </TouchableOpacity>
         )}
 
-        <Text style={styles.appTitle}>SpeakSteps</Text>
+        <Text style={[styles.appTitle, { color: isDark ? '#38BDF8' : '#0284C7' }]}>SpeakSteps</Text>
 
-        <TouchableOpacity style={styles.iconButton}>
+        <TouchableOpacity
+          style={styles.iconButton}
+          activeOpacity={0.7}
+          onPress={() => {
+            setShowMenu(false);
+            setShowNotificationsDropdown(!showNotificationsDropdown);
+          }}
+        >
           <View>
             <Svg width="22" height="24" viewBox="0 0 24 24" fill="none">
               <Path
@@ -599,7 +761,7 @@ export default function TeacherDashboardScreen() {
                 strokeLinejoin="round"
               />
             </Svg>
-            <View style={styles.notificationDot} />
+            {notifications.some((n) => n.unread) && <View style={styles.notificationDot} />}
           </View>
         </TouchableOpacity>
       </View>
@@ -608,7 +770,7 @@ export default function TeacherDashboardScreen() {
           --- MAIN SCROLLABLE CONTENT BODY ---
           ========================================== */}
       <ScrollView
-        style={styles.mainScrollView}
+        style={[styles.mainScrollView, { backgroundColor: colors.bgSecondary }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
@@ -618,13 +780,13 @@ export default function TeacherDashboardScreen() {
         {activeTab === 'home' && (
           <>
             <View style={styles.greetingSection}>
-              <Text style={styles.dateText}>Friday, October 29</Text>
-              <Text style={styles.greetingTitle}>Good morning, Dr. Andres</Text>
-              <Text style={styles.greetingSubtitle}>Here's what needs your attention today.</Text>
+              <Text style={[styles.dateText, { color: colors.textSub }]}>Friday, October 29</Text>
+              <Text style={[styles.greetingTitle, { color: colors.heading }]}>Good morning, Dr. Andres</Text>
+              <Text style={[styles.greetingSubtitle, { color: colors.textSub }]}>Here's what needs your attention today.</Text>
 
               {/* Assign Activity Quick Button -> Switches to Assign Screen */}
               <TouchableOpacity
-                style={styles.assignButton}
+                style={[styles.assignButton, { backgroundColor: colors.primaryLight }]}
                 activeOpacity={0.8}
                 onPress={() => {
                   setActiveTab('activities');
@@ -643,7 +805,7 @@ export default function TeacherDashboardScreen() {
             {/* 2x2 Metric Cards Grid */}
             <View style={styles.statsGrid}>
               <TouchableOpacity
-                style={styles.statCard}
+                style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                 activeOpacity={0.7}
                 onPress={() => {
                   setActiveTab('reviews');
@@ -656,45 +818,45 @@ export default function TeacherDashboardScreen() {
                     <Text style={[styles.statBadgeText, { color: '#15803D' }]}>Pending</Text>
                   </View>
                 </View>
-                <Text style={styles.statLabel}>Recordings to Review</Text>
+                <Text style={[styles.statLabel, { color: colors.text }]}>Recordings to Review</Text>
               </TouchableOpacity>
 
-              <View style={styles.statCard}>
+              <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
                   <Text style={[styles.statNumber, { color: '#F97316' }]}>3</Text>
                   <View style={[styles.statBadge, { backgroundColor: '#FFEDD5' }]}>
                     <Text style={[styles.statBadgeText, { color: '#C2410C' }]}>Alert</Text>
                   </View>
                 </View>
-                <Text style={styles.statLabel}>Require Follow-up</Text>
+                <Text style={[styles.statLabel, { color: colors.text }]}>Require Follow-up</Text>
               </View>
 
-              <View style={styles.statCard}>
+              <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
                   <Text style={[styles.statNumber, { color: '#0EA5E9' }]}>7</Text>
                   <View style={[styles.statBadge, { backgroundColor: '#BAE6FD' }]}>
                     <Text style={[styles.statBadgeText, { color: '#0369A1' }]}>Today</Text>
                   </View>
                 </View>
-                <Text style={styles.statLabel}>Submissions Received</Text>
+                <Text style={[styles.statLabel, { color: colors.text }]}>Submissions Received</Text>
               </View>
 
-              <View style={styles.statCard}>
+              <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
                   <Text style={[styles.statNumber, { color: '#F59E0B' }]}>14</Text>
                   <View style={[styles.statBadge, { backgroundColor: '#FEF3C7' }]}>
                     <Text style={[styles.statBadgeText, { color: '#B45309' }]}>Active</Text>
                   </View>
                 </View>
-                <Text style={styles.statLabel}>Overdue / Active Task</Text>
+                <Text style={[styles.statLabel, { color: colors.text }]}>Overdue / Active Task</Text>
               </View>
             </View>
 
             {/* Patient Progress Section */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Patient Progress</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Patient Progress</Text>
               <TouchableOpacity onPress={() => setActiveTab('patients')}>
-                <Text style={styles.viewAllText}>View all</Text>
+                <Text style={[styles.viewAllText, { color: isDark ? '#38BDF8' : '#0284C7' }]}>View all</Text>
               </TouchableOpacity>
             </View>
 
@@ -702,24 +864,24 @@ export default function TeacherDashboardScreen() {
               {INITIAL_PATIENTS.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={styles.patientCard}
+                  style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                   activeOpacity={0.7}
                   onPress={() => setSelectedPatient(item)}
                 >
-                  <View style={styles.patientAvatar}>
-                    <Text style={styles.avatarText}>{item.initials}</Text>
+                  <View style={[styles.patientAvatar, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
+                    <Text style={[styles.avatarText, { color: colors.text }]}>{item.initials}</Text>
                   </View>
                   <View style={styles.patientCardBody}>
                     <View style={styles.patientCardTopRow}>
-                      <Text style={styles.patientName}>{item.name}</Text>
+                      <Text style={[styles.patientName, { color: colors.text }]}>{item.name}</Text>
                       <View style={[styles.percentBadge, { backgroundColor: item.badgeBg }]}>
                         <Text style={[styles.percentText, { color: item.badgeTextColor }]}>
                           {item.accuracy}%
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.patientSubtitle}>{item.targetDescription}</Text>
-                    <View style={styles.progressBarBackground}>
+                    <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>{item.targetDescription}</Text>
+                    <View style={[styles.progressBarBackground, { backgroundColor: colors.border }]}>
                       <View
                         style={[
                           styles.progressBarFill,
@@ -734,24 +896,24 @@ export default function TeacherDashboardScreen() {
 
             {/* Recent Submissions Section */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Recent submissions</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent submissions</Text>
               <TouchableOpacity onPress={() => setActiveTab('reviews')}>
-                <Text style={styles.viewAllText}>View all</Text>
+                <Text style={[styles.viewAllText, { color: isDark ? '#38BDF8' : '#0284C7' }]}>View all</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.submissionsCardWrapper}>
+            <View style={[styles.submissionsCardWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {INITIAL_SUBMISSIONS.map((sub) => (
-                <View key={sub.id} style={styles.submissionItem}>
-                  <View style={styles.patientAvatarSmall}>
-                    <Text style={styles.avatarTextSmall}>{sub.initials}</Text>
+                <View key={sub.id} style={[styles.submissionItem, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
+                  <View style={[styles.patientAvatarSmall, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.avatarTextSmall, { color: colors.text }]}>{sub.initials}</Text>
                   </View>
                   <View style={{ flex: 1, marginHorizontal: 10 }}>
-                    <Text style={styles.subPatientName}>{sub.name}</Text>
-                    <Text style={styles.subDetails}>
+                    <Text style={[styles.subPatientName, { color: colors.text }]}>{sub.name}</Text>
+                    <Text style={[styles.subDetails, { color: colors.textSub }]}>
                       {sub.phrase} • {sub.time}
                     </Text>
-                    <View style={styles.subProgressBar}>
+                    <View style={[styles.subProgressBar, { backgroundColor: colors.border }]}>
                       <View style={[styles.subProgressFill, { width: `${sub.progress * 100}%` }]} />
                     </View>
                   </View>
@@ -776,46 +938,46 @@ export default function TeacherDashboardScreen() {
            ---------------------------------------------------- */}
         {activeTab === 'patients' && (
           <View style={styles.patientsTabContainer}>
-            <Text style={styles.pageTitle}>Patients</Text>
-            <Text style={styles.pageSubtitle}>Track development and review progress</Text>
+            <Text style={[styles.pageTitle, { color: colors.heading }]}>Patients</Text>
+            <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>Track development and review progress</Text>
 
             <View style={styles.searchFilterRow}>
-              <View style={styles.searchInputWrapper}>
+              <View style={[styles.searchInputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { color: colors.inputText }]}
                   placeholder="Search by name, targets..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textMuted}
                   value={patientSearch}
                   onChangeText={setPatientSearch}
                 />
               </View>
-              <TouchableOpacity style={styles.filterDropdown}>
-                <Text style={styles.filterText}>ALL</Text>
-                <Text style={styles.filterArrow}>▼</Text>
+              <TouchableOpacity style={[styles.filterDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.filterText, { color: colors.textSub }]}>ALL</Text>
+                <Text style={[styles.filterArrow, { color: colors.textMuted }]}>▼</Text>
               </TouchableOpacity>
             </View>
 
             {filteredPatients.map((item) => (
               <TouchableOpacity
                 key={item.id}
-                style={styles.patientCard}
+                style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                 activeOpacity={0.7}
                 onPress={() => setSelectedPatient(item)}
               >
-                <View style={styles.patientAvatar}>
-                  <Text style={styles.avatarText}>{item.initials}</Text>
+                <View style={[styles.patientAvatar, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
+                  <Text style={[styles.avatarText, { color: colors.text }]}>{item.initials}</Text>
                 </View>
                 <View style={styles.patientCardBody}>
                   <View style={styles.patientCardTopRow}>
-                    <Text style={styles.patientName}>{item.name}</Text>
+                    <Text style={[styles.patientName, { color: colors.text }]}>{item.name}</Text>
                     <View style={[styles.percentBadge, { backgroundColor: item.badgeBg }]}>
                       <Text style={[styles.percentText, { color: item.badgeTextColor }]}>
                         {item.accuracy}%
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.patientSubtitle}>{item.targetDescription}</Text>
-                  <View style={styles.progressBarBackground}>
+                  <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>{item.targetDescription}</Text>
+                  <View style={[styles.progressBarBackground, { backgroundColor: colors.border }]}>
                     <View
                       style={[
                         styles.progressBarFill,
@@ -2012,6 +2174,620 @@ export default function TeacherDashboardScreen() {
         </View>
       </Modal>
 
+      {/* ==========================================
+          --- THREE LINES (HAMBURGER) DROPDOWN MENU (Screenshot 2) ---
+          ========================================== */}
+      {showMenu && (
+        <Modal transparent animationType="fade" visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+          <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
+            <View style={styles.menuDropdownContainer}>
+              {/* Therapist Profile Snippet Header */}
+              <TouchableOpacity
+                style={styles.menuUserHeader}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowProfileModal(true);
+                }}
+              >
+                <View style={styles.menuAvatarCircle}>
+                  <Text style={styles.menuAvatarText}>A</Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.menuUserName} numberOfLines={1}>{therapistProfile.name}</Text>
+                  <Text style={styles.menuUserRole} numberOfLines={1}>{therapistProfile.title}</Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.menuSectionDivider} />
+
+              {/* Option 1: Profile */}
+              <TouchableOpacity
+                style={styles.menuOptionRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowProfileModal(true);
+                }}
+              >
+                <View style={styles.menuIconCircle}>
+                  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <Circle cx="12" cy="8" r="4" stroke="#0284C7" strokeWidth="2" />
+                    <Path d="M4 20C4 16.6863 7.58172 14 12 14C16.4183 14 20 16.6863 20 20" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" />
+                  </Svg>
+                </View>
+                <Text style={styles.menuOptionLabel}>Profile</Text>
+                <Text style={styles.menuOptionChevron}>›</Text>
+              </TouchableOpacity>
+
+              {/* Option 2: Settings */}
+              <TouchableOpacity
+                style={styles.menuOptionRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowSettingsModal(true);
+                }}
+              >
+                <View style={styles.menuIconCircle}>
+                  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <Circle cx="12" cy="12" r="3" stroke="#0284C7" strokeWidth="2" />
+                    <Path
+                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"
+                      stroke="#0284C7"
+                      strokeWidth="2"
+                    />
+                  </Svg>
+                </View>
+                <Text style={styles.menuOptionLabel}>Settings</Text>
+                <Text style={styles.menuOptionChevron}>›</Text>
+              </TouchableOpacity>
+
+              <View style={styles.menuSectionDivider} />
+
+              {/* Option 3: Logout */}
+              <TouchableOpacity
+                style={styles.menuOptionRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowLogoutConfirm(true);
+                }}
+              >
+                <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M16 17l5-5-5-5" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <Path d="M21 12H9" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </View>
+                <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontWeight: '700' }]}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* ==========================================
+          --- NOTIFICATIONS POPOVER (Screenshot 1 Right) ---
+          ========================================== */}
+      {showNotificationsDropdown && (
+        <Modal
+          transparent
+          animationType="fade"
+          visible={showNotificationsDropdown}
+          onRequestClose={() => setShowNotificationsDropdown(false)}
+        >
+          <Pressable style={styles.menuOverlay} onPress={() => setShowNotificationsDropdown(false)}>
+            <View style={styles.notifDropdownContainer}>
+              <View style={styles.notifDropdownHeaderRow}>
+                <Text style={styles.notifDropdownTitle}>Notifications</Text>
+                <View style={styles.notifFilterPillsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.notifPill,
+                      notificationsFilter === 'All' && styles.notifPillActive,
+                    ]}
+                    onPress={() => setNotificationsFilter('All')}
+                  >
+                    <Text
+                      style={[
+                        styles.notifPillText,
+                        notificationsFilter === 'All' && styles.notifPillTextActive,
+                      ]}
+                    >
+                      All
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.notifPill,
+                      notificationsFilter === 'Unread' && styles.notifPillActive,
+                    ]}
+                    onPress={() => setNotificationsFilter('Unread')}
+                  >
+                    <Text
+                      style={[
+                        styles.notifPillText,
+                        notificationsFilter === 'Unread' && styles.notifPillTextActive,
+                      ]}
+                    >
+                      Unread
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                {notifications
+                  .filter((item) => (notificationsFilter === 'Unread' ? item.unread : true))
+                  .map((item) => (
+                    <View key={item.id} style={styles.notifItemRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.notifItemTitle}>
+                          <Text style={{ fontWeight: '700' }}>{item.name} </Text>
+                          {item.action}
+                        </Text>
+                        <Text style={styles.notifItemDetail}>{item.detail}</Text>
+                      </View>
+                      <Text style={styles.notifItemTime}>{item.time}</Text>
+                    </View>
+                  ))}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.markAllReadBtn}
+                onPress={handleMarkAllNotificationsRead}
+              >
+                <Text style={styles.markAllReadBtnText}>Mark All as Read</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* ==========================================
+          --- MODAL: SETTINGS & ACCOUNT (Screenshot 1 Left) ---
+          ========================================== */}
+      <Modal
+        visible={showSettingsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSettingsModal(false)}
+      >
+        <SafeAreaView style={styles.settingsModalContainer}>
+          <View style={styles.settingsTopBar}>
+            <Text style={styles.settingsNavTitle}>Settings</Text>
+            <TouchableOpacity onPress={() => setShowSettingsModal(false)} style={styles.closeButton}>
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
+            {/* Header: Avatar + Doctor Info */}
+            <View style={styles.settingsProfileHeaderRow}>
+              <View style={styles.settingsAvatarCircle}>
+                <Text style={styles.settingsAvatarLetter}>A</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={styles.settingsDoctorName}>{therapistProfile.name}</Text>
+                <Text style={styles.settingsDoctorRole}>{therapistProfile.title}</Text>
+                <Text style={styles.settingsLicenseText}>License: {therapistProfile.license}</Text>
+              </View>
+            </View>
+
+            {/* SECTION 1: ACCOUNT */}
+            <Text style={styles.settingsSectionTitle}>Account</Text>
+            <View style={styles.settingsCard}>
+              <TouchableOpacity
+                style={styles.settingsCardRow}
+                onPress={() => {
+                  setEditProfileForm({ ...therapistProfile });
+                  setShowEditProfileModal(true);
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsRowTitle}>Edit Profile</Text>
+                  <Text style={styles.settingsRowSub}>Name, clinic, contact number</Text>
+                </View>
+                <Text style={styles.settingsChevron}>›</Text>
+              </TouchableOpacity>
+
+              <View style={styles.settingsRowDivider} />
+
+              <View style={styles.settingsCardRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsRowTitle}>Clinic</Text>
+                  <Text style={styles.settingsRowSub}>{therapistProfile.clinic}</Text>
+                </View>
+              </View>
+
+              <View style={styles.settingsRowDivider} />
+
+              <View style={styles.settingsCardRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsRowTitle}>Contact</Text>
+                  <Text style={styles.settingsRowSub}>{therapistProfile.contact}</Text>
+                </View>
+              </View>
+
+              <View style={styles.settingsRowDivider} />
+
+              <View style={styles.settingsCardRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsRowTitle}>Email</Text>
+                  <Text style={styles.settingsRowSub}>{therapistProfile.email}</Text>
+                </View>
+              </View>
+
+              <View style={styles.settingsRowDivider} />
+
+              <TouchableOpacity
+                style={styles.settingsCardRow}
+                onPress={() => setShowChangePasswordModal(true)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingsRowTitle}>Change Password</Text>
+                </View>
+                <Text style={styles.settingsChevron}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* SECTION 2: NOTIFICATIONS */}
+            <Text style={styles.settingsSectionTitle}>Notifications</Text>
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsCardRow}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={styles.settingsRowTitle}>New Recordings</Text>
+                  <Text style={styles.settingsRowSub}>When a child or parent submits</Text>
+                </View>
+                <Switch
+                  value={newRecordingsToggle}
+                  onValueChange={(val) => {
+                    setNewRecordingsToggle(val);
+                    triggerToast(`New recordings alerts ${val ? 'enabled' : 'disabled'}`);
+                  }}
+                  trackColor={{ false: '#CBD5E1', true: '#1E293B' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <View style={styles.settingsRowDivider} />
+
+              <View style={styles.settingsCardRow}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={styles.settingsRowTitle}>Follow-Up Alerts</Text>
+                  <Text style={styles.settingsRowSub}>Patients who need practice follow-up</Text>
+                </View>
+                <Switch
+                  value={followUpAlertsToggle}
+                  onValueChange={(val) => {
+                    setFollowUpAlertsToggle(val);
+                    triggerToast(`Follow-up alerts ${val ? 'enabled' : 'disabled'}`);
+                  }}
+                  trackColor={{ false: '#CBD5E1', true: '#1E293B' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </View>
+
+            {/* SECTION 3: APPEARANCE */}
+            <Text style={styles.settingsSectionTitle}>Appearance</Text>
+            <View style={styles.settingsCard}>
+              <View style={styles.themeRow}>
+                <Text style={styles.settingsRowTitle}>Theme</Text>
+                <View style={styles.themeSegmentControl}>
+                  {(['Auto', 'Light', 'Dark'] as const).map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.themeSegmentBtn,
+                        themeMode === mode && styles.themeSegmentBtnActive,
+                      ]}
+                      onPress={() => {
+                        setThemeMode(mode);
+                        triggerToast(
+                          mode === 'Auto'
+                            ? `Auto theme enabled (${systemColorScheme === 'dark' ? 'Dark' : 'Light'})`
+                            : `${mode} theme enabled`
+                        );
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.themeSegmentText,
+                          themeMode === mode && styles.themeSegmentTextActive,
+                        ]}
+                      >
+                        {mode}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {/* LOG OUT BUTTON (Screenshot 1 bottom) */}
+            <TouchableOpacity
+              style={styles.settingsLogoutButton}
+              activeOpacity={0.8}
+              onPress={() => setShowLogoutConfirm(true)}
+            >
+              <Text style={styles.settingsLogoutButtonText}>Log Out</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: PROFILE VIEW & EDIT ---
+          ========================================== */}
+      <Modal
+        visible={showProfileModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <SafeAreaView style={styles.settingsModalContainer}>
+          <View style={styles.settingsTopBar}>
+            <Text style={styles.settingsNavTitle}>Therapist Profile</Text>
+            <TouchableOpacity onPress={() => setShowProfileModal(false)} style={styles.closeButton}>
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
+            <View style={styles.profileHeroCard}>
+              <View style={styles.profileBigAvatarCircle}>
+                <Text style={styles.profileBigAvatarLetter}>A</Text>
+              </View>
+              <Text style={styles.profileHeroName}>{therapistProfile.name}</Text>
+              <Text style={styles.profileHeroRole}>{therapistProfile.title}</Text>
+              <View style={styles.licenseBadge}>
+                <Text style={styles.licenseBadgeText}>{therapistProfile.license}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.settingsSectionTitle}>Clinical Credentials</Text>
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsCardRow}>
+                <View>
+                  <Text style={styles.settingsRowSub}>Clinic Organization</Text>
+                  <Text style={styles.settingsRowTitle}>{therapistProfile.clinic}</Text>
+                </View>
+              </View>
+              <View style={styles.settingsRowDivider} />
+              <View style={styles.settingsCardRow}>
+                <View>
+                  <Text style={styles.settingsRowSub}>Contact Number</Text>
+                  <Text style={styles.settingsRowTitle}>{therapistProfile.contact}</Text>
+                </View>
+              </View>
+              <View style={styles.settingsRowDivider} />
+              <View style={styles.settingsCardRow}>
+                <View>
+                  <Text style={styles.settingsRowSub}>Email Address</Text>
+                  <Text style={styles.settingsRowTitle}>{therapistProfile.email}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.previewActionsRow}>
+              <TouchableOpacity
+                style={styles.outlineBtn}
+                onPress={() => {
+                  setEditProfileForm({ ...therapistProfile });
+                  setShowEditProfileModal(true);
+                }}
+              >
+                <Text style={styles.outlineBtnText}>Edit Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.solidBlueBtn}
+                onPress={() => {
+                  setShowProfileModal(false);
+                  setShowSettingsModal(true);
+                }}
+              >
+                <Text style={styles.solidBlueBtnText}>Go to Settings ›</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: EDIT PROFILE FORM ---
+          ========================================== */}
+      <Modal
+        visible={showEditProfileModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowEditProfileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitleText}>Edit Profile Information</Text>
+              <TouchableOpacity onPress={() => setShowEditProfileModal(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.formLabel}>Full Name</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editProfileForm.name}
+              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, name: text })}
+              placeholder="e.g. Dr. Ameer Andres, SLP-CCC"
+            />
+
+            <Text style={styles.formLabel}>Clinical Role</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editProfileForm.title}
+              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, title: text })}
+              placeholder="e.g. Speech-Language Pathologist"
+            />
+
+            <Text style={styles.formLabel}>License ID</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editProfileForm.license}
+              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, license: text })}
+              placeholder="e.g. SLP-PH-2024-8821"
+            />
+
+            <Text style={styles.formLabel}>Clinic</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editProfileForm.clinic}
+              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, clinic: text })}
+              placeholder="e.g. SpeakSteps"
+            />
+
+            <Text style={styles.formLabel}>Contact Number</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editProfileForm.contact}
+              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, contact: text })}
+              placeholder="e.g. +63 9000 000 000"
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.formLabel}>Email</Text>
+            <TextInput
+              style={styles.formInput}
+              value={editProfileForm.email}
+              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, email: text })}
+              placeholder="e.g. ameer@speakstep.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <View style={[styles.previewActionsRow, { marginTop: 12 }]}>
+              <TouchableOpacity
+                style={styles.outlineBtn}
+                onPress={() => setShowEditProfileModal(false)}
+              >
+                <Text style={styles.outlineBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.solidBlueBtn}
+                onPress={handleSaveProfile}
+              >
+                <Text style={styles.solidBlueBtnText}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: CHANGE PASSWORD ---
+          ========================================== */}
+      <Modal
+        visible={showChangePasswordModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowChangePasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitleText}>Change Password</Text>
+              <TouchableOpacity onPress={() => setShowChangePasswordModal(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.formLabel}>Current Password</Text>
+            <TextInput
+              style={styles.formInput}
+              secureTextEntry
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              placeholder="Enter current password"
+            />
+
+            <Text style={styles.formLabel}>New Password</Text>
+            <TextInput
+              style={styles.formInput}
+              secureTextEntry
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Enter new password (min. 8 characters)"
+            />
+
+            <Text style={styles.formLabel}>Confirm New Password</Text>
+            <TextInput
+              style={styles.formInput}
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Re-enter new password"
+            />
+
+            <View style={[styles.previewActionsRow, { marginTop: 12 }]}>
+              <TouchableOpacity
+                style={styles.outlineBtn}
+                onPress={() => setShowChangePasswordModal(false)}
+              >
+                <Text style={styles.outlineBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.solidBlueBtn}
+                onPress={handleChangePassword}
+              >
+                <Text style={styles.solidBlueBtnText}>Update Password</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: LOGOUT CONFIRMATION ---
+          ========================================== */}
+      <Modal
+        visible={showLogoutConfirm}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowLogoutConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 360, alignItems: 'center' }]}>
+            <View style={[styles.menuIconCircle, { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FEE2E2', marginBottom: 12 }]}>
+              <Svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M16 17l5-5-5-5" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M21 12H9" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </View>
+            <Text style={[styles.modalPatientName, { fontSize: 18, marginBottom: 6 }]}>Log Out of SpeakSteps?</Text>
+            <Text style={[styles.subtextSmall, { textAlign: 'center', marginBottom: 20 }]}>
+              You will need to sign back in with your credentials to manage your patients.
+            </Text>
+
+            <View style={[styles.previewActionsRow, { width: '100%', marginTop: 0 }]}>
+              <TouchableOpacity
+                style={styles.outlineBtn}
+                onPress={() => setShowLogoutConfirm(false)}
+              >
+                <Text style={styles.outlineBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.solidBlueBtn, { backgroundColor: '#DC2626' }]}
+                onPress={handleLogout}
+              >
+                <Text style={styles.solidBlueBtnText}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Global Toast Feedback Banner */}
       {toastMessage && (
         <View style={styles.toastContainer}>
@@ -2030,10 +2806,10 @@ export default function TeacherDashboardScreen() {
           activeOpacity={0.7}
         >
           {activeTab === 'home' && <View style={styles.activeTabIndicator} />}
-          <Svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'home' ? '#0284C7' : 'none'}>
+          <Svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'home' ? (isDark ? '#38BDF8' : '#0284C7') : 'none'}>
             <Path
               d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"
-              stroke={activeTab === 'home' ? '#0284C7' : '#94A3B8'}
+              stroke={activeTab === 'home' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -2052,20 +2828,20 @@ export default function TeacherDashboardScreen() {
           <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
             <Path
               d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21"
-              stroke={activeTab === 'patients' ? '#0284C7' : '#94A3B8'}
+              stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
             />
-            <Circle cx="9" cy="7" r="4" stroke={activeTab === 'patients' ? '#0284C7' : '#94A3B8'} strokeWidth="2" />
+            <Circle cx="9" cy="7" r="4" stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted} strokeWidth="2" />
             <Path
               d="M23 21V19C22.9986 18.1771 22.7345 17.3789 22.2476 16.7208C21.7607 16.0628 21.0766 15.5783 20.3 15.34"
-              stroke={activeTab === 'patients' ? '#0284C7' : '#94A3B8'}
+              stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
             />
             <Path
               d="M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89317 18.7122 8.75608 18.1676 9.45768C17.623 10.1593 16.8604 10.6597 16 10.88"
-              stroke={activeTab === 'patients' ? '#0284C7' : '#94A3B8'}
+              stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
             />
@@ -2084,22 +2860,22 @@ export default function TeacherDashboardScreen() {
         >
           {activeTab === 'activities' && <View style={styles.activeTabIndicator} />}
           <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <Circle cx="10" cy="8" r="4" stroke={activeTab === 'activities' ? '#0284C7' : '#94A3B8'} strokeWidth="2" />
+            <Circle cx="10" cy="8" r="4" stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted} strokeWidth="2" />
             <Path
               d="M2 20C2 16.6863 5.58172 14 10 14C14.4183 14 18 16.6863 18 20"
-              stroke={activeTab === 'activities' ? '#0284C7' : '#94A3B8'}
+              stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
             />
             <Path
               d="M17 7C17.5 7.8 18 8.8 18 10C18 11.2 17.5 12.2 17 13"
-              stroke={activeTab === 'activities' ? '#0284C7' : '#94A3B8'}
+              stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
             />
             <Path
               d="M20 5C21 6.5 22 8.2 22 10C22 11.8 21 13.5 20 15"
-              stroke={activeTab === 'activities' ? '#0284C7' : '#94A3B8'}
+              stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
               strokeWidth="2"
               strokeLinecap="round"
             />
@@ -2118,7 +2894,7 @@ export default function TeacherDashboardScreen() {
             <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <Path
                 d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                stroke={activeTab === 'reviews' ? '#0284C7' : '#94A3B8'}
+                stroke={activeTab === 'reviews' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -2140,1674 +2916,2055 @@ export default function TeacherDashboardScreen() {
 // ==========================================
 // --- STYLESHEET ---
 // ==========================================
-const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  topHeader: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-  },
-  iconButton: {
-    padding: 8,
-  },
-  backCircleBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backArrowText: {
-    fontSize: 16,
-    color: '#334155',
-    fontWeight: '700',
-  },
-  appTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 22,
-    color: '#0284C7',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
-  },
-  mainScrollView: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  // Greeting
-  greetingSection: {
-    marginTop: 16,
-    marginBottom: 16,
-  },
-  dateText: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  greetingTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24,
-    color: '#0369A1',
-    marginBottom: 4,
-  },
-  greetingSubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 14,
-  },
-  assignButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#CFFAFE',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  assignButtonText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 13,
-    color: '#0F766E',
-  },
-  // Stats Grid
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  statCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-  },
-  statCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statNumber: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 28,
-  },
-  statBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-  },
-  statBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  statLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  // Section Headers
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  viewAllText: {
-    fontSize: 13,
-    color: '#0284C7',
-    fontWeight: '600',
-  },
-  // Patient Cards
-  patientListContainer: {
-    marginBottom: 16,
-  },
-  patientCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
-  },
-  patientAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: '#94A3B8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  patientCardBody: {
-    flex: 1,
-  },
-  patientCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  patientName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  percentBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-  },
-  percentText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  patientSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 6,
-  },
-  progressBarBackground: {
-    height: 6,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  // Recent Submissions
-  submissionsCardWrapper: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 18,
-    padding: 8,
-    marginBottom: 20,
-  },
-  submissionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    padding: 10,
-    marginBottom: 8,
-  },
-  patientAvatarSmall: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: '#94A3B8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  avatarTextSmall: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  subPatientName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  subDetails: {
-    fontSize: 11,
-    color: '#64748B',
-    marginVertical: 2,
-  },
-  subProgressBar: {
-    height: 5,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 3,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  subProgressFill: {
-    height: '100%',
-    backgroundColor: '#22C55E',
-  },
-  reviewButton: {
-    backgroundColor: '#0284C7',
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-  },
-  reviewButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  // Patients Tab
-  patientsTabContainer: {
-    paddingTop: 8,
-  },
-  pageTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24,
-    color: '#0369A1',
-    marginBottom: 4,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 16,
-  },
-  searchFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  searchInputWrapper: {
-    flex: 1,
-    height: 42,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  searchInput: {
-    fontSize: 13,
-    color: '#1E293B',
-  },
-  filterDropdown: {
-    height: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-  },
-  filterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginRight: 4,
-  },
-  filterArrow: {
-    fontSize: 9,
-    color: '#64748B',
-  },
-  // Activity Library
-  subHeadingCaps: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 1,
-    marginTop: 10,
-  },
-  subTabsRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    marginBottom: 14,
-  },
-  subTabActive: {
-    paddingVertical: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: '#0284C7',
-    marginRight: 20,
-  },
-  subTabActiveText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  subTabInactive: {
-    paddingVertical: 8,
-  },
-  subTabInactiveText: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  activitySearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  activitySearchInputWrapper: {
-    flex: 1,
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    marginRight: 8,
-  },
-  createTaskButton: {
-    backgroundColor: '#0284C7',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  createTaskButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  chipsScroll: {
-    marginBottom: 14,
-  },
-  chipButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    marginRight: 8,
-  },
-  chipButtonActive: {
-    backgroundColor: '#0284C7',
-    borderColor: '#0284C7',
-  },
-  chipText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  activityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  activityGridCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 14,
-  },
-  activitySoundHeader: {
-    height: 70,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-  },
-  activitySoundText: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginRight: 10,
-  },
-  soundWavesSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  waveLine: {
-    width: 2.5,
-    marginHorizontal: 1.5,
-    borderRadius: 1.5,
-  },
-  activityCardBody: {
-    padding: 10,
-  },
-  activityCategoryTag: {
-    fontSize: 10,
-    color: '#D97706',
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  activityCardTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  activityCardSub: {
-    fontSize: 10,
-    color: '#64748B',
-    marginBottom: 8,
-  },
-  viewActivityLink: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  // Preview
-  previewContainer: {
-    paddingTop: 8,
-  },
-  previewTagPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFEDD5',
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    marginBottom: 6,
-  },
-  previewTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#C2410C',
-  },
-  previewTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24,
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  previewSoundDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 14,
-  },
-  previewSectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginTop: 14,
-    marginBottom: 6,
-  },
-  previewSectionBody: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 18,
-  },
-  practiceContentCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 6,
-  },
-  practiceContentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  practicePositionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  targetCountBadge: {
-    backgroundColor: '#BAE6FD',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-  },
-  targetCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
-  wordPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 10,
-  },
-  wordPillPeach: {
-    backgroundColor: '#FFEDD5',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginRight: 6,
-    marginBottom: 4,
-  },
-  wordPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#C2410C',
-  },
-  phraseBulletText: {
-    fontSize: 12,
-    color: '#334155',
-    lineHeight: 20,
-  },
-  emptyTargetCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 10,
-    marginTop: 8,
-  },
-  zeroTargetBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  zeroTargetText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  noTargetsSub: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginLeft: 4,
-    marginTop: 2,
-  },
-  audioModelCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FEF3C7',
-    borderRadius: 14,
-    padding: 12,
-    marginTop: 6,
-  },
-  audioPlayCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F97316',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  audioPlayIcon: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    marginLeft: 2,
-  },
-  audioModelTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  audioModelSub: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  audioWaveformRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  audioWaveBar: {
-    width: 3.5,
-    backgroundColor: '#F97316',
-    marginHorizontal: 1.5,
-    borderRadius: 2,
-  },
-  videoPlaceholderBox: {
-    height: 120,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  videoPlayCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  videoPlayIcon: {
-    color: '#64748B',
-    fontSize: 16,
-    marginLeft: 2,
-  },
-  previewActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 18,
-  },
-  outlineBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#0284C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  outlineBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  solidBlueBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#0284C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  solidBlueBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  // Edit Wizard
-  editWizardContainer: {
-    paddingTop: 8,
-  },
-  editWizardTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24,
-    color: '#0369A1',
-    marginBottom: 8,
-  },
-  stepperBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    marginBottom: 16,
-  },
-  stepItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  stepItemActive: {},
-  stepText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  stepTextActive: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-  stepIndicatorLine: {
-    position: 'absolute',
-    bottom: -1,
-    left: '15%',
-    right: '15%',
-    height: 2,
-    backgroundColor: '#0284C7',
-  },
-  formLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  formInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  formRowTwoCol: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dropdownSelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 40,
-    marginBottom: 8,
-  },
-  dropdownValue: {
-    fontSize: 13,
-    color: '#1E293B',
-    fontWeight: '500',
-  },
-  dropdownArrow: {
-    fontSize: 10,
-    color: '#64748B',
-  },
-  pillsSelectRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  posPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    marginRight: 8,
-  },
-  posPillSelected: {
-    backgroundColor: '#FFEDD5',
-    borderColor: '#FB923C',
-  },
-  posPillText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  posPillTextSelected: {
-    color: '#C2410C',
-    fontWeight: '700',
-  },
-  langSegmentControl: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    padding: 3,
-    marginBottom: 8,
-  },
-  langSegmentBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  langSegmentBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  langSegmentText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  langSegmentTextActive: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-  wordOriginRadioRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  originCard: {
-    width: '48%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    padding: 10,
-  },
-  originCardActive: {
-    borderColor: '#FB923C',
-    backgroundColor: '#FFF7ED',
-  },
-  radioDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#94A3B8',
-  },
-  radioDotActive: {
-    borderColor: '#EA580C',
-    backgroundColor: '#EA580C',
-  },
-  originTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  originSub: {
-    fontSize: 10,
-    color: '#64748B',
-  },
-  posCountersRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  posCounterBox: {
-    width: '31%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    padding: 8,
-    alignItems: 'center',
-  },
-  posCounterBoxActive: {
-    borderColor: '#FB923C',
-    backgroundColor: '#FFF7ED',
-  },
-  posCounterLabel: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  posCounterValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginTop: 2,
-  },
-  wordBankSearchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 40,
-    marginBottom: 10,
-  },
-  wordChecklistContainer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    padding: 8,
-    marginBottom: 10,
-  },
-  wordCheckItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-  },
-  checkboxSquare: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxSquareActive: {
-    backgroundColor: '#EA580C',
-    borderColor: '#EA580C',
-  },
-  checkmarkIcon: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  checkWordLabel: {
-    fontSize: 13,
-    color: '#1E293B',
-  },
-  selectedChipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 10,
-  },
-  removableChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEDD5',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  removableChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#C2410C',
-  },
-  removableChipX: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#C2410C',
-  },
-  wordPhraseBlock: {
-    marginBottom: 10,
-  },
-  wordPhraseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  wordPhraseTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  phraseInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    fontSize: 12,
-    color: '#1E293B',
-  },
-  customWordInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  addWordBtn: {
-    height: 40,
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addWordBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  checkboxRowLabel: {
-    fontSize: 12,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  subtextSmall: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  phraseBuilderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  symbolBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  symbolBtnText: {
-    fontSize: 16,
-    color: '#64748B',
-    fontWeight: '700',
-  },
-  savePhraseBtn: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#D97706',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  savePhraseBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  uploadDashedBox: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#CBD5E1',
-    borderRadius: 14,
-    padding: 20,
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    marginVertical: 8,
-  },
-  uploadMainText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  uploadSubText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  bigPhonemeHero: {
-    backgroundColor: '#FFF7ED',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  bigHeroSound: {
-    fontSize: 54,
-    fontWeight: '800',
-    color: '#C2410C',
-  },
-  bigHeroTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 20,
-    color: '#1E293B',
-    marginTop: 4,
-  },
-  bigHeroSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  // Assign Activity
-  assignScreenContainer: {
-    paddingTop: 8,
-  },
-  accordionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginVertical: 8,
-  },
-  accordionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#C2410C',
-  },
-  accordionArrow: {
-    fontSize: 10,
-    color: '#C2410C',
-  },
-  expandedAccordionCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
-  },
-  dateInputWrapper: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 42,
-    marginBottom: 8,
-  },
-  dateTextInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#1E293B',
-  },
-  // ==========================================
-  // --- REVIEWS TAB STYLES (Image 2) ---
-  // ==========================================
-  reviewsTabContainer: {
-    paddingTop: 8,
-  },
-  reviewsCapsHeading: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  reviewsTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24,
-    color: '#0369A1',
-    marginBottom: 4,
-  },
-  reviewsSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 14,
-  },
-  reviewsFilterTabsBar: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    marginBottom: 14,
-  },
-  reviewsFilterTab: {
-    paddingVertical: 8,
-    marginRight: 24,
-    alignItems: 'center',
-  },
-  reviewsFilterTabActive: {},
-  reviewsFilterTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  reviewsFilterTabTextActive: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-  reviewsFilterTabIndicator: {
-    position: 'absolute',
-    bottom: -1,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: '#0284C7',
-  },
-  reviewsListContainer: {
-    marginBottom: 20,
-  },
-  reviewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
-  },
-  reviewAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  reviewAvatarText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  reviewCardBody: {
-    flex: 1,
-  },
-  reviewStudentName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  reviewActivityDesc: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  reviewStatusBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  reviewStatusPending: {
-    backgroundColor: '#FFEDD5',
-  },
-  reviewStatusReviewed: {
-    backgroundColor: '#DCFCE7',
-  },
-  reviewStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  reviewStatusTextPending: {
-    color: '#C2410C',
-  },
-  reviewStatusTextReviewed: {
-    color: '#16A34A',
-  },
-  reviewChevron: {
-    fontSize: 16,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  // Rating buttons in Review Modal
-  ratingButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  ratingBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingVertical: 7,
-    alignItems: 'center',
-    marginHorizontal: 2,
-    backgroundColor: '#F8FAFC',
-  },
-  ratingBtnText: {
-    fontSize: 10,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  // Modal (Patient & SOAP)
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  patientAvatarModal: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: '#94A3B8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  avatarTextModal: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  modalPatientName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  modalPatientAge: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  closeButton: {
-    padding: 6,
-  },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#64748B',
-    fontWeight: '700',
-  },
-  modalMetricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalMetricBox: {
-    width: '31%',
-    borderRadius: 12,
-    padding: 8,
-    alignItems: 'center',
-  },
-  metricBoxTitle: {
-    fontSize: 9,
-    color: '#475569',
-    textAlign: 'center',
-    marginBottom: 2,
-  },
-  metricBoxValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  metricBoxSubtitle: {
-    fontSize: 9,
-    color: '#64748B',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  modalSection: {
-    marginBottom: 16,
-  },
-  modalSectionHeading: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  overviewBox: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-  },
-  overviewTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0369A1',
-    marginBottom: 8,
-  },
-  profileRow: {
-    marginBottom: 6,
-  },
-  profileLabel: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  profileValue: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-  sectionRowWithButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  newSoapButton: {
-    backgroundColor: '#0284C7',
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-  },
-  newSoapButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  emptySessionBox: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  emptySessionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 4,
-  },
-  emptySessionSubtitle: {
-    fontSize: 11,
-    color: '#94A3B8',
-    textAlign: 'center',
-  },
-  soapFormCard: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-  },
-  soapFormTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0369A1',
-    marginBottom: 8,
-  },
-  soapInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 11,
-    color: '#1E293B',
-    marginBottom: 6,
-  },
-  saveSoapButton: {
-    backgroundColor: '#0284C7',
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  saveSoapButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  soapEntryCard: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    backgroundColor: '#F8FAFC',
-  },
-  soapEntryHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0369A1',
-    marginBottom: 6,
-  },
-  soapEntryLine: {
-    fontSize: 11,
-    color: '#334155',
-    marginBottom: 3,
-    lineHeight: 16,
-  },
-  soapEntryPrefix: {
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  accomplishmentCard: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  accDate: {
-    fontSize: 10,
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  accTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  accAccuracy: {
-    fontSize: 11,
-    color: '#059669',
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  notesLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  notesBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 6,
-    padding: 6,
-    marginBottom: 8,
-  },
-  notesText: {
-    fontSize: 10,
-    color: '#475569',
-    fontStyle: 'italic',
-  },
-  audioPlayerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    borderRadius: 10,
-    padding: 8,
-  },
-  playButtonCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F97316',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playIcon: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    marginLeft: 2,
-  },
-  audioLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  audioSub: {
-    fontSize: 9,
-    color: '#64748B',
-  },
-  waveformContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  waveBar: {
-    width: 3,
-    backgroundColor: '#F97316',
-    marginHorizontal: 1.5,
-    borderRadius: 1.5,
-  },
-  toastContainer: {
-    position: 'absolute',
-    bottom: 75,
-    alignSelf: 'center',
-    backgroundColor: '#0284C7',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  toastText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  // Bottom Nav
-  bottomNav: {
-    flexDirection: 'row',
-    height: 60,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    height: '100%',
-  },
-  activeTabIndicator: {
-    position: 'absolute',
-    top: 0,
-    width: 32,
-    height: 3,
-    backgroundColor: '#0284C7',
-    borderRadius: 2,
-  },
-  navLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 3,
-    fontWeight: '500',
-  },
-  navLabelActive: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-  starBadgeContainer: {
-    position: 'absolute',
-    top: -4,
-    right: -8,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  starBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-});
+function createStyles(colors: ReturnType<typeof getThemeColors>) {
+  return StyleSheet.create({
+    safeContainer: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
+    topHeader: {
+      height: 56,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOpacity: 0.05,
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 4,
+    },
+    iconButton: {
+      padding: 8,
+    },
+    backCircleBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+    },
+    backArrowText: {
+      fontSize: 16,
+      color: colors.text,
+      fontWeight: '700',
+    },
+    appTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 22,
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    notificationDot: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: '#EF4444',
+    },
+    mainScrollView: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 24,
+    },
+    // Greeting
+    greetingSection: {
+      marginTop: 16,
+      marginBottom: 16,
+    },
+    dateText: {
+      fontSize: 13,
+      color: colors.textSub,
+      marginBottom: 4,
+    },
+    greetingTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 24,
+      color: colors.heading,
+      marginBottom: 4,
+    },
+    greetingSubtitle: {
+      fontSize: 14,
+      color: colors.textSub,
+      marginBottom: 14,
+    },
+    assignButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: colors.primaryLight,
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+    },
+    assignButtonText: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 13,
+      color: colors.isDark ? '#38BDF8' : '#0F766E',
+    },
+    // Stats Grid
+    statsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      marginBottom: 20,
+    },
+    statCard: {
+      width: '48%',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 12,
+    },
+    statCardTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    statNumber: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 28,
+    },
+    statBadge: {
+      paddingVertical: 3,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+    },
+    statBadgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    statLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    // Section Headers
+    sectionHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+      marginTop: 8,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    viewAllText: {
+      fontSize: 13,
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '600',
+    },
+    // Patient Cards
+    patientListContainer: {
+      marginBottom: 16,
+    },
+    patientCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 12,
+      marginBottom: 10,
+    },
+    patientAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.cardSubtle,
+      marginRight: 12,
+    },
+    avatarText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    patientCardBody: {
+      flex: 1,
+    },
+    patientCardTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 2,
+    },
+    patientName: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    percentBadge: {
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: 10,
+    },
+    percentText: {
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    patientSubtitle: {
+      fontSize: 12,
+      color: colors.textSub,
+      marginBottom: 6,
+    },
+    progressBarBackground: {
+      height: 6,
+      backgroundColor: colors.border,
+      borderRadius: 3,
+      overflow: 'hidden',
+    },
+    progressBarFill: {
+      height: '100%',
+      borderRadius: 3,
+    },
+    // Recent Submissions
+    submissionsCardWrapper: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 18,
+      padding: 8,
+      marginBottom: 20,
+    },
+    submissionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardSubtle,
+      borderRadius: 14,
+      padding: 10,
+      marginBottom: 8,
+    },
+    patientAvatarSmall: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      borderWidth: 1,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+    },
+    avatarTextSmall: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    subPatientName: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    subDetails: {
+      fontSize: 11,
+      color: colors.textSub,
+      marginVertical: 2,
+    },
+    subProgressBar: {
+      height: 5,
+      backgroundColor: colors.border,
+      borderRadius: 3,
+      overflow: 'hidden',
+      width: '100%',
+    },
+    subProgressFill: {
+      height: '100%',
+      backgroundColor: '#22C55E',
+    },
+    reviewButton: {
+      backgroundColor: '#0284C7',
+      paddingVertical: 7,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+    },
+    reviewButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    // Patients Tab
+    patientsTabContainer: {
+      paddingTop: 8,
+    },
+    pageTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 24,
+      color: colors.heading,
+      marginBottom: 4,
+    },
+    pageSubtitle: {
+      fontSize: 13,
+      color: colors.textSub,
+      marginBottom: 16,
+    },
+    searchFilterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    searchInputWrapper: {
+      flex: 1,
+      height: 42,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      paddingHorizontal: 12,
+      justifyContent: 'center',
+      marginRight: 8,
+    },
+    searchInput: {
+      fontSize: 13,
+      color: colors.inputText,
+    },
+    filterDropdown: {
+      height: 42,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      paddingHorizontal: 12,
+    },
+    filterText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSub,
+      marginRight: 4,
+    },
+    filterArrow: {
+      fontSize: 9,
+      color: colors.textMuted,
+    },
+    // Activity Library
+    subHeadingCaps: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.textSub,
+      letterSpacing: 1,
+      marginTop: 10,
+    },
+    subTabsRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      marginBottom: 14,
+    },
+    subTabActive: {
+      paddingVertical: 8,
+      borderBottomWidth: 2,
+      borderBottomColor: '#0284C7',
+      marginRight: 20,
+    },
+    subTabActiveText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#0284C7',
+    },
+    subTabInactive: {
+      paddingVertical: 8,
+    },
+    subTabInactiveText: {
+      fontSize: 13,
+      color: colors.textSub,
+    },
+    activitySearchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    activitySearchInputWrapper: {
+      flex: 1,
+      height: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      paddingHorizontal: 10,
+      marginRight: 8,
+    },
+    createTaskButton: {
+      backgroundColor: '#0284C7',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+    },
+    createTaskButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    chipsScroll: {
+      marginBottom: 14,
+    },
+    chipButton: {
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      marginRight: 8,
+    },
+    chipButtonActive: {
+      backgroundColor: '#0284C7',
+      borderColor: '#0284C7',
+    },
+    chipText: {
+      fontSize: 12,
+      color: colors.textSub,
+      fontWeight: '600',
+    },
+    chipTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+    },
+    activityGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+    },
+    activityGridCard: {
+      width: '48%',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      overflow: 'hidden',
+      marginBottom: 14,
+    },
+    activitySoundHeader: {
+      height: 70,
+      justifyContent: 'center',
+      alignItems: 'center',
+      flexDirection: 'row',
+      paddingHorizontal: 12,
+    },
+    activitySoundText: {
+      fontSize: 26,
+      fontWeight: '800',
+      marginRight: 10,
+    },
+    soundWavesSmall: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    waveLine: {
+      width: 2.5,
+      marginHorizontal: 1.5,
+      borderRadius: 1.5,
+    },
+    activityCardBody: {
+      padding: 10,
+    },
+    activityCategoryTag: {
+      fontSize: 10,
+      color: '#D97706',
+      fontWeight: '700',
+      marginBottom: 2,
+    },
+    activityCardTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    activityCardSub: {
+      fontSize: 10,
+      color: colors.textSub,
+      marginBottom: 8,
+    },
+    viewActivityLink: {
+      fontSize: 11,
+      color: colors.textSub,
+      fontWeight: '600',
+    },
+    // Preview
+    previewContainer: {
+      paddingTop: 8,
+    },
+    previewTagPill: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.peachPillBg,
+      paddingVertical: 3,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      marginBottom: 6,
+    },
+    previewTagText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+    previewTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 24,
+      color: colors.text,
+      marginBottom: 2,
+    },
+    previewSoundDesc: {
+      fontSize: 12,
+      color: colors.textSub,
+      marginBottom: 14,
+    },
+    previewSectionTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: 14,
+      marginBottom: 6,
+    },
+    previewSectionBody: {
+      fontSize: 12,
+      color: colors.textSub,
+      lineHeight: 18,
+    },
+    practiceContentCard: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      padding: 12,
+      marginTop: 6,
+    },
+    practiceContentHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    practicePositionLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    targetCountBadge: {
+      backgroundColor: colors.isDark ? '#082F49' : '#BAE6FD',
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: 10,
+    },
+    targetCountText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0369A1',
+    },
+    wordPillsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 10,
+    },
+    wordPillPeach: {
+      backgroundColor: colors.peachPillBg,
+      paddingVertical: 4,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      marginRight: 6,
+      marginBottom: 4,
+    },
+    wordPillText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+    phraseBulletText: {
+      fontSize: 12,
+      color: colors.text,
+      lineHeight: 20,
+    },
+    emptyTargetCard: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 10,
+      marginTop: 8,
+    },
+    zeroTargetBadge: {
+      backgroundColor: colors.cardSubtle,
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: 8,
+    },
+    zeroTargetText: {
+      fontSize: 11,
+      color: colors.textSub,
+    },
+    noTargetsSub: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginLeft: 4,
+      marginTop: 2,
+    },
+    audioModelCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.yellowCardBg,
+      borderWidth: 1,
+      borderColor: colors.yellowCardBorder,
+      borderRadius: 14,
+      padding: 12,
+      marginTop: 6,
+    },
+    audioPlayCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: '#F97316',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    audioPlayIcon: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      marginLeft: 2,
+    },
+    audioModelTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    audioModelSub: {
+      fontSize: 11,
+      color: colors.textSub,
+    },
+    audioWaveformRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    audioWaveBar: {
+      width: 3.5,
+      backgroundColor: '#F97316',
+      marginHorizontal: 1.5,
+      borderRadius: 2,
+    },
+    videoPlaceholderBox: {
+      height: 120,
+      backgroundColor: colors.cardSubtle,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 6,
+    },
+    videoPlayCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.card,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    videoPlayIcon: {
+      color: colors.textSub,
+      fontSize: 16,
+      marginLeft: 2,
+    },
+    previewActionsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 18,
+    },
+    outlineBtn: {
+      flex: 1,
+      height: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#38BDF8' : '#0284C7',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 8,
+      backgroundColor: colors.card,
+    },
+    outlineBtnText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    solidBlueBtn: {
+      flex: 1,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: '#0284C7',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 8,
+    },
+    solidBlueBtnText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#FFFFFF',
+    },
+    // Edit Wizard
+    editWizardContainer: {
+      paddingTop: 8,
+    },
+    editWizardTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 24,
+      color: colors.heading,
+      marginBottom: 8,
+    },
+    stepperBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      marginBottom: 16,
+    },
+    stepItem: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    stepItemActive: {},
+    stepText: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
+    stepTextActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    stepIndicatorLine: {
+      position: 'absolute',
+      bottom: -1,
+      left: '15%',
+      right: '15%',
+      height: 2,
+      backgroundColor: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    formLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: 10,
+      marginBottom: 4,
+    },
+    formInput: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      fontSize: 13,
+      color: colors.inputText,
+      marginBottom: 8,
+    },
+    formRowTwoCol: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    dropdownSelector: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      height: 40,
+      marginBottom: 8,
+    },
+    dropdownValue: {
+      fontSize: 13,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    dropdownArrow: {
+      fontSize: 10,
+      color: colors.textSub,
+    },
+    pillsSelectRow: {
+      flexDirection: 'row',
+      marginBottom: 8,
+    },
+    posPill: {
+      paddingVertical: 6,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      marginRight: 8,
+    },
+    posPillSelected: {
+      backgroundColor: colors.peachPillBg,
+      borderColor: '#FB923C',
+    },
+    posPillText: {
+      fontSize: 12,
+      color: colors.textSub,
+      fontWeight: '600',
+    },
+    posPillTextSelected: {
+      color: colors.peachPillText,
+      fontWeight: '700',
+    },
+    langSegmentControl: {
+      flexDirection: 'row',
+      backgroundColor: colors.cardSubtle,
+      borderRadius: 10,
+      padding: 3,
+      marginBottom: 8,
+    },
+    langSegmentBtn: {
+      flex: 1,
+      paddingVertical: 7,
+      alignItems: 'center',
+      borderRadius: 8,
+    },
+    langSegmentBtnActive: {
+      backgroundColor: colors.card,
+      shadowColor: '#000',
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 1,
+    },
+    langSegmentText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    langSegmentTextActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    wordOriginRadioRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    originCard: {
+      width: '48%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 10,
+    },
+    originCardActive: {
+      borderColor: '#FB923C',
+      backgroundColor: colors.peachCardBg,
+    },
+    radioDot: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      borderWidth: 2,
+      borderColor: colors.border,
+    },
+    radioDotActive: {
+      borderColor: '#EA580C',
+      backgroundColor: '#EA580C',
+    },
+    originTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    originSub: {
+      fontSize: 10,
+      color: colors.textSub,
+    },
+    posCountersRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    posCounterBox: {
+      width: '31%',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      padding: 8,
+      alignItems: 'center',
+    },
+    posCounterBoxActive: {
+      borderColor: '#FB923C',
+      backgroundColor: colors.peachCardBg,
+    },
+    posCounterLabel: {
+      fontSize: 11,
+      color: colors.textSub,
+    },
+    posCounterValue: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: 2,
+    },
+    wordBankSearchWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      height: 40,
+      marginBottom: 10,
+    },
+    wordChecklistContainer: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 8,
+      marginBottom: 10,
+    },
+    wordCheckItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 6,
+    },
+    checkboxSquare: {
+      width: 18,
+      height: 18,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 8,
+      backgroundColor: colors.card,
+    },
+    checkboxSquareActive: {
+      backgroundColor: '#EA580C',
+      borderColor: '#EA580C',
+    },
+    checkmarkIcon: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    checkWordLabel: {
+      fontSize: 13,
+      color: colors.text,
+    },
+    selectedChipsWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 10,
+    },
+    removableChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.peachPillBg,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      marginRight: 6,
+      marginBottom: 6,
+    },
+    removableChipText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+    removableChipX: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+    wordPhraseBlock: {
+      marginBottom: 10,
+    },
+    wordPhraseHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    wordPhraseTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    phraseInput: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      fontSize: 12,
+      color: colors.inputText,
+    },
+    customWordInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    addWordBtn: {
+      height: 40,
+      backgroundColor: '#0284C7',
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    addWordBtnText: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+      fontSize: 12,
+    },
+    checkboxRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    checkboxRowLabel: {
+      fontSize: 12,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    subtextSmall: {
+      fontSize: 11,
+      color: colors.textSub,
+      marginBottom: 4,
+    },
+    phraseBuilderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    symbolBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    symbolBtnText: {
+      fontSize: 16,
+      color: colors.textSub,
+      fontWeight: '700',
+    },
+    savePhraseBtn: {
+      alignSelf: 'flex-end',
+      backgroundColor: '#D97706',
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    savePhraseBtnText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    uploadDashedBox: {
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: colors.border,
+      borderRadius: 14,
+      padding: 20,
+      alignItems: 'center',
+      backgroundColor: colors.cardSubtle,
+      marginVertical: 8,
+    },
+    uploadMainText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    uploadSubText: {
+      fontSize: 10,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    bigPhonemeHero: {
+      backgroundColor: colors.peachCardBg,
+      borderRadius: 16,
+      padding: 24,
+      alignItems: 'center',
+      marginBottom: 14,
+    },
+    bigHeroSound: {
+      fontSize: 54,
+      fontWeight: '800',
+      color: '#C2410C',
+    },
+    bigHeroTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 20,
+      color: colors.text,
+      marginTop: 4,
+    },
+    bigHeroSubtitle: {
+      fontSize: 12,
+      color: colors.textSub,
+      marginTop: 2,
+    },
+    // Assign Activity
+    assignScreenContainer: {
+      paddingTop: 8,
+    },
+    accordionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.peachCardBg,
+      borderWidth: 1,
+      borderColor: colors.peachCardBorder,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginVertical: 8,
+    },
+    accordionTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.peachText,
+    },
+    accordionArrow: {
+      fontSize: 10,
+      color: colors.peachText,
+    },
+    expandedAccordionCard: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 14,
+    },
+    dateInputWrapper: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      height: 42,
+      marginBottom: 8,
+    },
+    dateTextInput: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.inputText,
+    },
+    // ==========================================
+    // --- REVIEWS TAB STYLES (Image 2) ---
+    // ==========================================
+    reviewsTabContainer: {
+      paddingTop: 8,
+    },
+    reviewsCapsHeading: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.textSub,
+      letterSpacing: 1,
+      marginBottom: 4,
+    },
+    reviewsTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 24,
+      color: colors.heading,
+      marginBottom: 4,
+    },
+    reviewsSubtitle: {
+      fontSize: 13,
+      color: colors.textSub,
+      marginBottom: 14,
+    },
+    reviewsFilterTabsBar: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      marginBottom: 14,
+    },
+    reviewsFilterTab: {
+      paddingVertical: 8,
+      marginRight: 24,
+      alignItems: 'center',
+    },
+    reviewsFilterTabActive: {},
+    reviewsFilterTabText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    reviewsFilterTabTextActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    reviewsFilterTabIndicator: {
+      position: 'absolute',
+      bottom: -1,
+      left: 0,
+      right: 0,
+      height: 2,
+      backgroundColor: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    reviewsListContainer: {
+      marginBottom: 20,
+    },
+    reviewCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 12,
+      marginBottom: 10,
+    },
+    reviewAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    reviewAvatarText: {
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    reviewCardBody: {
+      flex: 1,
+    },
+    reviewStudentName: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    reviewActivityDesc: {
+      fontSize: 11,
+      color: colors.textSub,
+    },
+    reviewStatusBadge: {
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      marginRight: 8,
+    },
+    reviewStatusPending: {
+      backgroundColor: colors.peachPillBg,
+    },
+    reviewStatusReviewed: {
+      backgroundColor: '#DCFCE7',
+    },
+    reviewStatusText: {
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    reviewStatusTextPending: {
+      color: colors.peachPillText,
+    },
+    reviewStatusTextReviewed: {
+      color: '#16A34A',
+    },
+    reviewChevron: {
+      fontSize: 16,
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
+    // Rating buttons in Review Modal
+    ratingButtonsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    ratingBtn: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingVertical: 7,
+      alignItems: 'center',
+      marginHorizontal: 2,
+      backgroundColor: colors.cardSubtle,
+    },
+    ratingBtnText: {
+      fontSize: 10,
+      color: colors.textSub,
+      fontWeight: '600',
+    },
+    // Modal (Patient & SOAP)
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: colors.modalOverlay,
+      justifyContent: 'center',
+      padding: 16,
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      padding: 18,
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    modalHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    patientAvatarModal: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.cardSubtle,
+    },
+    avatarTextModal: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    modalPatientName: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    modalPatientAge: {
+      fontSize: 12,
+      color: colors.textSub,
+    },
+    closeButton: {
+      padding: 6,
+    },
+    closeButtonText: {
+      fontSize: 18,
+      color: colors.textSub,
+      fontWeight: '700',
+    },
+    modalMetricsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    modalMetricBox: {
+      width: '31%',
+      borderRadius: 12,
+      padding: 8,
+      alignItems: 'center',
+    },
+    metricBoxTitle: {
+      fontSize: 9,
+      color: colors.textSub,
+      textAlign: 'center',
+      marginBottom: 2,
+    },
+    metricBoxValue: {
+      fontSize: 13,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    metricBoxSubtitle: {
+      fontSize: 9,
+      color: colors.textSub,
+      marginTop: 2,
+      textAlign: 'center',
+    },
+    modalSection: {
+      marginBottom: 16,
+    },
+    modalSectionHeading: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textSub,
+      letterSpacing: 0.5,
+      marginBottom: 8,
+    },
+    overviewBox: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 12,
+    },
+    overviewTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.heading,
+      marginBottom: 8,
+    },
+    profileRow: {
+      marginBottom: 6,
+    },
+    profileLabel: {
+      fontSize: 11,
+      color: colors.textSub,
+    },
+    profileValue: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    sectionRowWithButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    newSoapButton: {
+      backgroundColor: '#0284C7',
+      paddingVertical: 5,
+      paddingHorizontal: 12,
+      borderRadius: 14,
+    },
+    newSoapButtonText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    emptySessionBox: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderStyle: 'dashed',
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+    },
+    emptySessionTitle: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 4,
+    },
+    emptySessionSubtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      textAlign: 'center',
+    },
+    soapFormCard: {
+      backgroundColor: colors.cardSubtle,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 10,
+    },
+    soapFormTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.heading,
+      marginBottom: 8,
+    },
+    soapInput: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      fontSize: 11,
+      color: colors.inputText,
+      marginBottom: 6,
+    },
+    saveSoapButton: {
+      backgroundColor: '#0284C7',
+      paddingVertical: 8,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    saveSoapButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    soapEntryCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 8,
+      backgroundColor: colors.cardSubtle,
+    },
+    soapEntryHeader: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.heading,
+      marginBottom: 6,
+    },
+    soapEntryLine: {
+      fontSize: 11,
+      color: colors.text,
+      marginBottom: 3,
+      lineHeight: 16,
+    },
+    soapEntryPrefix: {
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    accomplishmentCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 8,
+    },
+    accDate: {
+      fontSize: 10,
+      color: colors.textSub,
+      marginBottom: 2,
+    },
+    accTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    accAccuracy: {
+      fontSize: 11,
+      color: '#059669',
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    notesLabel: {
+      fontSize: 9,
+      fontWeight: '700',
+      color: colors.textSub,
+      marginBottom: 2,
+    },
+    notesBox: {
+      backgroundColor: colors.cardSubtle,
+      borderRadius: 6,
+      padding: 6,
+      marginBottom: 8,
+    },
+    notesText: {
+      fontSize: 10,
+      color: colors.textSub,
+      fontStyle: 'italic',
+    },
+    audioPlayerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.yellowCardBg,
+      borderRadius: 10,
+      padding: 8,
+    },
+    playButtonCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: '#F97316',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    playIcon: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      marginLeft: 2,
+    },
+    audioLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    audioSub: {
+      fontSize: 9,
+      color: colors.textSub,
+    },
+    waveformContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    waveBar: {
+      width: 3,
+      backgroundColor: '#F97316',
+      marginHorizontal: 1.5,
+      borderRadius: 1.5,
+    },
+    toastContainer: {
+      position: 'absolute',
+      bottom: 75,
+      alignSelf: 'center',
+      backgroundColor: '#0284C7',
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    toastText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    // Bottom Nav
+    bottomNav: {
+      flexDirection: 'row',
+      height: 60,
+      backgroundColor: colors.bottomNavBg,
+      borderTopWidth: 1,
+      borderTopColor: colors.bottomNavBorder,
+      alignItems: 'center',
+      justifyContent: 'space-around',
+    },
+    navItem: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: 1,
+      height: '100%',
+    },
+    activeTabIndicator: {
+      position: 'absolute',
+      top: 0,
+      width: 32,
+      height: 3,
+      backgroundColor: colors.isDark ? '#38BDF8' : '#0284C7',
+      borderRadius: 2,
+    },
+    navLabel: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 3,
+      fontWeight: '500',
+    },
+    navLabelActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    starBadgeContainer: {
+      position: 'absolute',
+      top: -4,
+      right: -8,
+      backgroundColor: '#EF4444',
+      borderRadius: 8,
+      width: 16,
+      height: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    starBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 9,
+      fontWeight: '700',
+    },
+
+    // --- Three Lines (Hamburger) Dropdown Styles ---
+    menuOverlay: {
+      flex: 1,
+      backgroundColor: colors.menuOverlay,
+    },
+    menuDropdownContainer: {
+      position: 'absolute',
+      top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 52 : 52,
+      left: 14,
+      width: 250,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 10,
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 10,
+      elevation: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    menuUserHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 6,
+      borderRadius: 10,
+    },
+    menuAvatarCircle: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    menuAvatarText: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    menuUserName: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    menuUserRole: {
+      fontSize: 11,
+      color: colors.textSub,
+    },
+    menuSectionDivider: {
+      height: 1,
+      backgroundColor: colors.divider,
+      marginVertical: 6,
+    },
+    menuOptionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 8,
+      borderRadius: 10,
+    },
+    menuIconCircle: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.isDark ? '#0F172A' : '#F0F9FF',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 10,
+    },
+    menuOptionLabel: {
+      flex: 1,
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    menuOptionChevron: {
+      fontSize: 16,
+      color: colors.textMuted,
+      fontWeight: '700',
+    },
+
+    // --- Notifications Dropdown Styles (Screenshot 1 Right) ---
+    notifDropdownContainer: {
+      position: 'absolute',
+      top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 52 : 52,
+      right: 14,
+      width: 320,
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      padding: 14,
+      shadowColor: '#000',
+      shadowOpacity: 0.14,
+      shadowOffset: { width: 0, height: 6 },
+      shadowRadius: 14,
+      elevation: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    notifDropdownHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    notifDropdownTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    notifFilterPillsRow: {
+      flexDirection: 'row',
+    },
+    notifPill: {
+      paddingVertical: 3,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginLeft: 6,
+      backgroundColor: colors.card,
+    },
+    notifPillActive: {
+      backgroundColor: '#38BDF8',
+      borderColor: '#38BDF8',
+    },
+    notifPillText: {
+      fontSize: 11,
+      color: colors.textSub,
+      fontWeight: '600',
+    },
+    notifPillTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+    },
+    notifItemRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    notifItemTitle: {
+      fontSize: 12,
+      color: colors.text,
+      marginBottom: 2,
+      lineHeight: 16,
+    },
+    notifItemDetail: {
+      fontSize: 11,
+      color: colors.textSub,
+      lineHeight: 15,
+    },
+    notifItemTime: {
+      fontSize: 10,
+      color: colors.textMuted,
+      marginLeft: 8,
+      fontWeight: '500',
+    },
+    markAllReadBtn: {
+      marginTop: 10,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      backgroundColor: colors.card,
+    },
+    markAllReadBtnText: {
+      fontSize: 11,
+      color: colors.textSub,
+      fontWeight: '600',
+    },
+
+    // --- Settings & Account Styles (Screenshot 1 Left) ---
+    settingsModalContainer: {
+      flex: 1,
+      backgroundColor: colors.bgSecondary,
+    },
+    settingsTopBar: {
+      height: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    settingsNavTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 18,
+      color: colors.heading,
+    },
+    settingsScrollContent: {
+      padding: 16,
+      paddingBottom: 40,
+    },
+    settingsProfileHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 20,
+      marginTop: 6,
+    },
+    settingsAvatarCircle: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    settingsAvatarLetter: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 28,
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    settingsDoctorName: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 16,
+      color: colors.heading,
+      marginBottom: 2,
+    },
+    settingsDoctorRole: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    settingsLicenseText: {
+      fontSize: 11,
+      color: colors.textMuted,
+    },
+    settingsSectionTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 8,
+      marginTop: 12,
+    },
+    settingsCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      marginBottom: 12,
+    },
+    settingsCardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    settingsRowDivider: {
+      height: 1,
+      backgroundColor: colors.divider,
+      marginHorizontal: 16,
+    },
+    settingsRowTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    settingsRowSub: {
+      fontSize: 12,
+      color: colors.textSub,
+    },
+    settingsChevron: {
+      fontSize: 16,
+      color: colors.textMuted,
+      fontWeight: '700',
+    },
+    themeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    themeSegmentControl: {
+      flexDirection: 'row',
+      backgroundColor: colors.segmentBg,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 3,
+    },
+    themeSegmentBtn: {
+      paddingVertical: 6,
+      paddingHorizontal: 16,
+      borderRadius: 16,
+    },
+    themeSegmentBtnActive: {
+      backgroundColor: '#38BDF8',
+    },
+    themeSegmentText: {
+      fontSize: 12,
+      color: colors.textSub,
+      fontWeight: '600',
+    },
+    themeSegmentTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+    },
+    settingsLogoutButton: {
+      backgroundColor: colors.logoutBtnBg,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 24,
+      marginBottom: 10,
+    },
+    settingsLogoutButtonText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.logoutBtnText,
+    },
+
+    // --- Profile Screen Hero Styles ---
+    profileHeroCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 20,
+      alignItems: 'center',
+      marginBottom: 14,
+    },
+    profileBigAvatarCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    profileBigAvatarLetter: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 34,
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    profileHeroName: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 18,
+      color: colors.heading,
+      marginBottom: 2,
+    },
+    profileHeroRole: {
+      fontSize: 13,
+      color: colors.text,
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    licenseBadge: {
+      backgroundColor: colors.cardSubtle,
+      paddingVertical: 4,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    licenseBadgeText: {
+      fontSize: 11,
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '600',
+    },
+    modalTitleText: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 16,
+      color: colors.heading,
+    },
+  });
+}
