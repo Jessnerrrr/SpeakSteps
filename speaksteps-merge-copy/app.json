@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "SpeakSteps",
+    "slug": "SpeakSteps",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "speakstepsclean",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "server"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-splash-screen",
+      "expo-image",
+      "expo-font",
+      "@react-native-community/datetimepicker"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
