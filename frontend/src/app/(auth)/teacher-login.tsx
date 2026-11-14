@@ -38,10 +38,9 @@ export default function TeacherLoginScreen() {
       Alert.alert("Missing Fields", "Please enter both Email and Password.");
       return; 
     }
-    
     if (email.trim().toLowerCase() === 'teacher@speaksteps.com' && password === 'Teacher@123') {
       // Connects the login screen to the teacher dashboard
-      router.push('/teacher-dashboard' as any);
+      router.replace('/teacher/teacher-dashboard' as any);
     } else {
       Alert.alert("Login Failed", "Invalid Email or Password. Please try again.");
     }
