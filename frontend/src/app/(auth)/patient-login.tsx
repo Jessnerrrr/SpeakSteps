@@ -16,9 +16,6 @@ export default function PatientLoginScreen() {
   // Form States
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [loginError, setLoginError] = useState('');
-  
-  // Tracks if the password input is clicked/focused
-  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
@@ -28,14 +25,6 @@ export default function PatientLoginScreen() {
 
   if (!fontsLoaded) return null; 
 
-  // --- Real-time Password Validation Logic ---
-  const isLengthValid = password.length >= 8 && password.length <= 20;
-  const hasLowercase = /[a-z]/.test(password);
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(password);
-
-  // --- STRICT VALIDATION LOGIC ---
   const handleLogin = () => {
     setHasSubmitted(true);
     setLoginError(''); // Reset error on new attempt
@@ -71,13 +60,6 @@ export default function PatientLoginScreen() {
     setPassword(text);
     setLoginError('');
   };
-
-  const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
-    <View style={styles.reqItem}>
-      <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
-      <Text style={styles.reqText}>{text}</Text>
-    </View>
-  );
 
   return (
     <>
@@ -157,8 +139,6 @@ export default function PatientLoginScreen() {
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={handlePasswordChange}
-                      onFocus={() => setIsPasswordFocused(true)} 
-                      onBlur={() => setIsPasswordFocused(false)} 
                     />
                     <TouchableOpacity 
                       style={styles.showButton}
@@ -173,24 +153,6 @@ export default function PatientLoginScreen() {
                 {!!loginError && (
                   <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>⚠ {loginError}</Text>
-                  </View>
-                )}
-
-                {/* Only renders the box if the password input is focused */}
-                {isPasswordFocused && (
-                  <View style={styles.requirementsBox}>
-                    <View style={styles.requirementsHeader}>
-                      <Text style={styles.requirementsHeaderText}>
-                        The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
-                      </Text>
-                    </View>
-                    <View style={styles.requirementsList}>
-                      <RequirementItem text="Number of characters" isValid={isLengthValid} />
-                      <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
-                      <RequirementItem text="Capital letter" isValid={hasUppercase} />
-                      <RequirementItem text="Number" isValid={hasNumber} />
-                      <RequirementItem text="Special character" isValid={hasSpecial} />
-                    </View>
                   </View>
                 )}
 
@@ -309,15 +271,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#C0392B',
   },
-
-  requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
-  requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
-  requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
-  requirementsList: { padding: 12, gap: 10 },
-  reqItem: { flexDirection: 'row', alignItems: 'center' },
-  reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
-  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
-  reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
   
   signInBtn: { backgroundColor: '#0865AD', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginTop: 5, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   signInText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },

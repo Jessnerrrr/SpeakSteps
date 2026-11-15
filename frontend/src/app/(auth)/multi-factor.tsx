@@ -77,8 +77,15 @@ export default function MultiFactorScreen() {
                 />
               </View>
 
+              {/* Added Reminder Text */}
+              <View style={styles.reminderContainer}>
+                <Text style={styles.reminderText}>
+                  Keep your contact details updated in <Text style={styles.boldText}>Settings</Text> and <Text style={styles.linkText}>enable two-factor authentication</Text> to protect your account and your child's progress.
+                </Text>
+              </View>
+
               <TouchableOpacity style={styles.submitBtn} onPress={handleSendOTP}>
-                <Text style={styles.submitBtnText}>Get OTP</Text>
+                <Text style={styles.submitBtnText}>Send OTP</Text>
               </TouchableOpacity>
 
             </View>
@@ -107,13 +114,19 @@ const styles = StyleSheet.create({
   },
 
   welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#0865AD', marginBottom: 10, textAlign: 'center' },
-  subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 35 },
+  subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', textAlign: 'center', marginBottom: 25 },
   
-  inputContainer: { marginBottom: 35 },
+  inputContainer: { marginBottom: 15 },
   inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', marginBottom: 5 },
   input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, paddingHorizontal: 15, height: 50, fontFamily: 'SourGummy', color: '#333', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
   errorBorder: { borderColor: '#E74C3C', borderWidth: 1.5 },
   
+  // New Reminder Styles
+  reminderContainer: { paddingHorizontal: 5, marginBottom: 35 },
+  reminderText: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#666', lineHeight: 14, textAlign: 'left' },
+  boldText: { fontFamily: 'SourGummy-Bold', color: '#333' },
+  linkText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', textDecorationLine: 'underline' },
+
   submitBtn: { backgroundColor: '#F5B041', alignSelf: 'center', paddingVertical: 14, paddingHorizontal: 60, borderRadius: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   submitBtnText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
 });

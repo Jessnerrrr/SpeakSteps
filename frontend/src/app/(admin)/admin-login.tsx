@@ -67,9 +67,9 @@ export default function AdminLoginScreen() {
           {isDesktop && (
             <View style={styles.leftSideContainer}>
               <Image 
-                source={require('../../../assets/images/speaksteps-side-design.gif')} 
+                source={require('../../../assets/images/speaksteps-landing-wide.gif')} 
                 style={styles.sideDesignImage}
-                contentFit="cover" // Cover ensures no blue bars will ever show
+                contentFit="cover" // Cover works perfectly with the wide GIF and a 50/50 split
               />
             </View>
           )}
@@ -185,9 +185,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'column' },
   desktopContainer: { flexDirection: 'row' },
 
-  // ADJUSTED: Narrowed the left side to naturally fit the GIF's aspect ratio
+  // ADJUSTED: flex 1 guarantees exactly 50% width
   leftSideContainer: {
-    flex: 0.85,
+    flex: 1,
     height: '100%',
     backgroundColor: '#1C7BC2', 
     justifyContent: 'center',
@@ -199,9 +199,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // ADJUSTED: Widened the right side (white part) to take up the remaining space
+  // ADJUSTED: flex 1 guarantees exactly 50% width
   rightSideContainer: {
-    flex: 1.15, 
+    flex: 1, 
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     position: 'relative', 

@@ -2,7 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
 
 export default function TeacherLoginScreen() {
   // Responsive Hooks
@@ -12,9 +12,10 @@ export default function TeacherLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
   
-  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  // Form States
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
@@ -24,34 +25,33 @@ export default function TeacherLoginScreen() {
 
   if (!fontsLoaded) return null; 
 
-  const isLengthValid = password.length >= 8 && password.length <= 20;
-  const hasLowercase = /[a-z]/.test(password);
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(password);
-
-  // --- STRICT VALIDATION LOGIC ---
   const handleLogin = () => {
     setHasSubmitted(true);
+    setLoginError(''); // Reset error on new attempt
     
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing Fields", "Please enter both Email and Password.");
+      setLoginError('Please enter both Email and Password.');
       return; 
     }
+    
     if (email.trim().toLowerCase() === 'teacher@speaksteps.com' && password === 'Teacher@123') {
       // Connects the login screen to the teacher dashboard
       router.replace('/teacher/teacher-dashboard' as any);
     } else {
-      Alert.alert("Login Failed", "Invalid Email or Password. Please try again.");
+      setLoginError('Invalid email or password');
     }
   };
 
-  const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
-    <View style={styles.reqItem}>
-      <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
-      <Text style={styles.reqText}>{text}</Text>
-    </View>
-  );
+  // Helper to clear error when user types
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    setLoginError('');
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    setLoginError('');
+  };
 
   return (
     <>
@@ -108,28 +108,32 @@ export default function TeacherLoginScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Email</Text>
                   <TextInput 
-                    style={[styles.input, hasSubmitted && !email && styles.errorBorder]} 
+                    style={[
+                      styles.input, 
+                      (hasSubmitted && !email) || loginError ? styles.errorBorder : null
+                    ]} 
                     placeholder="teacher@gmail.com"
                     placeholderTextColor="#999"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={handleEmailChange}
                   />
                 </View>
 
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Password</Text>
-                  <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
+                  <View style={[
+                    styles.passwordWrapper, 
+                    (hasSubmitted && !password) || loginError ? styles.errorBorder : null
+                  ]}>
                     <TextInput 
                       style={styles.passwordInput} 
                       placeholder="••••••••"
                       placeholderTextColor="#999"
                       secureTextEntry={!showPassword}
                       value={password}
-                      onChangeText={setPassword}
-                      onFocus={() => setIsPasswordFocused(true)} 
-                      onBlur={() => setIsPasswordFocused(false)} 
+                      onChangeText={handlePasswordChange}
                     />
                     <TouchableOpacity 
                       style={styles.showButton}
@@ -140,20 +144,10 @@ export default function TeacherLoginScreen() {
                   </View>
                 </View>
 
-                {isPasswordFocused && (
-                  <View style={styles.requirementsBox}>
-                    <View style={styles.requirementsHeader}>
-                      <Text style={styles.requirementsHeaderText}>
-                        The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
-                      </Text>
-                    </View>
-                    <View style={styles.requirementsList}>
-                      <RequirementItem text="Number of characters" isValid={isLengthValid} />
-                      <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
-                      <RequirementItem text="Capital letter" isValid={hasUppercase} />
-                      <RequirementItem text="Number" isValid={hasNumber} />
-                      <RequirementItem text="Special character" isValid={hasSpecial} />
-                    </View>
+                {/* Inline Error Message */}
+                {!!loginError && (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>⚠ {loginError}</Text>
                   </View>
                 )}
 
@@ -183,7 +177,6 @@ const styles = StyleSheet.create({
   brandTitle: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 36 },
   
   bottomCard: { backgroundColor: '#FFFFFF', flex: 2.5, borderRadius: 40, marginHorizontal: 15, marginBottom: 30, paddingHorizontal: 25, paddingTop: 25, paddingBottom: 20 },
-  // Responsive Tablet Constraint
   bottomCardTablet: {
     maxWidth: 500,
     alignSelf: 'center',
@@ -200,21 +193,63 @@ const styles = StyleSheet.create({
   subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666', marginBottom: 20 },
   inputContainer: { marginBottom: 15 },
   inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', marginBottom: 5 },
-  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, paddingHorizontal: 15, height: 45, fontFamily: 'SourGummy', color: '#333', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  passwordWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, height: 45, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
+  
+  input: { 
+    backgroundColor: '#FFFFFF', 
+    borderWidth: 1.5, 
+    borderColor: '#CBE6F6', 
+    borderRadius: 10, 
+    paddingHorizontal: 15, 
+    height: 45, 
+    fontFamily: 'SourGummy', 
+    color: '#333', 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 2 
+  },
+  passwordWrapper: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#FFFFFF', 
+    borderWidth: 1.5, 
+    borderColor: '#CBE6F6', 
+    borderRadius: 10, 
+    height: 45, 
+    elevation: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 1 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 2 
+  },
+  
   passwordInput: { flex: 1, paddingHorizontal: 15, fontFamily: 'SourGummy', color: '#333' },
   showButton: { backgroundColor: '#CBE6F6', paddingVertical: 5, paddingHorizontal: 12, borderRadius: 15, marginRight: 8 },
   showButtonText: { color: '#0865AD', fontFamily: 'SourGummy-Bold', fontSize: 12 },
-  requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
-  requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
-  requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
-  requirementsList: { padding: 12, gap: 10 },
-  reqItem: { flexDirection: 'row', alignItems: 'center' },
-  reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
-  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
-  reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
-  signInBtn: { backgroundColor: '#0865AD', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
+  
+  // Custom Error UI Styling
+  errorBorder: { 
+    borderColor: '#E74C3C', 
+    borderWidth: 2,
+    backgroundColor: '#FDEDEC' 
+  },
+  errorContainer: {
+    backgroundColor: '#FDEDEC',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#F5B7B1',
+    alignItems: 'center'
+  },
+  errorText: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 13,
+    color: '#C0392B',
+  },
+  
+  signInBtn: { backgroundColor: '#0865AD', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginTop: 5, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
   signInText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
   forgotPasswordText: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', textAlign: 'center', textDecorationLine: 'underline' },
-  errorBorder: { borderColor: '#E74C3C', borderWidth: 1.5 },
 });
