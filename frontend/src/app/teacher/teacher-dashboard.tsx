@@ -467,6 +467,10 @@ const getThemeColors = (isDark: boolean) => ({
   yellowCardBorder: isDark ? '#78350F' : '#FEF3C7',
   bottomNavBg: isDark ? '#1E293B' : '#FFFFFF',
   bottomNavBorder: isDark ? '#334155' : '#E2E8F0',
+  switchTrackFalse: isDark ? '#334155' : '#CBD5E1',
+  switchTrackTrue: isDark ? '#38BDF8' : '#1E293B',
+  switchThumbOn: '#FFFFFF',
+  switchThumbOff: isDark ? '#94A3B8' : '#FFFFFF',
 });
 
 export default function TeacherDashboardScreen() {
@@ -2448,8 +2452,9 @@ export default function TeacherDashboardScreen() {
                     setNewRecordingsToggle(val);
                     triggerToast(`New recordings alerts ${val ? 'enabled' : 'disabled'}`);
                   }}
-                  trackColor={{ false: '#CBD5E1', true: '#1E293B' }}
-                  thumbColor="#FFFFFF"
+                  trackColor={{ false: colors.switchTrackFalse, true: colors.switchTrackTrue }}
+                  thumbColor={newRecordingsToggle ? colors.switchThumbOn : colors.switchThumbOff}
+                  ios_backgroundColor={colors.switchTrackFalse}
                 />
               </View>
 
@@ -2466,8 +2471,9 @@ export default function TeacherDashboardScreen() {
                     setFollowUpAlertsToggle(val);
                     triggerToast(`Follow-up alerts ${val ? 'enabled' : 'disabled'}`);
                   }}
-                  trackColor={{ false: '#CBD5E1', true: '#1E293B' }}
-                  thumbColor="#FFFFFF"
+                  trackColor={{ false: colors.switchTrackFalse, true: colors.switchTrackTrue }}
+                  thumbColor={followUpAlertsToggle ? colors.switchThumbOn : colors.switchThumbOff}
+                  ios_backgroundColor={colors.switchTrackFalse}
                 />
               </View>
             </View>
