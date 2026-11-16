@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,46 @@ import {
   Switch,
   Pressable,
   useColorScheme,
+  Image,
 } from 'react-native';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useFonts } from 'expo-font';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import {
+  Menu,
+  ArrowLeft,
+  Bell,
+  Search,
+  Plus,
+  Minus,
+  Check,
+  X,
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  Play,
+  Upload,
+  Calendar,
+  Home,
+  Users,
+  Speech,
+  Star,
+  User,
+  Settings,
+  LogOut,
+  Palette,
+  SunMoon,
+  Lock,
+  ShieldCheck,
+  Camera,
+  TrendingUp,
+  UserCheck,
+  Filter,
+  Trash2,
+  Pencil,
+  ArrowUpDown,
+} from 'lucide-react-native';
 
 // ==========================================
 // --- Data Interfaces ---
@@ -434,6 +470,23 @@ const INITIAL_NOTIFICATIONS = [
   },
 ];
 
+interface WordBankEntry {
+  id: string;
+  text: string;
+  sound: string;
+  position: 'Initial' | 'Medial' | 'Final';
+  language: string;
+}
+
+const INITIAL_WORD_BANK_ENTRIES: WordBankEntry[] = [
+  { id: 'wb-1', text: 'rabbit', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-2', text: 'red', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-3', text: 'run', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-4', text: 'rain', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-5', text: 'rice', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-6', text: 'rock', sound: '/r/', position: 'Initial', language: 'English' },
+];
+
 // Theme Colors Palette Generator
 const getThemeColors = (isDark: boolean) => ({
   isDark,
@@ -467,11 +520,18 @@ const getThemeColors = (isDark: boolean) => ({
   yellowCardBorder: isDark ? '#78350F' : '#FEF3C7',
   bottomNavBg: isDark ? '#1E293B' : '#FFFFFF',
   bottomNavBorder: isDark ? '#334155' : '#E2E8F0',
-  switchTrackFalse: isDark ? '#334155' : '#CBD5E1',
-  switchTrackTrue: isDark ? '#38BDF8' : '#1E293B',
-  switchThumbOn: '#FFFFFF',
-  switchThumbOff: isDark ? '#94A3B8' : '#FFFFFF',
 });
+
+const SPECIALTY_PALETTE = [
+  { border: '#38BDF8', text: '#0284C7', darkText: '#7DD3FC', darkBg: 'rgba(56, 189, 248, 0.14)' },
+  { border: '#FB923C', text: '#EA580C', darkText: '#FDBA74', darkBg: 'rgba(251, 146, 60, 0.14)' },
+  { border: '#4ADE80', text: '#16A34A', darkText: '#86EFAC', darkBg: 'rgba(74, 222, 128, 0.14)' },
+  { border: '#FBBF24', text: '#D97706', darkText: '#FDE68A', darkBg: 'rgba(251, 191, 36, 0.14)' },
+  { border: '#84CC16', text: '#65A30D', darkText: '#BEF264', darkBg: 'rgba(132, 204, 22, 0.14)' },
+  { border: '#F97316', text: '#EA580C', darkText: '#FDBA74', darkBg: 'rgba(249, 115, 22, 0.14)' },
+  { border: '#38BDF8', text: '#0284C7', darkText: '#7DD3FC', darkBg: 'rgba(56, 189, 248, 0.14)' },
+  { border: '#94A3B8', text: '#475569', darkText: '#CBD5E1', darkBg: 'rgba(148, 163, 184, 0.14)' },
+];
 
 export default function TeacherDashboardScreen() {
   const [fontsLoaded] = useFonts({
@@ -482,6 +542,19 @@ export default function TeacherDashboardScreen() {
 
   // --- Main Navigation Tabs ---
   const [activeTab, setActiveTab] = useState<'home' | 'patients' | 'activities' | 'reviews'>('home');
+  const routeParams = useLocalSearchParams<{ tab?: string; view?: string }>();
+
+  // Sync route params with dashboard tab/view
+  useEffect(() => {
+    if (routeParams?.tab === 'activities') {
+      setActiveTab('activities');
+      if (routeParams?.view === 'wordbank') {
+        setActivitiesView('wordbank');
+      } else if (routeParams?.view === 'library') {
+        setActivitiesView('library');
+      }
+    }
+  }, [routeParams?.tab, routeParams?.view]);
 
   // --- Three Lines (Hamburger) Menu, Profile, Settings & Notifications State ---
   const [showMenu, setShowMenu] = useState(false);
@@ -494,21 +567,45 @@ export default function TeacherDashboardScreen() {
   const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
 
-  // Therapist Profile Data
+  // Therapist / Teacher Profile Data
   const [therapistProfile, setTherapistProfile] = useState({
-    name: 'Dr. Ameer Andres, SLP-CCC',
+    name: 'Dr. Ameer Andres',
+    credentials: 'SLP-CCC',
+    fullName: 'Dr. Ameer Andres, SLP-CCC',
     title: 'Speech-Language Pathologist',
-    license: 'SLP-PH-2024-8821',
-    clinic: 'SpeakSteps',
+    license: 'PRC #0048291',
+    clinic: 'LittleVoices Pediatric Speech Center',
     contact: '+63 9000 000 000',
     email: 'ameer@speakstep.com',
+    photoUri: null as string | null,
+    specializations: [
+      'Articulation',
+      'Phonological',
+      'Fluency',
+      'Language',
+      'Voice',
+      'Early intervention',
+      'Bilingual',
+      'AAC',
+    ],
   });
   const [editProfileForm, setEditProfileForm] = useState({ ...therapistProfile });
 
   // Settings Toggles & Theme (Screenshot 1 Left)
   const [newRecordingsToggle, setNewRecordingsToggle] = useState(true);
   const [followUpAlertsToggle, setFollowUpAlertsToggle] = useState(true);
+  const [readyToLevelUpToggle, setReadyToLevelUpToggle] = useState(false);
+  const [teacherUpdatesToggle, setTeacherUpdatesToggle] = useState(true);
+  const [missedExercisesToggle, setMissedExercisesToggle] = useState(true);
+  const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(true);
   const [themeMode, setThemeMode] = useState<'Auto' | 'Light' | 'Dark'>('Auto');
+  const [activeSessions, setActiveSessions] = useState([
+    { id: '1', device: 'Redmi 15', isCurrent: true, location: 'Quezon City', lastActive: 'Active now' },
+    { id: '2', device: 'Samsung Galaxy Tab S9 FE', isCurrent: false, location: 'Android App', lastActive: 'Yesterday' },
+    { id: '3', device: 'Samsung Galaxy S24', isCurrent: false, location: 'Chrome', lastActive: 'Nov 10' },
+  ]);
+  const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
+  const [profileOpenedFromSettings, setProfileOpenedFromSettings] = useState(false);
 
   // --- Dynamic Color Theme Resolution (Functional Light & Dark) ---
   const systemColorScheme = useColorScheme();
@@ -530,10 +627,100 @@ export default function TeacherDashboardScreen() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // --- Activities Sub-View State ---
-  const [activitiesView, setActivitiesView] = useState<'library' | 'preview' | 'edit' | 'assign'>('library');
+  const [activitiesView, setActivitiesView] = useState<'library' | 'preview' | 'edit' | 'assign' | 'wordbank'>('library');
   const [activityCategoryFilter, setActivityCategoryFilter] = useState<'ALL' | 'Words' | 'Phrases' | 'Syllables' | 'Isolation' | 'Sentences'>('ALL');
   const [activitySearch, setActivitySearch] = useState('');
+  const [showActivityFilterPanel, setShowActivityFilterPanel] = useState(false);
+  const [activitySortBy, setActivitySortBy] = useState<'default' | 'title-asc' | 'title-desc' | 'sound'>('default');
+  const [activitySoundFilter, setActivitySoundFilter] = useState<string[]>([]);
+  const [activityLanguageFilter, setActivityLanguageFilter] = useState<string>('ALL');
+
+  const isActivityFilterActive =
+    showActivityFilterPanel ||
+    activitySortBy !== 'default' ||
+    activitySoundFilter.length > 0 ||
+    activityLanguageFilter !== 'ALL';
   const [currentActivity, setCurrentActivity] = useState<ActivityItem>(INITIAL_ACTIVITIES[1]);
+
+  // --- Word Bank Tab State ---
+  const [wordBankEntries, setWordBankEntries] = useState<WordBankEntry[]>(INITIAL_WORD_BANK_ENTRIES);
+  const [wordBankQuery, setWordBankQuery] = useState('');
+  const [wordBankFiltersOpen, setWordBankFiltersOpen] = useState(false);
+  const [wordBankAdding, setWordBankAdding] = useState(false);
+  const [wordBankEditing, setWordBankEditing] = useState(false);
+  const [wordBankFilterSounds, setWordBankFilterSounds] = useState<string[]>([]);
+  const [wordBankFilterPositions, setWordBankFilterPositions] = useState<('Initial' | 'Medial' | 'Final')[]>([]);
+  const [wordBankFilterLanguages, setWordBankFilterLanguages] = useState<string[]>([]);
+  const [newWordText, setNewWordText] = useState('');
+  const [newWordSound, setNewWordSound] = useState('/r/');
+  const [newWordPosition, setNewWordPosition] = useState<'Initial' | 'Medial' | 'Final'>('Initial');
+  const [newWordLanguage, setNewWordLanguage] = useState('English');
+
+  const filteredWordBank = useMemo(() => {
+    const q = wordBankQuery.trim().toLowerCase();
+    return wordBankEntries.filter((item) => {
+      if (wordBankFilterSounds.length > 0 && !wordBankFilterSounds.includes(item.sound)) return false;
+      if (wordBankFilterPositions.length > 0 && !wordBankFilterPositions.includes(item.position)) return false;
+      if (wordBankFilterLanguages.length > 0 && !wordBankFilterLanguages.includes(item.language)) return false;
+      if (!q) return true;
+      return item.text.toLowerCase().includes(q) || item.sound.toLowerCase().includes(q);
+    });
+  }, [wordBankEntries, wordBankQuery, wordBankFilterSounds, wordBankFilterPositions, wordBankFilterLanguages]);
+
+  const wordBankChips = useMemo(() => {
+    const chips: { key: string; label: string; clear: () => void }[] = [];
+    wordBankFilterSounds.forEach((s) => {
+      chips.push({
+        key: `sound-${s}`,
+        label: s,
+        clear: () => setWordBankFilterSounds((curr) => curr.filter((x) => x !== s)),
+      });
+    });
+    wordBankFilterPositions.forEach((pos) => {
+      chips.push({
+        key: `pos-${pos}`,
+        label: pos,
+        clear: () => setWordBankFilterPositions((curr) => curr.filter((x) => x !== pos)),
+      });
+    });
+    wordBankFilterLanguages.forEach((lang) => {
+      chips.push({
+        key: `lang-${lang}`,
+        label: lang,
+        clear: () => setWordBankFilterLanguages((curr) => curr.filter((x) => x !== lang)),
+      });
+    });
+    return chips;
+  }, [wordBankFilterSounds, wordBankFilterPositions, wordBankFilterLanguages]);
+
+  const handleAddWordBankEntry = () => {
+    const trimmed = newWordText.trim().toLowerCase();
+    if (!trimmed) {
+      triggerToast('Please enter a target word.');
+      return;
+    }
+    const exists = wordBankEntries.some((w) => w.text.toLowerCase() === trimmed);
+    if (exists) {
+      triggerToast(`"${trimmed}" is already in the word bank.`);
+      return;
+    }
+    const newEntry: WordBankEntry = {
+      id: `wb-${Date.now()}`,
+      text: trimmed,
+      sound: newWordSound,
+      position: newWordPosition,
+      language: newWordLanguage,
+    };
+    setWordBankEntries((prev) => [newEntry, ...prev]);
+    setNewWordText('');
+    setWordBankAdding(false);
+    triggerToast(`Added "${trimmed}" to Word Bank.`);
+  };
+
+  const handleRemoveWordBankEntry = (id: string) => {
+    setWordBankEntries((prev) => prev.filter((item) => item.id !== id));
+    triggerToast('Word removed from Word Bank.');
+  };
 
   // --- Edit Activity Wizard State (3 Steps) ---
   const [editStep, setEditStep] = useState<1 | 2 | 3>(1);
@@ -592,12 +779,37 @@ export default function TeacherDashboardScreen() {
   );
 
   // Filtered Activities
-  const filteredActivities = INITIAL_ACTIVITIES.filter((act) => {
-    const matchesCategory = activityCategoryFilter === 'ALL' || act.category === activityCategoryFilter;
-    const matchesSearch = act.title.toLowerCase().includes(activitySearch.toLowerCase()) ||
-      act.sound.toLowerCase().includes(activitySearch.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredActivities = useMemo(() => {
+    let list = INITIAL_ACTIVITIES.filter((act) => {
+      const matchesCategory =
+        activityCategoryFilter === 'ALL' || act.category === activityCategoryFilter;
+      const matchesSearch =
+        act.title.toLowerCase().includes(activitySearch.toLowerCase()) ||
+        act.sound.toLowerCase().includes(activitySearch.toLowerCase());
+      const matchesSound =
+        activitySoundFilter.length === 0 || activitySoundFilter.includes(act.sound);
+      const matchesLanguage =
+        activityLanguageFilter === 'ALL' || act.language === activityLanguageFilter;
+
+      return matchesCategory && matchesSearch && matchesSound && matchesLanguage;
+    });
+
+    if (activitySortBy === 'title-asc') {
+      list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (activitySortBy === 'title-desc') {
+      list = [...list].sort((a, b) => b.title.localeCompare(a.title));
+    } else if (activitySortBy === 'sound') {
+      list = [...list].sort((a, b) => a.sound.localeCompare(b.sound));
+    }
+
+    return list;
+  }, [
+    activityCategoryFilter,
+    activitySearch,
+    activitySoundFilter,
+    activityLanguageFilter,
+    activitySortBy,
+  ]);
 
   // Filtered Reviews
   const filteredReviews = reviewsList.filter((rev) => {
@@ -667,8 +879,51 @@ export default function TeacherDashboardScreen() {
   // --- Profile, Settings & Logout Handlers ---
   const handleSaveProfile = () => {
     setTherapistProfile({ ...editProfileForm });
-    setShowEditProfileModal(false);
-    triggerToast('Profile updated successfully!');
+    setShowProfileModal(false);
+    triggerToast('Credentials saved successfully!');
+    if (profileOpenedFromSettings) {
+      setShowSettingsModal(true);
+      setProfileOpenedFromSettings(false);
+    }
+  };
+
+  const handleAddSpecialty = () => {
+    const trimmed = newSpecialtyInput.trim();
+    if (!trimmed) return;
+    if (!editProfileForm.specializations.includes(trimmed)) {
+      setEditProfileForm((prev) => ({
+        ...prev,
+        specializations: [...prev.specializations, trimmed],
+      }));
+    }
+    setNewSpecialtyInput('');
+  };
+
+  const handleRemoveSpecialty = (item: string) => {
+    setEditProfileForm((prev) => ({
+      ...prev,
+      specializations: prev.specializations.filter((s) => s !== item),
+    }));
+  };
+
+  const handleRevokeSession = (id: string) => {
+    setActiveSessions((current) => current.filter((s) => s.id !== id));
+    triggerToast('Session revoked successfully.');
+  };
+
+  const handlePickPhoto = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        setEditProfileForm((prev) => ({ ...prev, photoUri: url }));
+      };
+      input.click();
+    }
   };
 
   const handleChangePassword = () => {
@@ -721,7 +976,7 @@ export default function TeacherDashboardScreen() {
               }
             }}
           >
-            <Text style={[styles.backArrowText, { color: colors.text }]}>←</Text>
+            <ArrowLeft size={18} color={colors.text} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -732,9 +987,7 @@ export default function TeacherDashboardScreen() {
               setShowMenu(!showMenu);
             }}
           >
-            <Svg width="22" height="18" viewBox="0 0 24 18" fill="none">
-              <Path d="M1 1.5H23M1 9H23M1 16.5H23" stroke={colors.hamburger} strokeWidth="2.5" strokeLinecap="round" />
-            </Svg>
+            <Menu size={22} color={colors.hamburger} />
           </TouchableOpacity>
         )}
 
@@ -749,22 +1002,7 @@ export default function TeacherDashboardScreen() {
           }}
         >
           <View>
-            <Svg width="22" height="24" viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M18 8A6 6 0 0 0 6 8C6 15 3 17 3 17H21S18 15 18 8Z"
-                stroke="#0284C7"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <Path
-                d="M13.73 21A2 2 0 0 1 10.27 21"
-                stroke="#0284C7"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Bell size={22} color="#0284C7" />
             {notifications.some((n) => n.unread) && <View style={styles.notificationDot} />}
           </View>
         </TouchableOpacity>
@@ -797,11 +1035,7 @@ export default function TeacherDashboardScreen() {
                   setActivitiesView('assign');
                 }}
               >
-                <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
-                  <Circle cx="9" cy="7" r="4" stroke="#0F766E" strokeWidth="2" />
-                  <Path d="M2 21V18C2 15.2386 4.23858 13 7 13H11C13.7614 13 16 15.2386 16 18V21" stroke="#0F766E" strokeWidth="2" />
-                  <Path d="M16 8L18.5 10.5L22 6" stroke="#0F766E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
+                <UserCheck size={18} color="#0F766E" style={{ marginRight: 6 }} />
                 <Text style={styles.assignButtonText}>Assign Activity</Text>
               </TouchableOpacity>
             </View>
@@ -946,18 +1180,19 @@ export default function TeacherDashboardScreen() {
             <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>Track development and review progress</Text>
 
             <View style={styles.searchFilterRow}>
-              <View style={[styles.searchInputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.searchInputWrapper, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }]}>
+                <Search size={16} color={colors.textMuted} style={{ marginRight: 6 }} />
                 <TextInput
-                  style={[styles.searchInput, { color: colors.inputText }]}
+                  style={[styles.searchInput, { color: colors.inputText, flex: 1 }]}
                   placeholder="Search by name, targets..."
                   placeholderTextColor={colors.textMuted}
                   value={patientSearch}
                   onChangeText={setPatientSearch}
                 />
               </View>
-              <TouchableOpacity style={[styles.filterDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.filterText, { color: colors.textSub }]}>ALL</Text>
-                <Text style={[styles.filterArrow, { color: colors.textMuted }]}>▼</Text>
+              <TouchableOpacity style={[styles.filterDropdown, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }]}>
+                <Text style={[styles.filterText, { color: colors.textSub, marginRight: 4 }]}>ALL</Text>
+                <ChevronDown size={14} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -1008,17 +1243,25 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.pageSubtitle}>Build the small steps that make a big difference.</Text>
 
                 <View style={styles.subTabsRow}>
-                  <TouchableOpacity style={styles.subTabActive}>
+                  <TouchableOpacity
+                    style={styles.subTabActive}
+                    onPress={() => setActivitiesView('library')}
+                    activeOpacity={0.7}
+                  >
                     <Text style={styles.subTabActiveText}>Activity Library</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.subTabInactive}>
-                    <Text style={styles.subTabInactiveText}>Word Bank (6)</Text>
+                  <TouchableOpacity
+                    style={styles.subTabInactive}
+                    onPress={() => setActivitiesView('wordbank')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.subTabInactiveText}>Word Bank ({wordBankEntries.length})</Text>
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.activitySearchRow}>
                   <View style={styles.activitySearchInputWrapper}>
-                    <Text style={{ marginRight: 6, color: '#94A3B8' }}>🔍</Text>
+                    <Search size={16} color="#94A3B8" style={{ marginRight: 6 }} />
                     <TextInput
                       style={styles.searchInput}
                       placeholder="Search activities..."
@@ -1029,14 +1272,144 @@ export default function TeacherDashboardScreen() {
                   </View>
                   <TouchableOpacity
                     style={styles.createTaskButton}
+                    activeOpacity={0.8}
                     onPress={() => {
                       setEditStep(1);
                       setActivitiesView('edit');
                     }}
                   >
-                    <Text style={styles.createTaskButtonText}>+ Create a Task</Text>
+                    <Plus size={15} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 5 }} />
+                    <Text style={styles.createTaskButtonText} numberOfLines={1}>Create a Task</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.activityFilterBtn, isActivityFilterActive && styles.activityFilterBtnActive]}
+                    activeOpacity={0.7}
+                    onPress={() => setShowActivityFilterPanel((prev) => !prev)}
+                  >
+                    <View style={styles.activityFilterIconWrap}>
+                      <ArrowUpDown
+                        size={17}
+                        color={isActivityFilterActive ? '#0284C7' : (colors.isDark ? '#94A3B8' : '#64748B')}
+                        strokeWidth={2}
+                      />
+                      <View style={styles.activityFilterDot} />
+                    </View>
                   </TouchableOpacity>
                 </View>
+
+                {/* Expandable Activity Filter & Sort Panel */}
+                {showActivityFilterPanel && (
+                  <View style={styles.activityFilterPanel}>
+                    <View style={styles.activityFilterPanelHeader}>
+                      <Text style={styles.activityFilterPanelTitle}>Filter & Sort Activities</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {isActivityFilterActive && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              setActivitySortBy('default');
+                              setActivitySoundFilter([]);
+                              setActivityLanguageFilter('ALL');
+                              setActivityCategoryFilter('ALL');
+                            }}
+                            style={{ marginRight: 12 }}
+                          >
+                            <Text style={styles.activityFilterResetText}>Reset</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          onPress={() => setShowActivityFilterPanel(false)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <X size={16} color={colors.textSub} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Sort Options */}
+                    <Text style={styles.activityFilterSectionHeading}>Sort By</Text>
+                    <View style={styles.activityFilterPillsRow}>
+                      {[
+                        { id: 'default', label: 'Default' },
+                        { id: 'title-asc', label: 'Name (A–Z)' },
+                        { id: 'title-desc', label: 'Name (Z–A)' },
+                        { id: 'sound', label: 'By Sound' },
+                      ].map((opt) => (
+                        <TouchableOpacity
+                          key={opt.id}
+                          style={[
+                            styles.activityFilterPill,
+                            activitySortBy === opt.id && styles.activityFilterPillActive,
+                          ]}
+                          onPress={() => setActivitySortBy(opt.id as any)}
+                        >
+                          <Text
+                            style={[
+                              styles.activityFilterPillText,
+                              activitySortBy === opt.id && styles.activityFilterPillTextActive,
+                            ]}
+                          >
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Sound Filters */}
+                    <Text style={[styles.activityFilterSectionHeading, { marginTop: 10 }]}>Sound</Text>
+                    <View style={styles.activityFilterPillsRow}>
+                      {['/s/', '/r/', '/l/', '/t/'].map((s) => {
+                        const isSelected = activitySoundFilter.includes(s);
+                        return (
+                          <TouchableOpacity
+                            key={s}
+                            style={[
+                              styles.activityFilterPill,
+                              isSelected && styles.activityFilterPillActive,
+                            ]}
+                            onPress={() => {
+                              setActivitySoundFilter((prev) =>
+                                prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+                              );
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.activityFilterPillText,
+                                isSelected && styles.activityFilterPillTextActive,
+                              ]}
+                            >
+                              {s}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Language Filters */}
+                    <Text style={[styles.activityFilterSectionHeading, { marginTop: 10 }]}>Language</Text>
+                    <View style={styles.activityFilterPillsRow}>
+                      {['ALL', 'English', 'Tagalog'].map((lang) => (
+                        <TouchableOpacity
+                          key={lang}
+                          style={[
+                            styles.activityFilterPill,
+                            activityLanguageFilter === lang && styles.activityFilterPillActive,
+                          ]}
+                          onPress={() => setActivityLanguageFilter(lang)}
+                        >
+                          <Text
+                            style={[
+                              styles.activityFilterPillText,
+                              activityLanguageFilter === lang && styles.activityFilterPillTextActive,
+                            ]}
+                          >
+                            {lang}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
 
                 {/* Category Filter Chips */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
@@ -1078,7 +1451,10 @@ export default function TeacherDashboardScreen() {
                         <Text style={styles.activityCategoryTag}>{act.category}</Text>
                         <Text style={styles.activityCardTitle}>{act.title}</Text>
                         <Text style={styles.activityCardSub}>{act.subtitle}</Text>
-                        <Text style={styles.viewActivityLink}>View activity ›</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                          <Text style={styles.viewActivityLink}>View activity</Text>
+                          <ChevronRight size={13} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginLeft: 2 }} />
+                        </View>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -1142,7 +1518,7 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.previewSectionTitle}>Preview audio model</Text>
                 <View style={styles.audioModelCard}>
                   <View style={styles.audioPlayCircle}>
-                    <Text style={styles.audioPlayIcon}>▶</Text>
+                    <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                   </View>
                   <View style={{ flex: 1, marginHorizontal: 12 }}>
                     <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
@@ -1158,7 +1534,7 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.previewSectionTitle}>Visual material</Text>
                 <View style={styles.videoPlaceholderBox}>
                   <View style={styles.videoPlayCircle}>
-                    <Text style={styles.videoPlayIcon}>▶</Text>
+                    <Play size={20} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                   </View>
                 </View>
 
@@ -1233,14 +1609,14 @@ export default function TeacherDashboardScreen() {
                         <Text style={styles.formLabel}>Target Sound</Text>
                         <View style={styles.dropdownSelector}>
                           <Text style={styles.dropdownValue}>{editTargetSound}</Text>
-                          <Text style={styles.dropdownArrow}>▼</Text>
+                          <ChevronDown size={14} color={colors.text} />
                         </View>
                       </View>
                       <View style={{ flex: 1, marginLeft: 8 }}>
                         <Text style={styles.formLabel}>Practice Level</Text>
                         <View style={styles.dropdownSelector}>
                           <Text style={styles.dropdownValue}>{editPracticeLevel}</Text>
-                          <Text style={styles.dropdownArrow}>▼</Text>
+                          <ChevronDown size={14} color={colors.text} />
                         </View>
                       </View>
                     </View>
@@ -1314,7 +1690,10 @@ export default function TeacherDashboardScreen() {
                         style={styles.solidBlueBtn}
                         onPress={() => setEditStep(2)}
                       >
-                        <Text style={styles.solidBlueBtnText}>Next Step ›</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={styles.solidBlueBtnText}>Next Step </Text>
+                          <ChevronRight size={14} color="#FFFFFF" />
+                        </View>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1366,7 +1745,7 @@ export default function TeacherDashboardScreen() {
 
                         <Text style={styles.formLabel}>Word bank - {wordBankPositionTab}</Text>
                         <View style={styles.wordBankSearchWrapper}>
-                          <Text style={{ marginRight: 6, color: '#94A3B8' }}>🔍</Text>
+                          <Search size={16} color="#94A3B8" style={{ marginRight: 6 }} />
                           <TextInput
                             style={styles.searchInput}
                             placeholder="Search existing from word bank..."
@@ -1377,16 +1756,17 @@ export default function TeacherDashboardScreen() {
                         </View>
 
                         <View style={styles.wordChecklistContainer}>
-                          {['rabbit', 'red', 'run', 'rain', 'rice', 'rock'].map((w) => {
+                          {wordBankEntries.map((item) => {
+                            const w = item.text;
                             const isChecked = checkedWords.includes(w);
                             return (
                               <TouchableOpacity
-                                key={w}
+                                key={item.id}
                                 style={styles.wordCheckItem}
                                 onPress={() => toggleWordCheck(w)}
                               >
                                 <View style={[styles.checkboxSquare, isChecked && styles.checkboxSquareActive]}>
-                                  {isChecked && <Text style={styles.checkmarkIcon}>✓</Text>}
+                                  {isChecked && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
                                 </View>
                                 <Text style={styles.checkWordLabel}>{w}</Text>
                               </TouchableOpacity>
@@ -1398,8 +1778,12 @@ export default function TeacherDashboardScreen() {
                           {checkedWords.map((w) => (
                             <View key={w} style={styles.removableChip}>
                               <Text style={styles.removableChipText}>{w}</Text>
-                              <TouchableOpacity onPress={() => toggleWordCheck(w)}>
-                                <Text style={styles.removableChipX}> ×</Text>
+                              <TouchableOpacity
+                                onPress={() => toggleWordCheck(w)}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={{ marginLeft: 4 }}
+                              >
+                                <X size={11} color="#FDBA74" />
                               </TouchableOpacity>
                             </View>
                           ))}
@@ -1409,7 +1793,7 @@ export default function TeacherDashboardScreen() {
                           <View key={w} style={styles.wordPhraseBlock}>
                             <View style={styles.wordPhraseHeader}>
                               <Text style={styles.wordPhraseTitle}>{w}</Text>
-                              <Text style={{ color: '#94A3B8', fontWeight: '700' }}>—</Text>
+                              <Minus size={14} color="#94A3B8" />
                             </View>
                             <TextInput
                               style={styles.phraseInput}
@@ -1442,8 +1826,12 @@ export default function TeacherDashboardScreen() {
                           {customWords.map((cw) => (
                             <View key={cw} style={styles.removableChip}>
                               <Text style={styles.removableChipText}>{cw}</Text>
-                              <TouchableOpacity onPress={() => setCustomWords(customWords.filter((x) => x !== cw))}>
-                                <Text style={styles.removableChipX}> ×</Text>
+                              <TouchableOpacity
+                                onPress={() => setCustomWords(customWords.filter((x) => x !== cw))}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={{ marginLeft: 4 }}
+                              >
+                                <X size={11} color="#FDBA74" />
                               </TouchableOpacity>
                             </View>
                           ))}
@@ -1454,7 +1842,7 @@ export default function TeacherDashboardScreen() {
                           onPress={() => setSaveToWordBankChecked(!saveToWordBankChecked)}
                         >
                           <View style={[styles.checkboxSquare, saveToWordBankChecked && styles.checkboxSquareActive]}>
-                            {saveToWordBankChecked && <Text style={styles.checkmarkIcon}>✓</Text>}
+                            {saveToWordBankChecked && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
                           </View>
                           <Text style={styles.checkboxRowLabel}>Save to Word Bank</Text>
                         </TouchableOpacity>
@@ -1464,14 +1852,14 @@ export default function TeacherDashboardScreen() {
                             <Text style={styles.formLabel}>Target Sound</Text>
                             <View style={styles.dropdownSelector}>
                               <Text style={styles.dropdownValue}>/r/</Text>
-                              <Text style={styles.dropdownArrow}>▼</Text>
+                              <ChevronDown size={14} color={colors.text} />
                             </View>
                           </View>
                           <View style={{ flex: 1, marginLeft: 8 }}>
                             <Text style={styles.formLabel}>Target Position</Text>
                             <View style={styles.dropdownSelector}>
                               <Text style={styles.dropdownValue}>Initial</Text>
-                              <Text style={styles.dropdownArrow}>▼</Text>
+                              <ChevronDown size={14} color={colors.text} />
                             </View>
                           </View>
                         </View>
@@ -1489,7 +1877,7 @@ export default function TeacherDashboardScreen() {
 
                         <View style={styles.phraseBuilderRow}>
                           <TouchableOpacity style={styles.symbolBtn} onPress={handleAddCustomPhrase}>
-                            <Text style={styles.symbolBtnText}>+</Text>
+                            <Plus size={16} color={colors.text} />
                           </TouchableOpacity>
                           <TextInput
                             style={[styles.formInput, { flex: 1, marginHorizontal: 8, marginBottom: 0 }]}
@@ -1498,7 +1886,7 @@ export default function TeacherDashboardScreen() {
                             onChangeText={setNewPhraseInput}
                           />
                           <TouchableOpacity style={styles.symbolBtn}>
-                            <Text style={styles.symbolBtnText}>—</Text>
+                            <Minus size={16} color={colors.text} />
                           </TouchableOpacity>
                         </View>
 
@@ -1510,7 +1898,7 @@ export default function TeacherDashboardScreen() {
 
                     <Text style={styles.formLabel}>Visual Material</Text>
                     <View style={styles.uploadDashedBox}>
-                      <Text style={{ fontSize: 24, marginBottom: 4 }}>📤</Text>
+                      <Upload size={32} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginBottom: 6 }} />
                       <Text style={styles.uploadMainText}>Upload or browse files here</Text>
                       <Text style={styles.uploadSubText}>MP4 or MOV, up to 100MB per file</Text>
                     </View>
@@ -1518,7 +1906,7 @@ export default function TeacherDashboardScreen() {
                     <Text style={styles.formLabel}>Preview Audio Model</Text>
                     <View style={styles.audioModelCard}>
                       <View style={styles.audioPlayCircle}>
-                        <Text style={styles.audioPlayIcon}>▶</Text>
+                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                       <View style={{ flex: 1, marginHorizontal: 12 }}>
                         <Text style={styles.audioModelTitle}>Sample Audio Model</Text>
@@ -1532,10 +1920,11 @@ export default function TeacherDashboardScreen() {
                     </View>
 
                     <TouchableOpacity
-                      style={[styles.solidBlueBtn, { marginTop: 16 }]}
+                      style={styles.continueBtn}
                       onPress={() => setEditStep(3)}
+                      activeOpacity={0.8}
                     >
-                      <Text style={styles.solidBlueBtnText}>Continue</Text>
+                      <Text style={styles.continueBtnText}>Continue</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1568,7 +1957,7 @@ export default function TeacherDashboardScreen() {
                     <Text style={styles.previewSectionTitle}>Preview Audio Model</Text>
                     <View style={styles.audioModelCard}>
                       <View style={styles.audioPlayCircle}>
-                        <Text style={styles.audioPlayIcon}>▶</Text>
+                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                       <View style={{ flex: 1, marginHorizontal: 12 }}>
                         <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
@@ -1584,7 +1973,7 @@ export default function TeacherDashboardScreen() {
                     <Text style={styles.previewSectionTitle}>Visual Material</Text>
                     <View style={styles.videoPlaceholderBox}>
                       <View style={styles.videoPlayCircle}>
-                        <Text style={styles.videoPlayIcon}>▶</Text>
+                        <Play size={20} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                     </View>
 
@@ -1619,13 +2008,13 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.formLabel}>Student</Text>
                 <View style={styles.dropdownSelector}>
                   <Text style={styles.dropdownValue}>{assignStudent}</Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
+                  <ChevronDown size={16} color={colors.text} />
                 </View>
 
                 <Text style={styles.formLabel}>Activity</Text>
                 <View style={styles.dropdownSelector}>
                   <Text style={styles.dropdownValue}>{assignActivityName}</Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
+                  <ChevronDown size={16} color={colors.text} />
                 </View>
 
                 <TouchableOpacity
@@ -1633,7 +2022,7 @@ export default function TeacherDashboardScreen() {
                   onPress={() => setAssignPreviewExpanded(!assignPreviewExpanded)}
                 >
                   <Text style={styles.accordionTitle}>Activity Preview</Text>
-                  <Text style={styles.accordionArrow}>{assignPreviewExpanded ? '▲' : '▼'}</Text>
+                  {assignPreviewExpanded ? <ChevronUp size={16} color="#EA580C" /> : <ChevronDown size={16} color="#EA580C" />}
                 </TouchableOpacity>
 
                 {assignPreviewExpanded && (
@@ -1679,7 +2068,7 @@ export default function TeacherDashboardScreen() {
                     <Text style={styles.previewSectionTitle}>Preview audio model</Text>
                     <View style={styles.audioModelCard}>
                       <View style={styles.audioPlayCircle}>
-                        <Text style={styles.audioPlayIcon}>▶</Text>
+                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                       <View style={{ flex: 1, marginHorizontal: 12 }}>
                         <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
@@ -1695,7 +2084,7 @@ export default function TeacherDashboardScreen() {
                     <Text style={styles.previewSectionTitle}>Visual material</Text>
                     <View style={styles.videoPlaceholderBox}>
                       <View style={styles.videoPlayCircle}>
-                        <Text style={styles.videoPlayIcon}>▶</Text>
+                        <Play size={20} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                     </View>
 
@@ -1729,7 +2118,7 @@ export default function TeacherDashboardScreen() {
                     value={assignDueDate}
                     onChangeText={setAssignDueDate}
                   />
-                  <Text style={{ fontSize: 16 }}>📅</Text>
+                  <Calendar size={18} color={isDark ? '#38BDF8' : '#0284C7'} />
                 </View>
 
                 <Text style={styles.formLabel}>Instructions</Text>
@@ -1756,6 +2145,259 @@ export default function TeacherDashboardScreen() {
                   >
                     <Text style={styles.solidBlueBtnText}>Assign Activity</Text>
                   </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* VIEW 5: WORD BANK */}
+            {activitiesView === 'wordbank' && (
+              <View>
+                <Text style={styles.subHeadingCaps}>PURPOSEFUL PRACTICE</Text>
+                <Text style={styles.pageTitle}>The word bank.</Text>
+                <Text style={styles.pageSubtitle}>Reusable targets organized by sound, position and language.</Text>
+
+                <View style={styles.subTabsRow}>
+                  <TouchableOpacity
+                    style={styles.subTabInactive}
+                    onPress={() => setActivitiesView('library')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.subTabInactiveText}>Activity Library</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.subTabActive}
+                    onPress={() => setActivitiesView('wordbank')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.subTabActiveText}>Word Bank ({wordBankEntries.length})</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Word Bank Search, Add & Filter Row */}
+                <View style={styles.wbSearchRow}>
+                  <View style={styles.wbSearchInputWrapper}>
+                    <Search size={16} color="#94A3B8" style={{ marginRight: 6 }} />
+                    <TextInput
+                      style={styles.wbSearchInput}
+                      placeholder="Search for a specific word..."
+                      placeholderTextColor="#94A3B8"
+                      value={wordBankQuery}
+                      onChangeText={setWordBankQuery}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={styles.wbAddBtn}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setWordBankAdding((curr) => !curr);
+                      setWordBankEditing(false);
+                    }}
+                  >
+                    <Plus size={14} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 4 }} />
+                    <Text style={styles.wbAddBtnText}>{wordBankAdding ? 'Cancel' : 'Add a word'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.wbFilterBtn, wordBankFiltersOpen && styles.wbFilterBtnActive]}
+                    activeOpacity={0.7}
+                    onPress={() => setWordBankFiltersOpen((curr) => !curr)}
+                  >
+                    <Filter size={16} color={wordBankFiltersOpen ? '#0284C7' : colors.textSub} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Filter Panel */}
+                {wordBankFiltersOpen && (
+                  <View style={styles.wbFilterPanel}>
+                    <Text style={styles.wbFilterHeading}>Sound</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {['/r/', '/s/', '/l/', '/t/', '/k/', '/p/', '/m/'].map((s) => {
+                        const isSel = wordBankFilterSounds.includes(s);
+                        return (
+                          <TouchableOpacity
+                            key={s}
+                            style={[styles.wbChoicePill, isSel && styles.wbChoicePillActive]}
+                            onPress={() => {
+                              setWordBankFilterSounds((curr) =>
+                                curr.includes(s) ? curr.filter((x) => x !== s) : [...curr, s]
+                              );
+                            }}
+                          >
+                            <Text style={[styles.wbChoicePillText, isSel && styles.wbChoicePillTextActive]}>{s}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <Text style={[styles.wbFilterHeading, { marginTop: 10 }]}>Position</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {(['Initial', 'Medial', 'Final'] as const).map((pos) => {
+                        const isSel = wordBankFilterPositions.includes(pos);
+                        return (
+                          <TouchableOpacity
+                            key={pos}
+                            style={[styles.wbChoicePill, isSel && styles.wbChoicePillActive]}
+                            onPress={() => {
+                              setWordBankFilterPositions((curr) =>
+                                curr.includes(pos) ? curr.filter((x) => x !== pos) : [...curr, pos]
+                              );
+                            }}
+                          >
+                            <Text style={[styles.wbChoicePillText, isSel && styles.wbChoicePillTextActive]}>{pos}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <Text style={[styles.wbFilterHeading, { marginTop: 10 }]}>Language</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {['English', 'Tagalog'].map((lang) => {
+                        const isSel = wordBankFilterLanguages.includes(lang);
+                        return (
+                          <TouchableOpacity
+                            key={lang}
+                            style={[styles.wbChoicePill, isSel && styles.wbChoicePillActive]}
+                            onPress={() => {
+                              setWordBankFilterLanguages((curr) =>
+                                curr.includes(lang) ? curr.filter((x) => x !== lang) : [...curr, lang]
+                              );
+                            }}
+                          >
+                            <Text style={[styles.wbChoicePillText, isSel && styles.wbChoicePillTextActive]}>{lang}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {/* Filter Chips */}
+                {wordBankChips.length > 0 && (
+                  <View style={styles.wbChipsRow}>
+                    {wordBankChips.map((chip) => (
+                      <TouchableOpacity key={chip.key} style={styles.wbChip} onPress={chip.clear} activeOpacity={0.7}>
+                        <Text style={styles.wbChipLabel}>{chip.label}</Text>
+                        <X size={12} color="#0284C7" style={{ marginLeft: 4 }} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Add a Word Entry Form */}
+                {wordBankAdding && (
+                  <View style={styles.wbAddForm}>
+                    <Text style={styles.wbAddFormTitle}>Add a Word Bank Entry</Text>
+
+                    <Text style={styles.wbFormLabel}>Word</Text>
+                    <TextInput
+                      style={styles.wbFormInput}
+                      placeholder="Target word (e.g. rainbow)"
+                      placeholderTextColor="#94A3B8"
+                      value={newWordText}
+                      onChangeText={setNewWordText}
+                    />
+
+                    <Text style={styles.wbFormLabel}>Sound</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {['/r/', '/s/', '/l/', '/t/', '/k/', '/p/', '/m/'].map((s) => (
+                        <TouchableOpacity
+                          key={s}
+                          style={[styles.wbChoicePill, newWordSound === s && styles.wbChoicePillActive]}
+                          onPress={() => setNewWordSound(s)}
+                        >
+                          <Text style={[styles.wbChoicePillText, newWordSound === s && styles.wbChoicePillTextActive]}>{s}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.wbFormLabel, { marginTop: 10 }]}>Position</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {(['Initial', 'Medial', 'Final'] as const).map((pos) => (
+                        <TouchableOpacity
+                          key={pos}
+                          style={[styles.wbChoicePill, newWordPosition === pos && styles.wbChoicePillActive]}
+                          onPress={() => setNewWordPosition(pos)}
+                        >
+                          <Text style={[styles.wbChoicePillText, newWordPosition === pos && styles.wbChoicePillTextActive]}>{pos}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.wbFormLabel, { marginTop: 10 }]}>Language</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {['English', 'Tagalog'].map((lang) => (
+                        <TouchableOpacity
+                          key={lang}
+                          style={[styles.wbChoicePill, newWordLanguage === lang && styles.wbChoicePillActive]}
+                          onPress={() => setNewWordLanguage(lang)}
+                        >
+                          <Text style={[styles.wbChoicePillText, newWordLanguage === lang && styles.wbChoicePillTextActive]}>{lang}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.wbSaveWordBtn}
+                      onPress={handleAddWordBankEntry}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.wbSaveWordBtnText}>Save Target</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Word Bank List Header */}
+                <View style={styles.wbListHeader}>
+                  <Text style={styles.wbListTitle}>Word Bank List ({filteredWordBank.length})</Text>
+                  <TouchableOpacity
+                    style={styles.wbEditModeBtn}
+                    onPress={() => setWordBankEditing((curr) => !curr)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {wordBankEditing ? (
+                      <Check size={18} color="#0284C7" />
+                    ) : (
+                      <Pencil size={16} color={colors.textSub} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Word Bank List */}
+                <View style={styles.wbListCard}>
+                  {filteredWordBank.map((item, index) => (
+                    <View
+                      key={item.id}
+                      style={[
+                        styles.wbListRow,
+                        index > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.wbWordText}>{item.text}</Text>
+                        <View style={styles.wbSoundBadgeWrap}>
+                          <Text style={styles.wbSoundBadgeText}>{item.sound}</Text>
+                        </View>
+                      </View>
+
+                      {wordBankEditing ? (
+                        <TouchableOpacity
+                          onPress={() => handleRemoveWordBankEntry(item.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.wbDeleteBtn}
+                        >
+                          <Trash2 size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.wbPositionBadge}>
+                          <Text style={styles.wbPositionBadgeText}>{item.position}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                  {filteredWordBank.length === 0 && (
+                    <View style={{ padding: 24, alignItems: 'center' }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 13 }}>No words match your search or filters.</Text>
+                    </View>
+                  )}
                 </View>
               </View>
             )}
@@ -1835,7 +2477,7 @@ export default function TeacherDashboardScreen() {
                   </View>
 
                   {/* Chevron › */}
-                  <Text style={styles.reviewChevron}>›</Text>
+                  <ChevronRight size={16} color={colors.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -1868,7 +2510,7 @@ export default function TeacherDashboardScreen() {
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedReview(null)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
+                <X size={20} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -1880,7 +2522,7 @@ export default function TeacherDashboardScreen() {
             {/* Audio Playback Box */}
             <View style={[styles.audioModelCard, { marginVertical: 12 }]}>
               <View style={styles.audioPlayCircle}>
-                <Text style={styles.audioPlayIcon}>▶</Text>
+                <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
               </View>
               <View style={{ flex: 1, marginHorizontal: 12 }}>
                 <Text style={styles.audioModelTitle}>Child Audio Recording</Text>
@@ -1900,16 +2542,18 @@ export default function TeacherDashboardScreen() {
                 style={[
                   styles.ratingBtn,
                   reviewEvaluation === 'Correct' && { backgroundColor: '#DCFCE7', borderColor: '#16A34A' },
+                  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
                 ]}
                 onPress={() => setReviewEvaluation('Correct')}
               >
+                <Check size={14} color={reviewEvaluation === 'Correct' ? '#16A34A' : colors.textSub} style={{ marginRight: 4 }} />
                 <Text
                   style={[
                     styles.ratingBtnText,
                     reviewEvaluation === 'Correct' && { color: '#16A34A', fontWeight: '700' },
                   ]}
                 >
-                  ✓ Correct
+                  Correct
                 </Text>
               </TouchableOpacity>
 
@@ -1934,16 +2578,18 @@ export default function TeacherDashboardScreen() {
                 style={[
                   styles.ratingBtn,
                   reviewEvaluation === 'Incorrect' && { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+                  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
                 ]}
                 onPress={() => setReviewEvaluation('Incorrect')}
               >
+                <X size={14} color={reviewEvaluation === 'Incorrect' ? '#DC2626' : colors.textSub} style={{ marginRight: 4 }} />
                 <Text
                   style={[
                     styles.ratingBtnText,
                     reviewEvaluation === 'Incorrect' && { color: '#DC2626', fontWeight: '700' },
                   ]}
                 >
-                  ✕ Needs Practice
+                  Needs Practice
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2002,7 +2648,7 @@ export default function TeacherDashboardScreen() {
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedPatient(null)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
+                <X size={20} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -2158,7 +2804,7 @@ export default function TeacherDashboardScreen() {
                     </View>
                     <View style={styles.audioPlayerRow}>
                       <View style={styles.playButtonCircle}>
-                        <Text style={styles.playIcon}>▶</Text>
+                        <Play size={12} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
                       </View>
                       <View style={{ flex: 1, marginHorizontal: 10 }}>
                         <Text style={styles.audioLabel}>Child Audio</Text>
@@ -2215,13 +2861,10 @@ export default function TeacherDashboardScreen() {
                 }}
               >
                 <View style={styles.menuIconCircle}>
-                  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <Circle cx="12" cy="8" r="4" stroke="#0284C7" strokeWidth="2" />
-                    <Path d="M4 20C4 16.6863 7.58172 14 12 14C16.4183 14 20 16.6863 20 20" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" />
-                  </Svg>
+                  <User size={18} color="#0284C7" />
                 </View>
                 <Text style={styles.menuOptionLabel}>Profile</Text>
-                <Text style={styles.menuOptionChevron}>›</Text>
+                <ChevronRight size={16} color={colors.textMuted} />
               </TouchableOpacity>
 
               {/* Option 2: Settings */}
@@ -2234,17 +2877,10 @@ export default function TeacherDashboardScreen() {
                 }}
               >
                 <View style={styles.menuIconCircle}>
-                  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <Circle cx="12" cy="12" r="3" stroke="#0284C7" strokeWidth="2" />
-                    <Path
-                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"
-                      stroke="#0284C7"
-                      strokeWidth="2"
-                    />
-                  </Svg>
+                  <Settings size={18} color="#0284C7" />
                 </View>
                 <Text style={styles.menuOptionLabel}>Settings</Text>
-                <Text style={styles.menuOptionChevron}>›</Text>
+                <ChevronRight size={16} color={colors.textMuted} />
               </TouchableOpacity>
 
               <View style={styles.menuSectionDivider} />
@@ -2259,11 +2895,7 @@ export default function TeacherDashboardScreen() {
                 }}
               >
                 <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
-                  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M16 17l5-5-5-5" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    <Path d="M21 12H9" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </Svg>
+                  <LogOut size={18} color="#DC2626" />
                 </View>
                 <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontWeight: '700' }]}>Logout</Text>
               </TouchableOpacity>
@@ -2352,7 +2984,7 @@ export default function TeacherDashboardScreen() {
       )}
 
       {/* ==========================================
-          --- MODAL: SETTINGS & ACCOUNT (Screenshot 1 Left) ---
+          --- MODAL: SETTINGS (Screenshot 1 Left) ---
           ========================================== */}
       <Modal
         visible={showSettingsModal}
@@ -2361,90 +2993,62 @@ export default function TeacherDashboardScreen() {
         onRequestClose={() => setShowSettingsModal(false)}
       >
         <SafeAreaView style={styles.settingsModalContainer}>
-          <View style={styles.settingsTopBar}>
-            <Text style={styles.settingsNavTitle}>Settings</Text>
-            <TouchableOpacity onPress={() => setShowSettingsModal(false)} style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>✕</Text>
+          {/* Header Row */}
+          <View style={styles.newHeaderRow}>
+            <TouchableOpacity
+              onPress={() => setShowSettingsModal(false)}
+              style={styles.newBackButton}
+              accessibilityLabel="Back"
+            >
+              <ChevronLeft size={22} color={colors.text} />
             </TouchableOpacity>
+            <Text style={styles.newHeaderTitle}>Settings</Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
-            {/* Header: Avatar + Doctor Info */}
-            <View style={styles.settingsProfileHeaderRow}>
-              <View style={styles.settingsAvatarCircle}>
-                <Text style={styles.settingsAvatarLetter}>A</Text>
+            {/* Top Profile Card */}
+            <TouchableOpacity
+              style={styles.newProfileCard}
+              activeOpacity={0.8}
+              onPress={() => {
+                setProfileOpenedFromSettings(true);
+                setEditProfileForm({ ...therapistProfile });
+                setShowSettingsModal(false);
+                setShowProfileModal(true);
+              }}
+            >
+              <View style={styles.newProfileAvatar}>
+                {therapistProfile.photoUri ? (
+                  <Image source={{ uri: therapistProfile.photoUri }} style={styles.newProfileAvatarImg} />
+                ) : (
+                  <Text style={styles.newProfileAvatarText}>A</Text>
+                )}
               </View>
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.settingsDoctorName}>{therapistProfile.name}</Text>
-                <Text style={styles.settingsDoctorRole}>{therapistProfile.title}</Text>
-                <Text style={styles.settingsLicenseText}>License: {therapistProfile.license}</Text>
+              <View style={styles.newProfileInfo}>
+                <View style={styles.newProfileNameRow}>
+                  <Text style={styles.newProfileName}>{therapistProfile.fullName}</Text>
+                  <View style={styles.newVerifiedBadge}>
+                    <Check size={10} color="#FFFFFF" strokeWidth={3} />
+                  </View>
+                </View>
+                <Text style={styles.newProfileSubtitle}>
+                  {therapistProfile.license} {therapistProfile.title}
+                </Text>
+                <Text style={styles.newProfileHint}>Tap to edit credentials & specializations</Text>
               </View>
+              <ChevronRight size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            {/* Notifications Section */}
+            <View style={styles.newSectionHeader}>
+              <Bell size={18} color={colors.text} />
+              <Text style={styles.newSectionTitle}>Notifications</Text>
             </View>
-
-            {/* SECTION 1: ACCOUNT */}
-            <Text style={styles.settingsSectionTitle}>Account</Text>
-            <View style={styles.settingsCard}>
-              <TouchableOpacity
-                style={styles.settingsCardRow}
-                onPress={() => {
-                  setEditProfileForm({ ...therapistProfile });
-                  setShowEditProfileModal(true);
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingsRowTitle}>Edit Profile</Text>
-                  <Text style={styles.settingsRowSub}>Name, clinic, contact number</Text>
-                </View>
-                <Text style={styles.settingsChevron}>›</Text>
-              </TouchableOpacity>
-
-              <View style={styles.settingsRowDivider} />
-
-              <View style={styles.settingsCardRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingsRowTitle}>Clinic</Text>
-                  <Text style={styles.settingsRowSub}>{therapistProfile.clinic}</Text>
-                </View>
-              </View>
-
-              <View style={styles.settingsRowDivider} />
-
-              <View style={styles.settingsCardRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingsRowTitle}>Contact</Text>
-                  <Text style={styles.settingsRowSub}>{therapistProfile.contact}</Text>
-                </View>
-              </View>
-
-              <View style={styles.settingsRowDivider} />
-
-              <View style={styles.settingsCardRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingsRowTitle}>Email</Text>
-                  <Text style={styles.settingsRowSub}>{therapistProfile.email}</Text>
-                </View>
-              </View>
-
-              <View style={styles.settingsRowDivider} />
-
-              <TouchableOpacity
-                style={styles.settingsCardRow}
-                onPress={() => setShowChangePasswordModal(true)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingsRowTitle}>Change Password</Text>
-                </View>
-                <Text style={styles.settingsChevron}>›</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* SECTION 2: NOTIFICATIONS */}
-            <Text style={styles.settingsSectionTitle}>Notifications</Text>
-            <View style={styles.settingsCard}>
-              <View style={styles.settingsCardRow}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={styles.settingsRowTitle}>New Recordings</Text>
-                  <Text style={styles.settingsRowSub}>When a child or parent submits</Text>
+            <View style={styles.newCard}>
+              <View style={styles.newToggleRow}>
+                <View style={styles.newToggleRowCopy}>
+                  <Text style={styles.newRowTitle}>New Recordings</Text>
+                  <Text style={styles.newRowSubtitle}>When a child or parent submits</Text>
                 </View>
                 <Switch
                   value={newRecordingsToggle}
@@ -2452,18 +3056,17 @@ export default function TeacherDashboardScreen() {
                     setNewRecordingsToggle(val);
                     triggerToast(`New recordings alerts ${val ? 'enabled' : 'disabled'}`);
                   }}
-                  trackColor={{ false: colors.switchTrackFalse, true: colors.switchTrackTrue }}
-                  thumbColor={newRecordingsToggle ? colors.switchThumbOn : colors.switchThumbOff}
-                  ios_backgroundColor={colors.switchTrackFalse}
+                  trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                  thumbColor="#FFFFFF"
                 />
               </View>
 
-              <View style={styles.settingsRowDivider} />
+              <View style={styles.newDivider} />
 
-              <View style={styles.settingsCardRow}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={styles.settingsRowTitle}>Follow-Up Alerts</Text>
-                  <Text style={styles.settingsRowSub}>Patients who need practice follow-up</Text>
+              <View style={styles.newToggleRow}>
+                <View style={styles.newToggleRowCopy}>
+                  <Text style={styles.newRowTitle}>Follow-Up Alerts</Text>
+                  <Text style={styles.newRowSubtitle}>Patients who need practice follow-up</Text>
                 </View>
                 <Switch
                   value={followUpAlertsToggle}
@@ -2471,25 +3074,84 @@ export default function TeacherDashboardScreen() {
                     setFollowUpAlertsToggle(val);
                     triggerToast(`Follow-up alerts ${val ? 'enabled' : 'disabled'}`);
                   }}
-                  trackColor={{ false: colors.switchTrackFalse, true: colors.switchTrackTrue }}
-                  thumbColor={followUpAlertsToggle ? colors.switchThumbOn : colors.switchThumbOff}
-                  ios_backgroundColor={colors.switchTrackFalse}
+                  trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <View style={styles.newDivider} />
+
+              <View style={styles.newToggleRow}>
+                <View style={styles.newToggleRowCopy}>
+                  <Text style={styles.newRowTitle}>Ready to level up</Text>
+                  <Text style={styles.newRowSubtitle}>A child reaches your threshold</Text>
+                </View>
+                <Switch
+                  value={readyToLevelUpToggle}
+                  onValueChange={(val) => {
+                    setReadyToLevelUpToggle(val);
+                    triggerToast(`Level up alerts ${val ? 'enabled' : 'disabled'}`);
+                  }}
+                  trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <View style={styles.newDivider} />
+
+              <View style={styles.newToggleRow}>
+                <View style={styles.newToggleRowCopy}>
+                  <Text style={styles.newRowTitle}>Teacher updates</Text>
+                  <Text style={styles.newRowSubtitle}>Classroom notes from linked teachers</Text>
+                </View>
+                <Switch
+                  value={teacherUpdatesToggle}
+                  onValueChange={(val) => {
+                    setTeacherUpdatesToggle(val);
+                    triggerToast(`Teacher updates ${val ? 'enabled' : 'disabled'}`);
+                  }}
+                  trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+
+              <View style={styles.newDivider} />
+
+              <View style={styles.newToggleRow}>
+                <View style={styles.newToggleRowCopy}>
+                  <Text style={styles.newRowTitle}>Missed Exercises</Text>
+                  <Text style={styles.newRowSubtitle}>Alert after 3 consecutive missed practice days</Text>
+                </View>
+                <Switch
+                  value={missedExercisesToggle}
+                  onValueChange={(val) => {
+                    setMissedExercisesToggle(val);
+                    triggerToast(`Missed exercises alerts ${val ? 'enabled' : 'disabled'}`);
+                  }}
+                  trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                  thumbColor="#FFFFFF"
                 />
               </View>
             </View>
 
-            {/* SECTION 3: APPEARANCE */}
-            <Text style={styles.settingsSectionTitle}>Appearance</Text>
-            <View style={styles.settingsCard}>
-              <View style={styles.themeRow}>
-                <Text style={styles.settingsRowTitle}>Theme</Text>
-                <View style={styles.themeSegmentControl}>
+            {/* Appearance Section */}
+            <View style={styles.newSectionHeader}>
+              <Palette size={18} color={colors.text} />
+              <Text style={styles.newSectionTitle}>Appearance</Text>
+            </View>
+            <View style={styles.newCard}>
+              <View style={styles.newThemeRow}>
+                <View style={styles.newThemeLeft}>
+                  <SunMoon size={18} color={colors.text} />
+                  <Text style={styles.newRowTitle}>Theme</Text>
+                </View>
+                <View style={styles.newThemeSegmentControl}>
                   {(['Auto', 'Light', 'Dark'] as const).map((mode) => (
                     <TouchableOpacity
                       key={mode}
                       style={[
-                        styles.themeSegmentBtn,
-                        themeMode === mode && styles.themeSegmentBtnActive,
+                        styles.newThemeSegmentBtn,
+                        themeMode === mode && styles.newThemeSegmentBtnActive,
                       ]}
                       onPress={() => {
                         setThemeMode(mode);
@@ -2502,8 +3164,8 @@ export default function TeacherDashboardScreen() {
                     >
                       <Text
                         style={[
-                          styles.themeSegmentText,
-                          themeMode === mode && styles.themeSegmentTextActive,
+                          styles.newThemeSegmentText,
+                          themeMode === mode && styles.newThemeSegmentTextActive,
                         ]}
                       >
                         {mode}
@@ -2514,180 +3176,287 @@ export default function TeacherDashboardScreen() {
               </View>
             </View>
 
-            {/* LOG OUT BUTTON (Screenshot 1 bottom) */}
+            {/* Privacy & Security Section */}
+            <View style={styles.newSectionHeader}>
+              <Lock size={18} color={colors.text} />
+              <Text style={styles.newSectionTitle}>Privacy & Security</Text>
+            </View>
+            <View style={styles.newCard}>
+              <View style={styles.newToggleRow}>
+                <View style={styles.newShieldIcon}>
+                  <ShieldCheck size={26} color="#22C55E" />
+                </View>
+                <View style={styles.newToggleRowCopy}>
+                  <Text style={styles.newRowTitle}>Two-Factor Authentication</Text>
+                  <Text style={styles.newRowSubtitle}>Required for pediatric audio playback</Text>
+                </View>
+                <Switch
+                  value={twoFactorAuthToggle}
+                  onValueChange={(val) => {
+                    setTwoFactorAuthToggle(val);
+                    triggerToast(`Two-factor authentication ${val ? 'enabled' : 'disabled'}`);
+                  }}
+                  trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </View>
+
+            <Text style={styles.newSubSectionTitle}>Active Mobile Session</Text>
+            <View style={styles.newCard}>
+              {activeSessions.map((session, index) => (
+                <React.Fragment key={session.id}>
+                  <View style={styles.newSessionRow}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.newRowTitle}>{session.device}</Text>
+                        {session.isCurrent ? (
+                          <View style={styles.newThisDeviceBadge}>
+                            <Text style={styles.newThisDeviceText}>This Device</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.newRowSubtitle}>{session.location} • {session.lastActive}</Text>
+                    </View>
+                    {!session.isCurrent ? (
+                      <TouchableOpacity
+                        onPress={() => handleRevokeSession(session.id)}
+                        style={styles.newRevokeBtn}
+                      >
+                        <Text style={styles.newRevokeBtnText}>Revoke</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                  {index < activeSessions.length - 1 ? <View style={styles.newDivider} /> : null}
+                </React.Fragment>
+              ))}
+            </View>
+
+            {/* About Help Section */}
+            <View style={styles.newSectionHeader}>
+              <Text style={styles.newSectionTitle}>About Help</Text>
+            </View>
+            <View style={styles.newCard}>
+              <View style={styles.newAboutRow}>
+                <Text style={styles.newRowTitle}>Help center</Text>
+                <Text style={styles.newRowSubtitle}>Guides and FAQs</Text>
+              </View>
+              <View style={styles.newDivider} />
+              <View style={styles.newAboutRow}>
+                <Text style={styles.newRowTitle}>Contact support</Text>
+                <Text style={styles.newRowSubtitle}>We reply within a day</Text>
+              </View>
+              <View style={styles.newDivider} />
+              <View style={styles.newAboutRow}>
+                <Text style={styles.newRowTitle}>Terms & privacy policy</Text>
+                <Text style={styles.newRowSubtitle}>Updated this year</Text>
+              </View>
+            </View>
+
+            {/* Sign Out Button */}
             <TouchableOpacity
-              style={styles.settingsLogoutButton}
+              style={styles.newSignOutBtn}
               activeOpacity={0.8}
-              onPress={() => setShowLogoutConfirm(true)}
+              onPress={() => {
+                setShowSettingsModal(false);
+                setShowLogoutConfirm(true);
+              }}
             >
-              <Text style={styles.settingsLogoutButtonText}>Log Out</Text>
+              <LogOut size={18} color={colors.isDark ? '#FED7AA' : '#C48B5A'} style={{ marginRight: 8 }} />
+              <Text style={styles.newSignOutBtnText}>Sign Out</Text>
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </Modal>
 
       {/* ==========================================
-          --- MODAL: PROFILE VIEW & EDIT ---
+          --- MODAL: PROFILE & CREDENTIALS (Screenshot 1 Right) ---
           ========================================== */}
       <Modal
         visible={showProfileModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowProfileModal(false)}
+        onRequestClose={() => {
+          setShowProfileModal(false);
+          if (profileOpenedFromSettings) {
+            setShowSettingsModal(true);
+            setProfileOpenedFromSettings(false);
+          }
+        }}
       >
         <SafeAreaView style={styles.settingsModalContainer}>
-          <View style={styles.settingsTopBar}>
-            <Text style={styles.settingsNavTitle}>Therapist Profile</Text>
-            <TouchableOpacity onPress={() => setShowProfileModal(false)} style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>✕</Text>
+          {/* Header Row */}
+          <View style={styles.newHeaderRow}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowProfileModal(false);
+                if (profileOpenedFromSettings) {
+                  setShowSettingsModal(true);
+                  setProfileOpenedFromSettings(false);
+                }
+              }}
+              style={styles.newBackButton}
+              accessibilityLabel="Back"
+            >
+              <ChevronLeft size={22} color={colors.text} />
             </TouchableOpacity>
+            <Text style={styles.newHeaderTitle}>Profile & Credentials</Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
-            <View style={styles.profileHeroCard}>
-              <View style={styles.profileBigAvatarCircle}>
-                <Text style={styles.profileBigAvatarLetter}>A</Text>
+            {/* Upload Photo Card */}
+            <TouchableOpacity
+              style={styles.newUploadPhotoCard}
+              activeOpacity={0.8}
+              onPress={handlePickPhoto}
+            >
+              <View style={styles.newPhotoAvatarWrapper}>
+                <View style={styles.newPhotoAvatar}>
+                  {editProfileForm.photoUri ? (
+                    <Image source={{ uri: editProfileForm.photoUri }} style={styles.newPhotoAvatarImg} />
+                  ) : (
+                    <Text style={styles.newPhotoAvatarText}>A</Text>
+                  )}
+                </View>
+                <View style={styles.newCameraBadge}>
+                  <Camera size={14} color="#FFFFFF" />
+                </View>
               </View>
-              <Text style={styles.profileHeroName}>{therapistProfile.name}</Text>
-              <Text style={styles.profileHeroRole}>{therapistProfile.title}</Text>
-              <View style={styles.licenseBadge}>
-                <Text style={styles.licenseBadgeText}>{therapistProfile.license}</Text>
+              <Text style={styles.newUploadPhotoLabel}>Upload Photo</Text>
+            </TouchableOpacity>
+
+            {/* Profile Section */}
+            <Text style={styles.newSectionTitleStandalone}>Profile</Text>
+            <View style={styles.newCard}>
+              <View style={styles.newProfileFieldRow}>
+                <Text style={styles.newFieldLabel}>Name</Text>
+                <TextInput
+                  style={styles.newFieldInput}
+                  value={editProfileForm.name}
+                  onChangeText={(text) =>
+                    setEditProfileForm((prev) => ({
+                      ...prev,
+                      name: text,
+                      fullName: `${text}, ${prev.credentials}`,
+                    }))
+                  }
+                  placeholder="Dr. Ameer Andres"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+              <View style={styles.newDivider} />
+
+              <View style={styles.newProfileFieldRow}>
+                <Text style={styles.newFieldLabel}>Professional Title</Text>
+                <TextInput
+                  style={styles.newFieldInput}
+                  value={editProfileForm.title}
+                  onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, title: text }))}
+                  placeholder="Speech-Language Pathologist"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+              <View style={styles.newDivider} />
+
+              <View style={styles.newProfileFieldRow}>
+                <Text style={styles.newFieldLabel}>Contact Number</Text>
+                <TextInput
+                  style={styles.newFieldInput}
+                  value={editProfileForm.contact}
+                  onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, contact: text }))}
+                  placeholder="+63 9000 000 000"
+                  keyboardType="phone-pad"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+              <View style={styles.newDivider} />
+
+              <View style={styles.newProfileFieldRow}>
+                <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
+                <TextInput
+                  style={styles.newFieldInput}
+                  value={editProfileForm.license}
+                  onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, license: text }))}
+                  placeholder="PRC #0048291"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+              <View style={styles.newDivider} />
+
+              <View style={styles.newProfileFieldRow}>
+                <Text style={styles.newFieldLabel}>Clinic/School</Text>
+                <TextInput
+                  style={styles.newFieldInput}
+                  value={editProfileForm.clinic}
+                  onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, clinic: text }))}
+                  placeholder="LittleVoices Pediatric Speech Center"
+                  placeholderTextColor={colors.textMuted}
+                />
               </View>
             </View>
 
-            <Text style={styles.settingsSectionTitle}>Clinical Credentials</Text>
-            <View style={styles.settingsCard}>
-              <View style={styles.settingsCardRow}>
-                <View>
-                  <Text style={styles.settingsRowSub}>Clinic Organization</Text>
-                  <Text style={styles.settingsRowTitle}>{therapistProfile.clinic}</Text>
-                </View>
+            {/* Specialization Section */}
+            <Text style={styles.newSectionTitleStandalone}>Specialization</Text>
+            <View style={styles.newSpecialtyContainer}>
+              <View style={styles.newChipsRow}>
+                {editProfileForm.specializations.map((spec, index) => {
+                  const colorInfo = SPECIALTY_PALETTE[index % SPECIALTY_PALETTE.length];
+                  return (
+                    <View
+                      key={spec}
+                      style={[
+                        styles.newChip,
+                        {
+                          borderColor: colorInfo.border,
+                          backgroundColor: colors.isDark ? colorInfo.darkBg : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.newChipText,
+                          { color: colors.isDark ? colorInfo.darkText : colorInfo.text },
+                        ]}
+                      >
+                        {spec}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveSpecialty(spec)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={styles.newChipRemove}
+                      >
+                        <X size={12} color={colors.isDark ? colorInfo.darkText : colorInfo.text} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
               </View>
-              <View style={styles.settingsRowDivider} />
-              <View style={styles.settingsCardRow}>
-                <View>
-                  <Text style={styles.settingsRowSub}>Contact Number</Text>
-                  <Text style={styles.settingsRowTitle}>{therapistProfile.contact}</Text>
-                </View>
-              </View>
-              <View style={styles.settingsRowDivider} />
-              <View style={styles.settingsCardRow}>
-                <View>
-                  <Text style={styles.settingsRowSub}>Email Address</Text>
-                  <Text style={styles.settingsRowTitle}>{therapistProfile.email}</Text>
-                </View>
+
+              <View style={styles.newAddSpecialtyRow}>
+                <TextInput
+                  style={styles.newAddSpecialtyInput}
+                  value={newSpecialtyInput}
+                  onChangeText={setNewSpecialtyInput}
+                  onSubmitEditing={handleAddSpecialty}
+                  placeholder="Add Specialty e.g., Articulation"
+                  placeholderTextColor={colors.textMuted}
+                  returnKeyType="done"
+                />
               </View>
             </View>
 
-            <View style={styles.previewActionsRow}>
+            {/* Save Credentials Button */}
+            <View style={styles.newSaveContainer}>
               <TouchableOpacity
-                style={styles.outlineBtn}
-                onPress={() => {
-                  setEditProfileForm({ ...therapistProfile });
-                  setShowEditProfileModal(true);
-                }}
+                style={styles.newSaveCredentialsBtn}
+                activeOpacity={0.8}
+                onPress={handleSaveProfile}
               >
-                <Text style={styles.outlineBtnText}>Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.solidBlueBtn}
-                onPress={() => {
-                  setShowProfileModal(false);
-                  setShowSettingsModal(true);
-                }}
-              >
-                <Text style={styles.solidBlueBtnText}>Go to Settings ›</Text>
+                <Text style={styles.newSaveCredentialsBtnText}>Save Credentials</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeAreaView>
-      </Modal>
-
-      {/* ==========================================
-          --- MODAL: EDIT PROFILE FORM ---
-          ========================================== */}
-      <Modal
-        visible={showEditProfileModal}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowEditProfileModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitleText}>Edit Profile Information</Text>
-              <TouchableOpacity onPress={() => setShowEditProfileModal(false)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.formLabel}>Full Name</Text>
-            <TextInput
-              style={styles.formInput}
-              value={editProfileForm.name}
-              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, name: text })}
-              placeholder="e.g. Dr. Ameer Andres, SLP-CCC"
-            />
-
-            <Text style={styles.formLabel}>Clinical Role</Text>
-            <TextInput
-              style={styles.formInput}
-              value={editProfileForm.title}
-              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, title: text })}
-              placeholder="e.g. Speech-Language Pathologist"
-            />
-
-            <Text style={styles.formLabel}>License ID</Text>
-            <TextInput
-              style={styles.formInput}
-              value={editProfileForm.license}
-              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, license: text })}
-              placeholder="e.g. SLP-PH-2024-8821"
-            />
-
-            <Text style={styles.formLabel}>Clinic</Text>
-            <TextInput
-              style={styles.formInput}
-              value={editProfileForm.clinic}
-              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, clinic: text })}
-              placeholder="e.g. SpeakSteps"
-            />
-
-            <Text style={styles.formLabel}>Contact Number</Text>
-            <TextInput
-              style={styles.formInput}
-              value={editProfileForm.contact}
-              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, contact: text })}
-              placeholder="e.g. +63 9000 000 000"
-              keyboardType="phone-pad"
-            />
-
-            <Text style={styles.formLabel}>Email</Text>
-            <TextInput
-              style={styles.formInput}
-              value={editProfileForm.email}
-              onChangeText={(text) => setEditProfileForm({ ...editProfileForm, email: text })}
-              placeholder="e.g. ameer@speakstep.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            <View style={[styles.previewActionsRow, { marginTop: 12 }]}>
-              <TouchableOpacity
-                style={styles.outlineBtn}
-                onPress={() => setShowEditProfileModal(false)}
-              >
-                <Text style={styles.outlineBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.solidBlueBtn}
-                onPress={handleSaveProfile}
-              >
-                <Text style={styles.solidBlueBtnText}>Save Changes</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
       </Modal>
 
       {/* ==========================================
@@ -2704,7 +3473,7 @@ export default function TeacherDashboardScreen() {
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitleText}>Change Password</Text>
               <TouchableOpacity onPress={() => setShowChangePasswordModal(false)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
+                <X size={20} color={colors.text} />
               </TouchableOpacity>
             </View>
 
@@ -2765,11 +3534,7 @@ export default function TeacherDashboardScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxWidth: 360, alignItems: 'center' }]}>
             <View style={[styles.menuIconCircle, { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FEE2E2', marginBottom: 12 }]}>
-              <Svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-                <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M16 17l5-5-5-5" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M21 12H9" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
+              <LogOut size={26} color="#DC2626" />
             </View>
             <Text style={[styles.modalPatientName, { fontSize: 18, marginBottom: 6 }]}>Log Out of SpeakSteps?</Text>
             <Text style={[styles.subtextSmall, { textAlign: 'center', marginBottom: 20 }]}>
@@ -2812,15 +3577,11 @@ export default function TeacherDashboardScreen() {
           activeOpacity={0.7}
         >
           {activeTab === 'home' && <View style={styles.activeTabIndicator} />}
-          <Svg width="22" height="22" viewBox="0 0 24 24" fill={activeTab === 'home' ? (isDark ? '#38BDF8' : '#0284C7') : 'none'}>
-            <Path
-              d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"
-              stroke={activeTab === 'home' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
+          <Home
+            size={22}
+            color={activeTab === 'home' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
+            fill={activeTab === 'home' ? (isDark ? '#38BDF8' : '#0284C7') : 'none'}
+          />
           <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>Home</Text>
         </TouchableOpacity>
 
@@ -2831,27 +3592,10 @@ export default function TeacherDashboardScreen() {
           activeOpacity={0.7}
         >
           {activeTab === 'patients' && <View style={styles.activeTabIndicator} />}
-          <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21"
-              stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Circle cx="9" cy="7" r="4" stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted} strokeWidth="2" />
-            <Path
-              d="M23 21V19C22.9986 18.1771 22.7345 17.3789 22.2476 16.7208C21.7607 16.0628 21.0766 15.5783 20.3 15.34"
-              stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Path
-              d="M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89317 18.7122 8.75608 18.1676 9.45768C17.623 10.1593 16.8604 10.6597 16 10.88"
-              stroke={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </Svg>
+          <Users
+            size={22}
+            color={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
+          />
           <Text style={[styles.navLabel, activeTab === 'patients' && styles.navLabelActive]}>Patients</Text>
         </TouchableOpacity>
 
@@ -2865,27 +3609,10 @@ export default function TeacherDashboardScreen() {
           activeOpacity={0.7}
         >
           {activeTab === 'activities' && <View style={styles.activeTabIndicator} />}
-          <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <Circle cx="10" cy="8" r="4" stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted} strokeWidth="2" />
-            <Path
-              d="M2 20C2 16.6863 5.58172 14 10 14C14.4183 14 18 16.6863 18 20"
-              stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Path
-              d="M17 7C17.5 7.8 18 8.8 18 10C18 11.2 17.5 12.2 17 13"
-              stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Path
-              d="M20 5C21 6.5 22 8.2 22 10C22 11.8 21 13.5 20 15"
-              stroke={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </Svg>
+          <Speech
+            size={22}
+            color={activeTab === 'activities' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
+          />
           <Text style={[styles.navLabel, activeTab === 'activities' && styles.navLabelActive]}>Activities</Text>
         </TouchableOpacity>
 
@@ -2897,15 +3624,10 @@ export default function TeacherDashboardScreen() {
         >
           {activeTab === 'reviews' && <View style={styles.activeTabIndicator} />}
           <View>
-            <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                stroke={activeTab === 'reviews' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Star
+              size={22}
+              color={activeTab === 'reviews' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
+            />
             {pendingReviewsCount > 0 && (
               <View style={styles.starBadgeContainer}>
                 <Text style={styles.starBadgeText}>{pendingReviewsCount}</Text>
@@ -3293,6 +4015,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     },
     subTabInactive: {
       paddingVertical: 8,
+      marginRight: 20,
     },
     subTabInactiveText: {
       fontSize: 13,
@@ -3301,30 +4024,342 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     activitySearchRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: 14,
     },
     activitySearchInputWrapper: {
       flex: 1,
-      height: 40,
+      height: 42,
       flexDirection: 'row',
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 12,
       backgroundColor: colors.card,
-      paddingHorizontal: 10,
-      marginRight: 8,
+      paddingHorizontal: 12,
+      marginRight: 10,
     },
     createTaskButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 42,
       backgroundColor: '#0284C7',
-      paddingVertical: 10,
-      paddingHorizontal: 12,
+      paddingHorizontal: 14,
       borderRadius: 12,
+      marginRight: 10,
     },
     createTaskButtonText: {
       color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    activityFilterBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    activityFilterBtnActive: {
+      borderColor: '#0284C7',
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+    },
+    activityFilterIconWrap: {
+      position: 'relative',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    activityFilterDot: {
+      position: 'absolute',
+      top: -2,
+      right: -5,
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: '#0284C7',
+    },
+    activityFilterPanel: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.card,
+      padding: 14,
+      marginBottom: 14,
+    },
+    activityFilterPanelHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    activityFilterPanelTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    activityFilterResetText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#0284C7',
+    },
+    activityFilterSectionHeading: {
       fontSize: 12,
       fontWeight: '700',
+      color: colors.textSub,
+      marginBottom: 8,
+    },
+    activityFilterPillsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    activityFilterPill: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      backgroundColor: colors.card,
+    },
+    activityFilterPillActive: {
+      borderColor: '#0284C7',
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+    },
+    activityFilterPillText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    activityFilterPillTextActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    // Word Bank Styles
+    wbSearchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    wbSearchInputWrapper: {
+      flex: 1,
+      height: 42,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      paddingHorizontal: 12,
+      marginRight: 8,
+    },
+    wbSearchInput: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.inputText,
+      paddingVertical: 0,
+    },
+    wbAddBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 42,
+      backgroundColor: '#0284C7',
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      marginRight: 8,
+    },
+    wbAddBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    wbFilterBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    wbFilterBtnActive: {
+      borderColor: '#0284C7',
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+    },
+    wbFilterPanel: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.card,
+      padding: 14,
+      marginBottom: 12,
+    },
+    wbFilterHeading: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSub,
+      marginBottom: 8,
+    },
+    wbFilterOptionsWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    wbChoicePill: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: colors.card,
+    },
+    wbChoicePillActive: {
+      borderColor: '#0284C7',
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+    },
+    wbChoicePillText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    wbChoicePillTextActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    wbChipsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 12,
+    },
+    wbChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#0284C7' : '#BAE6FD',
+      backgroundColor: colors.isDark ? '#082F49' : '#F0F9FF',
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    wbChipLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    wbAddForm: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.card,
+      padding: 14,
+      marginBottom: 14,
+    },
+    wbAddFormTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 12,
+    },
+    wbFormLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSub,
+      marginBottom: 6,
+    },
+    wbFormInput: {
+      height: 42,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      fontSize: 13,
+      color: colors.inputText,
+      backgroundColor: colors.inputBg,
+      marginBottom: 10,
+    },
+    wbSaveWordBtn: {
+      alignSelf: 'flex-end',
+      backgroundColor: '#0284C7',
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      marginTop: 12,
+    },
+    wbSaveWordBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    wbListHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+      marginTop: 4,
+    },
+    wbListTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    wbEditModeBtn: {
+      padding: 6,
+      borderRadius: 8,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    wbListCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.card,
+      overflow: 'hidden',
+      marginBottom: 20,
+    },
+    wbListRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      minHeight: 48,
+    },
+    wbWordText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    wbSoundBadgeWrap: {
+      marginLeft: 8,
+      backgroundColor: colors.isDark ? '#1E3A5F' : '#F1F5F9',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    wbSoundBadgeText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.isDark ? '#7DD3FC' : '#0369A1',
+    },
+    wbPositionBadge: {
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    wbPositionBadgeText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    wbDeleteBtn: {
+      padding: 4,
     },
     chipsScroll: {
       marginBottom: 14,
@@ -3608,7 +4643,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     },
     outlineBtn: {
       flex: 1,
-      height: 44,
+      height: 48,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.isDark ? '#38BDF8' : '#0284C7',
@@ -3618,13 +4653,13 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       backgroundColor: colors.card,
     },
     outlineBtnText: {
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: '700',
       color: colors.isDark ? '#38BDF8' : '#0284C7',
     },
     solidBlueBtn: {
       flex: 1,
-      height: 44,
+      height: 48,
       borderRadius: 12,
       backgroundColor: '#0284C7',
       justifyContent: 'center',
@@ -3632,9 +4667,25 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       marginLeft: 8,
     },
     solidBlueBtnText: {
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: '700',
       color: '#FFFFFF',
+    },
+    continueBtn: {
+      width: '100%',
+      height: 50,
+      borderRadius: 12,
+      backgroundColor: '#0284C7',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 20,
+      marginBottom: 20,
+    },
+    continueBtnText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      letterSpacing: 0.3,
     },
     // Edit Wizard
     editWizardContainer: {
@@ -4189,26 +5240,29 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       color: colors.textSub,
     },
     reviewStatusBadge: {
-      paddingVertical: 4,
-      paddingHorizontal: 10,
-      borderRadius: 12,
+      width: 78,
+      height: 26,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
       marginRight: 8,
     },
     reviewStatusPending: {
-      backgroundColor: colors.peachPillBg,
+      backgroundColor: colors.isDark ? 'rgba(196, 139, 90, 0.22)' : colors.peachPillBg,
     },
     reviewStatusReviewed: {
-      backgroundColor: '#DCFCE7',
+      backgroundColor: colors.isDark ? 'rgba(67, 176, 92, 0.22)' : '#DCFCE7',
     },
     reviewStatusText: {
       fontSize: 11,
       fontWeight: '700',
+      textAlign: 'center',
     },
     reviewStatusTextPending: {
-      color: colors.peachPillText,
+      color: colors.isDark ? '#FED7AA' : colors.peachPillText,
     },
     reviewStatusTextReviewed: {
-      color: '#16A34A',
+      color: colors.isDark ? '#86EFAC' : '#16A34A',
     },
     reviewChevron: {
       fontSize: 16,
@@ -4971,6 +6025,396 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       fontFamily: 'SourGummy-Bold',
       fontSize: 16,
       color: colors.heading,
+    },
+
+    // --- New Settings & Profile Modal Styles ---
+    newHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 8,
+    },
+    newBackButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#334155' : '#E2E8F0',
+      backgroundColor: colors.isDark ? '#1E293B' : '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newBackButtonText: {
+      fontSize: 22,
+      fontWeight: '600',
+      color: colors.text,
+      marginTop: -2,
+    },
+    newHeaderTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newProfileCard: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#334155' : '#E2E8F0',
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    newProfileAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    newProfileAvatarImg: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+    },
+    newProfileAvatarText: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    newProfileInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    newProfileNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    newProfileName: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newVerifiedBadge: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: '#22C55E',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newVerifiedCheck: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#FFFFFF',
+    },
+    newProfileSubtitle: {
+      fontSize: 12,
+      color: colors.textSub,
+    },
+    newProfileHint: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    newChevronRight: {
+      fontSize: 20,
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
+    newSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 14,
+      marginBottom: 4,
+    },
+    newSectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newSectionTitleStandalone: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: 14,
+      marginBottom: 6,
+    },
+    newSubSectionTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSub,
+      marginTop: 12,
+      marginBottom: 4,
+    },
+    newCard: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#334155' : '#E2E8F0',
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      overflow: 'hidden',
+    },
+    newToggleRow: {
+      minHeight: 56,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    newToggleRowCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    newRowTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newRowSubtitle: {
+      fontSize: 12,
+      color: colors.textSub,
+    },
+    newDivider: {
+      height: 1,
+      backgroundColor: colors.isDark ? '#334155' : '#F1F5F9',
+    },
+    newShieldIcon: {
+      marginRight: 2,
+    },
+    newThemeRow: {
+      minHeight: 54,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    newThemeLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    newThemeSegmentControl: {
+      flexDirection: 'row',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#334155' : '#E2E8F0',
+      backgroundColor: colors.isDark ? '#0F172A' : '#F8FAFC',
+      padding: 2,
+      gap: 2,
+    },
+    newThemeSegmentBtn: {
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newThemeSegmentBtnActive: {
+      backgroundColor: colors.isDark ? 'rgba(196,139,90,0.28)' : 'rgba(196,139,90,0.18)',
+    },
+    newThemeSegmentText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    newThemeSegmentTextActive: {
+      color: colors.isDark ? '#FED7AA' : '#C48B5A',
+      fontWeight: '700',
+    },
+    newSessionRow: {
+      minHeight: 54,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    newThisDeviceBadge: {
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      backgroundColor: colors.isDark ? 'rgba(34,197,94,0.22)' : 'rgba(34,197,94,0.15)',
+    },
+    newThisDeviceText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#22C55E',
+    },
+    newRevokeBtn: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#7F1D1D' : '#FCA5A5',
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 4,
+      backgroundColor: colors.isDark ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.06)',
+    },
+    newRevokeBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.isDark ? '#FCA5A5' : '#DC2626',
+    },
+    newAboutRow: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 2,
+    },
+    newSignOutBtn: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#C48B5A' : '#C48B5A',
+      backgroundColor: colors.isDark ? 'rgba(196,139,90,0.14)' : 'rgba(196,139,90,0.08)',
+      borderRadius: 12,
+      height: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      alignSelf: 'center',
+      width: 200,
+      marginTop: 14,
+      marginBottom: 24,
+    },
+    newSignOutBtnText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.isDark ? '#FED7AA' : '#C48B5A',
+    },
+    newUploadPhotoCard: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#334155' : '#E2E8F0',
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      paddingVertical: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+    },
+    newPhotoAvatarWrapper: {
+      position: 'relative',
+    },
+    newPhotoAvatar: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    newPhotoAvatarImg: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+    },
+    newPhotoAvatarText: {
+      fontSize: 32,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    newCameraBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 2,
+      borderColor: colors.card,
+      backgroundColor: colors.isDark ? '#334155' : '#0F172A',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newUploadPhotoLabel: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newProfileFieldRow: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 4,
+    },
+    newFieldLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textSub,
+    },
+    newFieldInput: {
+      fontSize: 14,
+      color: colors.text,
+      padding: 0,
+      minHeight: 22,
+    },
+    newSpecialtyContainer: {
+      gap: 12,
+    },
+    newChipsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    newChip: {
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    newChipText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    newChipRemove: {
+      padding: 2,
+    },
+    newChipX: {
+      fontSize: 10,
+      fontWeight: '700',
+    },
+    newAddSpecialtyRow: {
+      width: '100%',
+    },
+    newAddSpecialtyInput: {
+      height: 42,
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#334155' : '#E2E8F0',
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      fontSize: 13,
+      color: colors.text,
+    },
+    newSaveContainer: {
+      alignItems: 'center',
+      marginTop: 16,
+      marginBottom: 28,
+    },
+    newSaveCredentialsBtn: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#C48B5A' : '#C48B5A',
+      backgroundColor: colors.isDark ? 'rgba(196,139,90,0.18)' : 'rgba(196,139,90,0.12)',
+      borderRadius: 10,
+      paddingHorizontal: 36,
+      paddingVertical: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newSaveCredentialsBtnText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.isDark ? '#FED7AA' : '#C48B5A',
     },
   });
 }
