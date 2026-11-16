@@ -13,6 +13,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Modal,
+  Switch,
+  Pressable,
   useWindowDimensions,
 } from 'react-native';
 
@@ -32,14 +35,42 @@ const MOCK_ACCOUNTS = [
   { id: '2', name: 'John Doe', email: 'john.doe@example.com', role: 'Teacher', status: 'Active', roleColor: '#16A34A', roleBg: '#DCFCE7', statusColor: '#16A34A', statusBg: '#DCFCE7', avatar: require('../../../assets/images/person4.png') },
 ];
 
+const INITIAL_NOTIFICATIONS = [
+  { id: 'notif-1', name: 'System', action: 'New Therapist Registration', detail: 'Khyl Shervin Sude requested access.', time: '5m ago', unread: true },
+  { id: 'notif-2', name: 'Security', action: 'Account Suspended', detail: 'Patient account linked to Ana Reyes suspended due to inactivity.', time: '1h ago', unread: true },
+  { id: 'notif-3', name: 'System', action: 'Database Backup', detail: 'Weekly cloud backup completed successfully.', time: '3h ago', unread: false },
+];
+
 export default function AdminDashboardScreen() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'request' | 'accounts'>('dashboard');
   const [requestSubTab, setRequestSubTab] = useState('All');
   const [accountSubTab, setAccountSubTab] = useState('All');
-  
-  // State to control whether the sidebar is expanded or collapsed
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Custom Alert State
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    title: '',
+    message: '',
+    confirmText: '',
+    confirmColor: '#0284C7',
+    iconName: 'warning',
+    onConfirm: () => {},
+  });
+
+  // ==========================================
+  // --- MENU & SETTINGS MODAL STATES ---
+  // ==========================================
+  const [showMenu, setShowMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  
+  // Settings Toggles
+  const [newRequestToggle, setNewRequestToggle] = useState(true);
+  const [securityAlertsToggle, setSecurityAlertsToggle] = useState(true);
+  
   // Desktop check
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
@@ -52,21 +83,72 @@ export default function AdminDashboardScreen() {
 
   if (!fontsLoaded) return null;
 
-  const renderDashboard = () => (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.logoImage} contentFit="contain" />
-          <View>
-            <Text style={styles.headerTitle}>Welcome, Admin</Text>
-          </View>
-        </View>
-        {!isDesktop && (
-          <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/(admin)/admin-login' as any)}>
-            <Ionicons name="log-out-outline" size={24} color="#FFFFFF" />
+  // Helper to trigger custom warning alerts
+  const triggerAlert = (title: string, message: string, confirmText: string, confirmColor: string, iconName: any, onConfirm: () => void) => {
+    setShowMenu(false); 
+    setShowSettingsModal(false);
+    setAlertConfig({ title, message, confirmText, confirmColor, iconName, onConfirm });
+    setAlertVisible(true);
+  };
+
+  // ==========================================
+  // --- UNIFIED TOP HEADER FOR ALL TABS ---
+  // ==========================================
+  const renderTopHeader = (title: string, showBackButton = false) => (
+    <View style={styles.topHeader}>
+      <View style={styles.headerLeft}>
+        {showBackButton ? (
+          <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={styles.backButtonBlue}>
+            <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={styles.hamburgerBtn}
+            onPress={() => {
+              setShowNotificationsDropdown(false);
+              setShowMenu(!showMenu);
+            }}
+          >
+            <Ionicons name="menu" size={28} color="#0284C7" />
           </TouchableOpacity>
         )}
+        {!showBackButton && <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.logoImage} contentFit="contain" />}
+        <Text style={styles.headerTitle}>{title}</Text>
       </View>
+
+      <View style={styles.headerRight}>
+        <TouchableOpacity 
+          style={styles.headerIconBtn} 
+          onPress={() => {
+            setShowMenu(false);
+            setShowNotificationsDropdown(!showNotificationsDropdown);
+          }}
+        >
+          <Ionicons name="notifications-outline" size={24} color="#0284C7" />
+          {notifications.some((n) => n.unread) && <View style={styles.notificationDot} />}
+        </TouchableOpacity>
+        
+        {/* Desktop Navbar Links */}
+        {isDesktop && (
+          <View style={styles.desktopNavLinks}>
+            <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={[styles.desktopNavLink, activeTab === 'dashboard' && styles.desktopNavLinkActive]}>
+              <Text style={[styles.desktopNavText, activeTab === 'dashboard' && styles.desktopNavTextActive]}>Dashboard</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setActiveTab('request')} style={[styles.desktopNavLink, activeTab === 'request' && styles.desktopNavLinkActive]}>
+              <Text style={[styles.desktopNavText, activeTab === 'request' && styles.desktopNavTextActive]}>Requests</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setActiveTab('accounts')} style={[styles.desktopNavLink, activeTab === 'accounts' && styles.desktopNavLinkActive]}>
+              <Text style={[styles.desktopNavText, activeTab === 'accounts' && styles.desktopNavTextActive]}>Accounts</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderDashboard = () => (
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
+      {renderTopHeader('Welcome, Admin')}
 
       <View style={styles.heroCard}>
         <Text style={styles.heroLabel}>Active Accounts</Text>
@@ -156,25 +238,22 @@ export default function AdminDashboardScreen() {
 
   const renderRequests = () => (
     <View style={styles.tabContainer}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={styles.backButtonBlue}>
-          <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Requests</Text>
-      </View>
-      <View style={styles.subTabsContainer}>
-        {['All', 'Pending (3)', 'Approved (4)', 'Rejected (0)'].map((tab) => (
-          <TouchableOpacity key={tab} onPress={() => setRequestSubTab(tab)} style={styles.subTabBtn}>
-            <Text style={[styles.subTabText, requestSubTab === tab && styles.subTabTextActive]}>{tab}</Text>
-            {requestSubTab === tab && <View style={styles.subTabIndicator} />}
-          </TouchableOpacity>
-        ))}
-      </View>
-      
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
+        
+        {/* Header and Sub-tabs moved inside the constrained scroll view */}
+        {renderTopHeader('Requests', true)}
+        
+        <View style={styles.subTabsContainer}>
+          {['All', 'Pending (3)', 'Approved (4)', 'Rejected (0)'].map((tab) => (
+            <TouchableOpacity key={tab} onPress={() => setRequestSubTab(tab)} style={styles.subTabBtn}>
+              <Text style={[styles.subTabText, requestSubTab === tab && styles.subTabTextActive]}>{tab}</Text>
+              {requestSubTab === tab && <View style={styles.subTabIndicator} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+        
         {MOCK_REQUESTS.map((req, i) => (
           <View key={i} style={styles.fullCard}>
-            
             <View style={styles.cardHeaderRow}>
               <Image source={req.avatar} style={styles.cardAvatarLarge} contentFit="cover" />
               <View style={styles.cardHeaderInfo}>
@@ -201,14 +280,23 @@ export default function AdminDashboardScreen() {
             </View>
 
             <View style={styles.cardActionsRow}>
-              <TouchableOpacity style={styles.rejectBtn}>
+              <TouchableOpacity 
+                style={styles.rejectBtn}
+                onPress={() => triggerAlert(
+                  'Reject Request',
+                  `Are you sure you want to reject ${req.name}'s request? This action cannot be undone.`,
+                  'Reject',
+                  '#EF4444',
+                  'close-circle',
+                  () => console.log('Rejected:', req.name)
+                )}
+              >
                 <Text style={styles.rejectBtnText}>Reject</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.approveBtn}>
                 <Text style={styles.approveBtnText}>Approve Request</Text>
               </TouchableOpacity>
             </View>
-
           </View>
         ))}
       </ScrollView>
@@ -217,22 +305,20 @@ export default function AdminDashboardScreen() {
 
   const renderAccounts = () => (
     <View style={styles.tabContainer}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={styles.backButtonBlue}>
-          <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Accounts</Text>
-      </View>
-      <View style={styles.subTabsContainer}>
-        {['All', 'Therapist', 'Teacher', 'Patient'].map((tab) => (
-          <TouchableOpacity key={tab} onPress={() => setAccountSubTab(tab)} style={styles.subTabBtn}>
-            <Text style={[styles.subTabText, accountSubTab === tab && styles.subTabTextActive]}>{tab}</Text>
-            {accountSubTab === tab && <View style={styles.subTabIndicator} />}
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
+        
+        {/* Header and Sub-tabs moved inside the constrained scroll view */}
+        {renderTopHeader('Accounts', true)}
+        
+        <View style={styles.subTabsContainer}>
+          {['All', 'Therapist', 'Teacher', 'Patient'].map((tab) => (
+            <TouchableOpacity key={tab} onPress={() => setAccountSubTab(tab)} style={styles.subTabBtn}>
+              <Text style={[styles.subTabText, accountSubTab === tab && styles.subTabTextActive]}>{tab}</Text>
+              {accountSubTab === tab && <View style={styles.subTabIndicator} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {MOCK_ACCOUNTS.map((acc, i) => (
           <View key={i} style={styles.fullCard}>
              <View style={styles.cardHeaderRow}>
@@ -256,11 +342,32 @@ export default function AdminDashboardScreen() {
             </View>
 
             <View style={styles.cardActionsRow}>
-              <TouchableOpacity style={styles.editBtn}>
+              <TouchableOpacity 
+                style={styles.editBtn}
+                onPress={() => triggerAlert(
+                  'Edit Account',
+                  `Are you sure you want to modify ${acc.name}'s account settings?`,
+                  'Edit Details',
+                  '#0284C7',
+                  'create',
+                  () => console.log('Edit Account:', acc.name)
+                )}
+              >
                 <Ionicons name="create-outline" size={16} color="#0284C7" />
                 <Text style={styles.editBtnText}>Edit</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.suspendBtn}>
+              
+              <TouchableOpacity 
+                style={styles.suspendBtn}
+                onPress={() => triggerAlert(
+                  'Suspend Account',
+                  `Are you sure you want to suspend ${acc.name}? They will instantly lose access to the system.`,
+                  'Suspend',
+                  '#EF4444',
+                  'alert-circle',
+                  () => console.log('Suspended:', acc.name)
+                )}
+              >
                 <Ionicons name="ban-outline" size={16} color="#DC2626" />
                 <Text style={styles.suspendBtnText}>Suspend</Text>
               </TouchableOpacity>
@@ -281,50 +388,8 @@ export default function AdminDashboardScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <StatusBar barStyle="dark-content" />
 
-        <View style={[styles.mainWrapper, isDesktop && { flexDirection: 'row' }]}>
+        <View style={styles.mainWrapper}>
           
-          {/* DESKTOP SIDEBAR - Dynamic Width based on isSidebarOpen state */}
-          {isDesktop && (
-            <View style={[styles.desktopSidebar, { width: isSidebarOpen ? 250 : 88, paddingHorizontal: isSidebarOpen ? 20 : 12 }]}>
-              
-              {/* Sidebar Collapse Toggle Button */}
-              <TouchableOpacity 
-                onPress={() => setIsSidebarOpen(!isSidebarOpen)}
-                style={{ alignItems: isSidebarOpen ? 'flex-end' : 'center', marginBottom: 15, paddingTop: 5 }}
-              >
-                <Ionicons name={isSidebarOpen ? "chevron-back" : "menu"} size={26} color="#94A3B8" />
-              </TouchableOpacity>
-
-              {/* Dynamic Brand Logo & Text */}
-              <View style={styles.sidebarBrand}>
-                <Image source={require('../../../assets/images/bird-logo.gif')} style={{width: isSidebarOpen ? 50 : 40, height: isSidebarOpen ? 50 : 40, marginBottom: isSidebarOpen ? 10 : 0}} contentFit="contain" />
-                {isSidebarOpen && <Text style={{fontFamily: 'Inter-Bold', color: '#0284C7', fontSize: 20}}>SpeakSteps</Text>}
-              </View>
-
-              {/* Dynamic Navigation Links */}
-              <View style={{flex: 1, marginTop: 40}}>
-                <TouchableOpacity style={[styles.sidebarNavBtn, activeTab === 'dashboard' && styles.sidebarNavActive, !isSidebarOpen && { justifyContent: 'center' }]} onPress={() => setActiveTab('dashboard')}>
-                  <Ionicons name="home" size={22} color={activeTab === 'dashboard' ? '#FFFFFF' : '#64748B'} />
-                  {isSidebarOpen && <Text style={[styles.sidebarNavText, activeTab === 'dashboard' && styles.sidebarNavTextActive]}>Dashboard</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.sidebarNavBtn, activeTab === 'request' && styles.sidebarNavActive, !isSidebarOpen && { justifyContent: 'center' }]} onPress={() => setActiveTab('request')}>
-                  <Ionicons name="clipboard" size={22} color={activeTab === 'request' ? '#FFFFFF' : '#64748B'} />
-                  {isSidebarOpen && <Text style={[styles.sidebarNavText, activeTab === 'request' && styles.sidebarNavTextActive]}>Requests</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.sidebarNavBtn, activeTab === 'accounts' && styles.sidebarNavActive, !isSidebarOpen && { justifyContent: 'center' }]} onPress={() => setActiveTab('accounts')}>
-                  <Ionicons name="people" size={22} color={activeTab === 'accounts' ? '#FFFFFF' : '#64748B'} />
-                  {isSidebarOpen && <Text style={[styles.sidebarNavText, activeTab === 'accounts' && styles.sidebarNavTextActive]}>Accounts</Text>}
-                </TouchableOpacity>
-              </View>
-
-              {/* Dynamic Log Out Button */}
-              <TouchableOpacity style={[styles.sidebarLogoutBtn, !isSidebarOpen && { justifyContent: 'center' }]} onPress={() => router.replace('/(admin)/admin-login' as any)}>
-                <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-                {isSidebarOpen && <Text style={{fontFamily: 'Inter-Bold', color: '#EF4444', marginLeft: 10}}>Log Out</Text>}
-              </TouchableOpacity>
-            </View>
-          )}
-
           <View style={{ flex: 1, backgroundColor: 'transparent' }}>
             {activeTab === 'dashboard' && renderDashboard()}
             {activeTab === 'request' && renderRequests()}
@@ -350,6 +415,221 @@ export default function AdminDashboardScreen() {
           )}
 
         </View>
+
+        {/* ==========================================
+            --- HAMBURGER DROPDOWN MENU ---
+            ========================================== */}
+        {showMenu && (
+          <Modal transparent animationType="fade" visible={showMenu} onRequestClose={() => setShowMenu(false)}>
+            <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
+              <View style={[styles.menuDropdownContainer, isDesktop && { top: 76, left: 16 }]}>
+                <TouchableOpacity
+                  style={styles.menuUserHeader}
+                  activeOpacity={0.8}
+                  onPress={() => { setShowMenu(false); setShowProfileModal(true); }}
+                >
+                  <View style={styles.menuAvatarCircle}>
+                    <Text style={styles.menuAvatarText}>A</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.menuUserName} numberOfLines={1}>Admin User</Text>
+                    <Text style={styles.menuUserRole} numberOfLines={1}>System Administrator</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <View style={styles.menuSectionDivider} />
+
+                <TouchableOpacity style={styles.menuOptionRow} activeOpacity={0.7} onPress={() => { setShowMenu(false); setShowProfileModal(true); }}>
+                  <View style={styles.menuIconCircle}>
+                    <Ionicons name="person-outline" size={16} color="#0284C7" />
+                  </View>
+                  <Text style={styles.menuOptionLabel}>Profile</Text>
+                  <Text style={styles.menuOptionChevron}>›</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.menuOptionRow} activeOpacity={0.7} onPress={() => { setShowMenu(false); setShowSettingsModal(true); }}>
+                  <View style={styles.menuIconCircle}>
+                    <Ionicons name="settings-outline" size={16} color="#0284C7" />
+                  </View>
+                  <Text style={styles.menuOptionLabel}>Settings</Text>
+                  <Text style={styles.menuOptionChevron}>›</Text>
+                </TouchableOpacity>
+
+                <View style={styles.menuSectionDivider} />
+
+                <TouchableOpacity
+                  style={styles.menuOptionRow}
+                  activeOpacity={0.7}
+                  onPress={() => triggerAlert(
+                    'Log Out',
+                    'Are you sure you want to log out of the Admin Dashboard?',
+                    'Log Out',
+                    '#EF4444',
+                    'log-out',
+                    () => router.replace('/(admin)/admin-login' as any)
+                  )}
+                >
+                  <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                    <Ionicons name="log-out-outline" size={16} color="#EF4444" />
+                  </View>
+                  <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontFamily: 'Inter-Bold' }]}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Modal>
+        )}
+
+        {/* ==========================================
+            --- NOTIFICATIONS POPOVER ---
+            ========================================== */}
+        {showNotificationsDropdown && (
+          <Modal transparent animationType="fade" visible={showNotificationsDropdown} onRequestClose={() => setShowNotificationsDropdown(false)}>
+            <Pressable style={styles.menuOverlay} onPress={() => setShowNotificationsDropdown(false)}>
+              <View style={styles.notifDropdownContainer}>
+                <View style={styles.notifDropdownHeaderRow}>
+                  <Text style={styles.notifDropdownTitle}>Notifications</Text>
+                  <View style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'All' && styles.notifPillActive]} onPress={() => setNotificationsFilter('All')}>
+                      <Text style={[styles.notifPillText, notificationsFilter === 'All' && styles.notifPillTextActive]}>All</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'Unread' && styles.notifPillActive]} onPress={() => setNotificationsFilter('Unread')}>
+                      <Text style={[styles.notifPillText, notificationsFilter === 'Unread' && styles.notifPillTextActive]}>Unread</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                  {notifications.filter((item) => (notificationsFilter === 'Unread' ? item.unread : true)).map((item) => (
+                    <View key={item.id} style={styles.notifItemRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.notifItemTitle}><Text style={{ fontFamily: 'Inter-Bold' }}>{item.name} </Text>{item.action}</Text>
+                        <Text style={styles.notifItemDetail}>{item.detail}</Text>
+                      </View>
+                      <Text style={styles.notifItemTime}>{item.time}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity style={styles.markAllReadBtn} onPress={() => setNotifications(notifications.map(n => ({ ...n, unread: false })))}>
+                  <Text style={styles.markAllReadBtnText}>Mark All as Read</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Modal>
+        )}
+
+        {/* ==========================================
+            --- SETTINGS MODAL ---
+            ========================================== */}
+        <Modal visible={showSettingsModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSettingsModal(false)}>
+          <SafeAreaView style={styles.settingsModalContainer}>
+            <View style={styles.settingsTopBar}>
+              <Text style={styles.settingsNavTitle}>Admin Settings</Text>
+              <TouchableOpacity onPress={() => setShowSettingsModal(false)} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
+              <View style={styles.settingsProfileHeaderRow}>
+                <View style={styles.settingsAvatarCircle}><Text style={styles.settingsAvatarLetter}>A</Text></View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={styles.settingsDoctorName}>Admin User</Text>
+                  <Text style={styles.settingsDoctorRole}>System Administrator</Text>
+                </View>
+              </View>
+
+              <Text style={styles.settingsSectionTitle}>Notifications</Text>
+              <View style={styles.settingsCard}>
+                <View style={styles.settingsCardRow}>
+                  <View style={{ flex: 1, marginRight: 10 }}><Text style={styles.settingsRowTitle}>New Account Requests</Text><Text style={styles.settingsRowSub}>Alerts for new signups</Text></View>
+                  <Switch value={newRequestToggle} onValueChange={setNewRequestToggle} trackColor={{ false: '#CBD5E1', true: '#0284C7' }} thumbColor="#FFFFFF" />
+                </View>
+                <View style={styles.settingsRowDivider} />
+                <View style={styles.settingsCardRow}>
+                  <View style={{ flex: 1, marginRight: 10 }}><Text style={styles.settingsRowTitle}>Security Alerts</Text><Text style={styles.settingsRowSub}>Unusual login attempts</Text></View>
+                  <Switch value={securityAlertsToggle} onValueChange={setSecurityAlertsToggle} trackColor={{ false: '#CBD5E1', true: '#0284C7' }} thumbColor="#FFFFFF" />
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.settingsLogoutButton} 
+                activeOpacity={0.8} 
+                onPress={() => triggerAlert('Log Out', 'Are you sure you want to log out?', 'Log Out', '#EF4444', 'log-out', () => router.replace('/(admin)/admin-login' as any))}
+              >
+                <Text style={styles.settingsLogoutButtonText}>Log Out</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
+        {/* ==========================================
+            --- PROFILE MODAL ---
+            ========================================== */}
+        <Modal visible={showProfileModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProfileModal(false)}>
+          <SafeAreaView style={styles.settingsModalContainer}>
+            <View style={styles.settingsTopBar}>
+              <Text style={styles.settingsNavTitle}>Admin Profile</Text>
+              <TouchableOpacity onPress={() => setShowProfileModal(false)} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
+              <View style={styles.profileHeroCard}>
+                <View style={styles.profileBigAvatarCircle}><Text style={styles.profileBigAvatarLetter}>A</Text></View>
+                <Text style={styles.profileHeroName}>Admin User</Text>
+                <Text style={styles.profileHeroRole}>System Administrator</Text>
+                <View style={styles.licenseBadge}><Text style={styles.licenseBadgeText}>Master Access</Text></View>
+              </View>
+              <Text style={styles.settingsSectionTitle}>System Credentials</Text>
+              <View style={styles.settingsCard}>
+                <View style={styles.settingsCardRow}><View><Text style={styles.settingsRowSub}>Role</Text><Text style={styles.settingsRowTitle}>Global Admin</Text></View></View>
+                <View style={styles.settingsRowDivider} />
+                <View style={styles.settingsCardRow}><View><Text style={styles.settingsRowSub}>Email Address</Text><Text style={styles.settingsRowTitle}>admin@speaksteps.com</Text></View></View>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
+        {/* ==========================================
+            --- PREMIUM CUSTOM WARNING MODAL ---
+            ========================================== */}
+        <Modal visible={alertVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.alertBox}>
+              
+              <View style={[styles.alertIconCircle, { backgroundColor: `${alertConfig.confirmColor}15` }]}>
+                <Ionicons 
+                  name={alertConfig.iconName as any} 
+                  size={36} 
+                  color={alertConfig.confirmColor} 
+                />
+              </View>
+
+              <Text style={styles.alertTitle}>{alertConfig.title}</Text>
+              <Text style={styles.alertMessage}>{alertConfig.message}</Text>
+              
+              <View style={styles.alertActions}>
+                <TouchableOpacity 
+                  style={styles.alertCancelBtn} 
+                  onPress={() => setAlertVisible(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.alertCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.alertConfirmBtn, { backgroundColor: alertConfig.confirmColor }]} 
+                  onPress={() => {
+                    alertConfig.onConfirm();
+                    setAlertVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.alertConfirmBtnText}>{alertConfig.confirmText}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     </ImageBackground>
   );
@@ -362,7 +642,7 @@ const styles = StyleSheet.create({
   
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 10 : 20,
+    paddingTop: Platform.OS === 'android' ? 10 : 20,
     paddingBottom: 100, 
   },
   desktopScrollContent: {
@@ -374,24 +654,35 @@ const styles = StyleSheet.create({
   },
   
   tabContainer: { flex: 1 },
-  
-  // Desktop Sidebar Base Styles
-  desktopSidebar: { backgroundColor: '#FFFFFF', borderRightWidth: 1, borderRightColor: '#E2E8F0', paddingVertical: 20 },
-  sidebarBrand: { alignItems: 'center', paddingBottom: 30, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  sidebarNavBtn: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, marginBottom: 8 },
-  sidebarNavActive: { backgroundColor: '#0284C7' },
-  sidebarNavText: { fontFamily: 'Inter-Medium', fontSize: 15, color: '#64748B', marginLeft: 12 },
-  sidebarNavTextActive: { color: '#FFFFFF', fontFamily: 'Inter-Bold' },
-  sidebarLogoutBtn: { flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: '#FEF2F2', borderRadius: 12 },
 
-  // Dashboard Styles
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  // ==========================================
+  // --- TOP HEADER (REPLACES DESKTOP SIDEBAR) ---
+  // ==========================================
+  topHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 24,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 10 : 0 
+  },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  logoImage: { width: 48, height: 48, marginRight: 10 },
-  headerTitle: { fontFamily: 'Inter-Bold', fontSize: 22, color: '#0284C7', letterSpacing: -0.5 },
-  headerSubtitle: { fontFamily: 'Inter-Medium', fontSize: 10, color: '#64748B', marginTop: 2 },
-  logoutButton: { width: 40, height: 40, borderRadius: 8, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center' },
+  hamburgerBtn: { padding: 8, marginRight: 8 },
+  backButtonBlue: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center', marginRight: 12, elevation: 2 },
+  logoImage: { width: 44, height: 44, marginRight: 10 },
+  headerTitle: { fontFamily: 'Inter-Bold', fontSize: 24, color: '#0284C7', letterSpacing: -0.5 },
   
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  headerIconBtn: { padding: 8, marginLeft: 4, position: 'relative' },
+  notificationDot: { position: 'absolute', top: 6, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+  
+  // Desktop Nav Links in Header
+  desktopNavLinks: { flexDirection: 'row', marginLeft: 16 },
+  desktopNavLink: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginLeft: 8 },
+  desktopNavLinkActive: { backgroundColor: '#F0F9FF' },
+  desktopNavText: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#64748B' },
+  desktopNavTextActive: { fontFamily: 'Inter-Bold', color: '#0284C7' },
+  
+  // Dashboard Metrics
   heroCard: { backgroundColor: '#0284C7', borderRadius: 16, padding: 20, marginBottom: 20, shadowColor: '#0284C7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 5 },
   heroLabel: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#E0F2FE', marginBottom: 4 },
   heroNumber: { fontFamily: 'Inter-Bold', fontSize: 42, color: '#FFFFFF', marginBottom: 16 },
@@ -433,10 +724,7 @@ const styles = StyleSheet.create({
   navTextActive: { color: '#0284C7', fontFamily: 'Inter-Bold' },
 
   // Tab Styles
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 10 : 20, paddingBottom: 10 },
-  backButtonBlue: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center', marginRight: 12, elevation: 2 },
-  topBarTitle: { fontFamily: 'Inter-Bold', fontSize: 24, color: '#0284C7' },
-  subTabsContainer: { flexDirection: 'row', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 10 },
+  subTabsContainer: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16, paddingBottom: 4 },
   subTabBtn: { paddingVertical: 12, paddingHorizontal: 10, marginRight: 8, position: 'relative' },
   subTabText: { fontFamily: 'Inter-Medium', fontSize: 12, color: '#64748B' },
   subTabTextActive: { color: '#0284C7', fontFamily: 'Inter-Bold' },
@@ -473,4 +761,147 @@ const styles = StyleSheet.create({
   editBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#0284C7', marginLeft: 6 },
   suspendBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
   suspendBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#DC2626', marginLeft: 6 },
+
+  // ==========================================
+  // --- DROP DOWN MENU STYLES ---
+  // ==========================================
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.4)' },
+  menuDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, left: 16, width: 240, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 10, shadowColor: '#000', shadowOpacity: 0.12, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  menuUserHeader: { flexDirection: 'row', alignItems: 'center', padding: 6, borderRadius: 10 },
+  menuAvatarCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' },
+  menuAvatarText: { fontSize: 16, fontFamily: 'Inter-Bold', color: '#0284C7' },
+  menuUserName: { fontSize: 13, fontFamily: 'Inter-Bold', color: '#1E293B' },
+  menuUserRole: { fontSize: 11, fontFamily: 'Inter-Medium', color: '#64748B' },
+  menuSectionDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 6 },
+  menuOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10 },
+  menuIconCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#F0F9FF', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  menuOptionLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter-Medium', color: '#1E293B' },
+  menuOptionChevron: { fontSize: 16, color: '#94A3B8', fontFamily: 'Inter-Bold' },
+
+  // ==========================================
+  // --- NOTIFICATIONS STYLES ---
+  // ==========================================
+  notifDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, right: 16, width: 320, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.14, shadowOffset: { width: 0, height: 6 }, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  notifDropdownHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  notifDropdownTitle: { fontSize: 15, fontFamily: 'Inter-Bold', color: '#1E293B' },
+  notifPill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginLeft: 6, backgroundColor: '#FFFFFF' },
+  notifPillActive: { backgroundColor: '#0284C7', borderColor: '#0284C7' },
+  notifPillText: { fontSize: 11, color: '#64748B', fontFamily: 'Inter-Medium' },
+  notifPillTextActive: { color: '#FFFFFF', fontFamily: 'Inter-Bold' },
+  notifItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  notifItemTitle: { fontSize: 12, color: '#1E293B', marginBottom: 2, lineHeight: 16, fontFamily: 'Inter-Regular' },
+  notifItemDetail: { fontSize: 11, color: '#64748B', lineHeight: 15, fontFamily: 'Inter-Regular' },
+  notifItemTime: { fontSize: 10, color: '#94A3B8', marginLeft: 8, fontFamily: 'Inter-Medium' },
+  markAllReadBtn: { marginTop: 10, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#F8FAFC' },
+  markAllReadBtnText: { fontSize: 11, color: '#64748B', fontFamily: 'Inter-Bold' },
+
+  // ==========================================
+  // --- SETTINGS/PROFILE MODAL STYLES ---
+  // ==========================================
+  settingsModalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  settingsTopBar: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  closeButton: { padding: 8 },
+  settingsNavTitle: { fontFamily: 'Inter-Bold', fontSize: 18, color: '#0F172A' },
+  settingsScrollContent: { padding: 20, paddingBottom: 40 },
+  settingsProfileHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
+  settingsAvatarCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' },
+  settingsAvatarLetter: { fontFamily: 'Inter-Bold', fontSize: 28, color: '#0284C7' },
+  settingsDoctorName: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#0F172A', marginBottom: 2 },
+  settingsDoctorRole: { fontSize: 12, fontFamily: 'Inter-Medium', color: '#475569', marginBottom: 2 },
+  settingsLicenseText: { fontSize: 11, color: '#94A3B8', fontFamily: 'Inter-Regular' },
+  settingsSectionTitle: { fontSize: 13, fontFamily: 'Inter-Bold', color: '#475569', marginBottom: 8, marginTop: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
+  settingsCard: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', marginBottom: 20 },
+  settingsCardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
+  settingsRowDivider: { height: 1, backgroundColor: '#F1F5F9', marginHorizontal: 16 },
+  settingsRowTitle: { fontSize: 14, fontFamily: 'Inter-Bold', color: '#1E293B', marginBottom: 2 },
+  settingsRowSub: { fontSize: 12, color: '#64748B', fontFamily: 'Inter-Regular' },
+  settingsLogoutButton: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 10, marginBottom: 10, borderWidth: 1, borderColor: '#FECACA' },
+  settingsLogoutButtonText: { fontSize: 14, fontFamily: 'Inter-Bold', color: '#DC2626' },
+  profileHeroCard: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', padding: 24, alignItems: 'center', marginBottom: 20 },
+  profileBigAvatarCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  profileBigAvatarLetter: { fontFamily: 'Inter-Bold', fontSize: 34, color: '#0284C7' },
+  profileHeroName: { fontFamily: 'Inter-Bold', fontSize: 20, color: '#0F172A', marginBottom: 4 },
+  profileHeroRole: { fontSize: 14, color: '#475569', fontFamily: 'Inter-Medium', marginBottom: 10 },
+  licenseBadge: { backgroundColor: '#F0F9FF', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD' },
+  licenseBadgeText: { fontSize: 11, color: '#0284C7', fontFamily: 'Inter-Bold' },
+
+  // ==========================================
+  // --- CUSTOM ALERT MODAL STYLES (PREMIUM)---
+  // ==========================================
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(15, 23, 42, 0.65)', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    padding: 20,
+  },
+  alertBox: { 
+    backgroundColor: '#FFFFFF', 
+    width: '100%', 
+    maxWidth: 380, 
+    borderRadius: 28, 
+    paddingTop: 32,
+    paddingBottom: 24,
+    paddingHorizontal: 24, 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 12 }, 
+    shadowOpacity: 0.15, 
+    shadowRadius: 24, 
+    elevation: 10 
+  },
+  alertIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  alertTitle: { 
+    fontFamily: 'Inter-Bold', 
+    fontSize: 22, 
+    color: '#0F172A', 
+    marginBottom: 12, 
+    textAlign: 'center' 
+  },
+  alertMessage: { 
+    fontFamily: 'Inter-Regular', 
+    fontSize: 15, 
+    color: '#475569', 
+    textAlign: 'center', 
+    marginBottom: 32, 
+    lineHeight: 22 
+  },
+  alertActions: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    width: '100%', 
+    gap: 12 
+  },
+  alertCancelBtn: { 
+    flex: 1, 
+    paddingVertical: 14, 
+    borderRadius: 14, 
+    backgroundColor: '#F1F5F9', 
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  alertCancelBtnText: { 
+    fontFamily: 'Inter-Bold', 
+    fontSize: 15, 
+    color: '#475569' 
+  },
+  alertConfirmBtn: { 
+    flex: 1, 
+    paddingVertical: 14, 
+    borderRadius: 14, 
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  alertConfirmBtnText: { 
+    fontFamily: 'Inter-Bold', 
+    fontSize: 15, 
+    color: '#FFFFFF' 
+  },
 });

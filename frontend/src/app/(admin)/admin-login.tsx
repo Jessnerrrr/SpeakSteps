@@ -69,7 +69,7 @@ export default function AdminLoginScreen() {
               <Image 
                 source={require('../../../assets/images/speaksteps-landing-wide.gif')} 
                 style={styles.sideDesignImage}
-                contentFit="cover" // Cover works perfectly with the wide GIF and a 50/50 split
+                contentFit="cover" 
               />
             </View>
           )}
@@ -185,7 +185,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'column' },
   desktopContainer: { flexDirection: 'row' },
 
-  // ADJUSTED: flex 1 guarantees exactly 50% width
   leftSideContainer: {
     flex: 1,
     height: '100%',
@@ -199,7 +198,6 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // ADJUSTED: flex 1 guarantees exactly 50% width
   rightSideContainer: {
     flex: 1, 
     justifyContent: 'center',
@@ -211,12 +209,17 @@ const styles = StyleSheet.create({
   },
 
   contentWrapper: { width: '100%', paddingHorizontal: 20, alignSelf: 'center' },
-  desktopContentWrapper: { width: '100%', maxWidth: 440, alignSelf: 'center' },
+  
+  // INCREASED MAX WIDTH: from 440 to 520 to balance the left side
+  desktopContentWrapper: { width: '100%', maxWidth: 520, alignSelf: 'center' },
   
   loginCard: { 
     backgroundColor: '#FFFFFF', 
     borderRadius: 16, 
-    padding: 32, 
+    
+    // INCREASED PADDING: from 32 to 40 to accommodate the wider card nicely
+    padding: 40, 
+    
     borderWidth: 1,          
     borderColor: '#E2E8F0',  
     shadowColor: '#000000', 
@@ -243,11 +246,11 @@ const styles = StyleSheet.create({
     color: '#FBBF24', 
   },
 
-  titleSection: { marginBottom: 24, alignItems: 'flex-start' },
+  titleSection: { marginBottom: 28, alignItems: 'flex-start' }, // Slightly more bottom margin
   pageTitle: { fontFamily: 'Inter-Bold', fontSize: 28, color: '#1E293B', marginBottom: 8 },
-  pageDescription: { fontFamily: 'Inter-Medium', fontSize: 13, color: '#94A3B8' },
+  pageDescription: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#94A3B8' }, // Slightly larger text
   
-  inputLabel: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#1E293B', marginBottom: 8 },
+  inputLabel: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#1E293B', marginBottom: 8 }, // Slightly larger text
   inputWrapper: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -255,15 +258,15 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0', 
     borderRadius: 8, 
     backgroundColor: '#FFFFFF', 
-    height: 48, 
-    paddingHorizontal: 12, 
-    marginBottom: 16 
+    height: 52, // Slightly taller input field to match the wider card
+    paddingHorizontal: 14, 
+    marginBottom: 20 
   },
   inputIcon: { marginRight: 10 },
-  textInput: { flex: 1, fontFamily: 'Inter-Medium', fontSize: 14, color: '#1E293B' },
+  textInput: { flex: 1, fontFamily: 'Inter-Medium', fontSize: 15, color: '#1E293B' },
   eyeButton: { padding: 4 },
   
-  optionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 4 },
+  optionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, marginTop: 4 }, // Increased margin
   checkboxWrapper: { flexDirection: 'row', alignItems: 'center' },
   checkbox: { width: 18, height: 18, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 4, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
   checkboxActive: { backgroundColor: '#0F69AF', borderColor: '#0F69AF' },
@@ -273,12 +276,12 @@ const styles = StyleSheet.create({
   loginBtn: { 
     flexDirection: 'row', 
     backgroundColor: '#0F69AF', 
-    height: 48, 
-    borderRadius: 24, 
+    height: 52, // Matched height of inputs
+    borderRadius: 26, // Rounded pill
     justifyContent: 'center', 
     alignItems: 'center', 
   },
-  loginBtnText: { fontFamily: 'Inter-Bold', fontSize: 15, color: '#FFFFFF' },
+  loginBtnText: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#FFFFFF' }, // Slightly larger text
 
   secureAccessFooter: {
     flexDirection: 'row',
