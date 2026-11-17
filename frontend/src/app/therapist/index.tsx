@@ -1,1 +1,1 @@
-export { default } from '@/Therapist-modules/therapist-homepage';
+export { default } from '@/Therapist/TherapistDashboard';

@@ -1,1 +1,1 @@
-export { default } from '@/Therapist-modules/therapist-activities/pages/ActivityDetailPage';
+export { TherapistActivityDetail as default } from '@/Therapist/TherapistActivities';
