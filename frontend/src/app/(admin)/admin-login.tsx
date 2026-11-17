@@ -209,24 +209,24 @@ const styles = StyleSheet.create({
   },
 
   contentWrapper: { width: '100%', paddingHorizontal: 20, alignSelf: 'center' },
-  
-  // INCREASED MAX WIDTH: from 440 to 520 to balance the left side
   desktopContentWrapper: { width: '100%', maxWidth: 520, alignSelf: 'center' },
   
   loginCard: { 
     backgroundColor: '#FFFFFF', 
     borderRadius: 16, 
-    
-    // INCREASED PADDING: from 32 to 40 to accommodate the wider card nicely
     padding: 40, 
     
+    // SOFTENED BORDER: Replaced hard hex color with a low-opacity rgba for a blended edge
     borderWidth: 1,          
-    borderColor: '#E2E8F0',  
+    borderColor: 'rgba(226, 232, 240, 0.4)',  
+    
+    // SOFTENED SHADOW: Lowered opacity and increased radius for a gentler, more embedded look
     shadowColor: '#000000', 
-    shadowOffset: { width: 0, height: 12 }, 
-    shadowOpacity: 0.08, 
-    shadowRadius: 24, 
-    elevation: 8,            
+    shadowOffset: { width: 0, height: 8 }, 
+    shadowOpacity: 0.04, 
+    shadowRadius: 30, 
+    elevation: 4,            
+    
     marginBottom: 24,
   },
   
@@ -246,11 +246,11 @@ const styles = StyleSheet.create({
     color: '#FBBF24', 
   },
 
-  titleSection: { marginBottom: 28, alignItems: 'flex-start' }, // Slightly more bottom margin
+  titleSection: { marginBottom: 28, alignItems: 'flex-start' },
   pageTitle: { fontFamily: 'Inter-Bold', fontSize: 28, color: '#1E293B', marginBottom: 8 },
-  pageDescription: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#94A3B8' }, // Slightly larger text
+  pageDescription: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#94A3B8' }, 
   
-  inputLabel: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#1E293B', marginBottom: 8 }, // Slightly larger text
+  inputLabel: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#1E293B', marginBottom: 8 },
   inputWrapper: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0', 
     borderRadius: 8, 
     backgroundColor: '#FFFFFF', 
-    height: 52, // Slightly taller input field to match the wider card
+    height: 52, 
     paddingHorizontal: 14, 
     marginBottom: 20 
   },
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   textInput: { flex: 1, fontFamily: 'Inter-Medium', fontSize: 15, color: '#1E293B' },
   eyeButton: { padding: 4 },
   
-  optionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, marginTop: 4 }, // Increased margin
+  optionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, marginTop: 4 },
   checkboxWrapper: { flexDirection: 'row', alignItems: 'center' },
   checkbox: { width: 18, height: 18, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 4, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
   checkboxActive: { backgroundColor: '#0F69AF', borderColor: '#0F69AF' },
@@ -276,12 +276,12 @@ const styles = StyleSheet.create({
   loginBtn: { 
     flexDirection: 'row', 
     backgroundColor: '#0F69AF', 
-    height: 52, // Matched height of inputs
-    borderRadius: 26, // Rounded pill
+    height: 52, 
+    borderRadius: 26,
     justifyContent: 'center', 
     alignItems: 'center', 
   },
-  loginBtnText: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#FFFFFF' }, // Slightly larger text
+  loginBtnText: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#FFFFFF' },
 
   secureAccessFooter: {
     flexDirection: 'row',
