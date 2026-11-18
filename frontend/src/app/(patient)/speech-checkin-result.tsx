@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ImageBackground,
@@ -12,10 +12,15 @@ import {
   SafeAreaView,
   StatusBar,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
 
 export default function SpeechCheckinResult() {
   const router = useRouter();
+  const { role } = useLocalSearchParams();
+
+  // State to control the custom alert modal
+  const [showSetupAlert, setShowSetupAlert] = useState(false);
 
   // Responsive Hooks
   const { width } = useWindowDimensions();
@@ -29,6 +34,20 @@ export default function SpeechCheckinResult() {
   });
 
   if (!fontsLoaded) return null;
+
+  // Function to show the custom alert modal before routing
+  const handleContinueToSetup = () => {
+    setShowSetupAlert(true);
+  };
+
+  // Function to proceed to the setup screen when they click the modal button
+  const proceedToSetup = () => {
+    setShowSetupAlert(false);
+    router.replace({
+      pathname: '/totp-setup',
+      params: { role: role }
+    } as any);
+  };
 
   return (
     <SafeAreaView style={styles.screenContainer}>
@@ -153,24 +172,12 @@ export default function SpeechCheckinResult() {
               </Text>
             </View>
 
-            {/* Bottom Buttons */}
+            {/* Bottom Buttons - Only Done button remaining */}
             <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={styles.startButton}
-                activeOpacity={0.85}
-                // UPDATED ROUTE: Goes straight to patient play area
-                onPress={() => router.replace('/sentences' as any)}
-              >
-                <Text style={styles.startButtonText}>
-                  Start Practicing ▶
-                </Text>
-              </TouchableOpacity>
-
               <TouchableOpacity
                 style={styles.doneButton}
                 activeOpacity={0.85}
-                // UPDATED ROUTE: Goes straight to parent dashboard
-                onPress={() => router.replace('/parent-dashboard' as any)}
+                onPress={handleContinueToSetup}
               >
                 <Text style={styles.doneButtonText}>Done ✓</Text>
               </TouchableOpacity>
@@ -178,6 +185,34 @@ export default function SpeechCheckinResult() {
 
           </View>
         </View>
+
+        {/* CUSTOM ALERT MODAL */}
+        <Modal
+          visible={showSetupAlert}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowSetupAlert(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.alertModalBox}>
+              <View style={styles.alertIconContainer}>
+                <Text style={styles.alertIcon}>🔒</Text>
+              </View>
+              <Text style={styles.alertTitle}>Secure Your Account</Text>
+              <Text style={styles.alertMessage}>
+                Before you can access your dashboard, you need to set up your Time-based OTP (Authenticator App) to keep your account secure.
+              </Text>
+              <TouchableOpacity
+                style={styles.alertButton}
+                onPress={proceedToSetup}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.alertButtonText}>Set Up Now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </ImageBackground>
     </SafeAreaView>
   );
@@ -447,7 +482,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  startButton: {
+  doneButton: {
     flex: 1,
     height: 46,
     backgroundColor: '#FEB723',
@@ -456,26 +491,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  startButtonText: {
+  doneButtonText: {
     fontFamily: 'SourGummy-Bold',
     color: '#FFFFFF',
     fontSize: 15,
   },
 
-  doneButton: {
-    width: 82,
-    height: 46,
+  // Custom Alert Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  alertModalBox: {
+    width: '100%',
+    maxWidth: 400,
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    borderWidth: 1.5,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
     borderColor: '#B0D5EC',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  alertIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#EAF6FC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alertIcon: {
+    fontSize: 32,
+  },
+  alertTitle: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 22,
+    color: '#0C66AD',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  alertMessage: {
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 15,
+    color: '#444444',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  alertButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: '#0C66AD',
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  doneButtonText: {
+  alertButtonText: {
     fontFamily: 'SourGummy-Bold',
-    fontSize: 15,
-    color: '#0C66AD',
+    fontSize: 16,
+    color: '#FFFFFF',
   },
 });

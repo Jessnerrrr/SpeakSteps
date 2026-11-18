@@ -59,47 +59,7 @@ export default function CreateAccountScreen() {
                 <Text style={styles.welcomeText}>Create an Account</Text>
                 <Text style={styles.subText}>Choose the type of account.</Text>
 
-                {/* Register as Therapist Button */}
-                <TouchableOpacity 
-                  style={styles.roleCard}
-                  activeOpacity={0.7}
-                  onPress={() => router.push('/register-therapist' as any)} 
-                >
-                  <Image 
-                    source={require('../../../assets/images/therapist_blue.gif')} 
-                    style={styles.gifIcon}
-                    contentFit="cover"
-                  />
-                  <View style={styles.roleTextContainer}>
-                    <Text style={styles.roleTitle}>Register as Therapist</Text>
-                    <Text style={styles.roleSubtitle}>Licensed and ID check required</Text>
-                  </View>
-                  <View style={styles.arrowCircle}>
-                    <Text style={styles.arrowText}>›</Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Register as Teacher Button */}
-                <TouchableOpacity 
-                  style={styles.roleCard}
-                  activeOpacity={0.7}
-                  onPress={() => router.push('/register-teacher' as any)} 
-                >
-                  <Image 
-                    source={require('../../../assets/images/teacher-icon.gif')} 
-                    style={styles.gifIcon}
-                    contentFit="cover"
-                  />
-                  <View style={styles.roleTextContainer}>
-                    <Text style={styles.roleTitle}>Register as Teacher</Text>
-                    <Text style={styles.roleSubtitle}>Parent / Guardian and Child</Text>
-                  </View>
-                  <View style={styles.arrowCircle}>
-                    <Text style={styles.arrowText}>›</Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Create Patient Account Button */}
+                {/* Create Patient Account Button ONLY */}
                 <TouchableOpacity 
                   style={styles.roleCard}
                   activeOpacity={0.7}

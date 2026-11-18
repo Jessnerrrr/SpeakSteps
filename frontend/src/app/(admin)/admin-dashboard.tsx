@@ -26,7 +26,7 @@ const RECENT_REQUESTS_DASHBOARD = [
   { id: '4', name: 'Lian Cruz', role: 'Patient', time: 'Yesterday AT 2:30 PM', status: 'Pending', avatar: require('../../../assets/images/person4.png') },
 ];
 
-// UPDATED WITH LIGHT PASTEL BACKGROUNDS SAMPLED FROM THE ROLE ICONS
+// EXACT COLORS EXTRACTED FROM YOUR UPLOADED PNGs
 const RECENT_ACTIVITIES_DASHBOARD = [
   {
     id: '1',
@@ -34,9 +34,9 @@ const RECENT_ACTIVITIES_DASHBOARD = [
     title: 'ANA REYES - ACCOUNT APPROVED',
     subtitle: 'Status updated from PENDING to ACTIVE • Edited by Admin',
     time: '2M AGO',
-    color: '#399D2F',
-    bgColor: '#DCF8C6',
-    borderColor: '#C0E9A8',
+    color: '#49A11B', // Exact Green Logo
+    bgColor: '#E2F7CE', // Exact Green Bg
+    borderColor: '#C6ECA7',
   },
   {
     id: '2',
@@ -44,9 +44,9 @@ const RECENT_ACTIVITIES_DASHBOARD = [
     title: 'MARK DIZON - ROLE UPDATED',
     subtitle: 'Assigned to Teacher • Edited by Super Admin',
     time: '1H AGO',
-    color: '#0066A4',
-    bgColor: '#CDE8F9',
-    borderColor: '#B0D3ED',
+    color: '#1173BA', // Exact Blue Logo
+    bgColor: '#DDF0F9', // Exact Blue Bg
+    borderColor: '#B9DFEE',
   },
   {
     id: '3',
@@ -54,9 +54,9 @@ const RECENT_ACTIVITIES_DASHBOARD = [
     title: 'S-2026-003 - PROFILE EDITED',
     subtitle: 'Updated contact information • Edited by Admin',
     time: '2H AGO',
-    color: '#C68700',
-    bgColor: '#FCE19C',
-    borderColor: '#F3DB8B',
+    color: '#C78800', // Exact Yellow Logo
+    bgColor: '#FDE9AD', // Exact Yellow Bg
+    borderColor: '#F3D47B',
   },
   {
     id: '4',
@@ -64,9 +64,9 @@ const RECENT_ACTIVITIES_DASHBOARD = [
     title: 'JOHN DOE - ACCOUNT SUSPENDED',
     subtitle: 'Status updated to SUSPENDED • Edited by Admin',
     time: '1D AGO',
-    color: '#BE1618',
-    bgColor: '#FACAC9',
-    borderColor: '#F2B9BC',
+    color: '#C81015', // Exact Red Logo
+    bgColor: '#FBD7D7', // Exact Red Bg
+    borderColor: '#F2B9B9',
   },
 ];
 
@@ -142,7 +142,7 @@ export default function AdminDashboardScreen() {
             <Ionicons name="menu" size={28} color="#0284C7" />
           </TouchableOpacity>
         )}
-        {!showBackButton && <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.logoImage} contentFit="contain" />}
+        {!showBackButton && <Image source={require('../../../assets/images/landing-logo.gif')} style={styles.logoImage} contentFit="contain" />}
         <Text style={styles.headerTitle}>{title}</Text>
       </View>
 
@@ -182,67 +182,71 @@ export default function AdminDashboardScreen() {
         <Text style={styles.heroLabel}>Active Accounts</Text>
         <Text style={styles.heroNumber}>4</Text>
         <View style={styles.progressContainer}>
-          <View style={[styles.progressSegment, { flex: 2, backgroundColor: '#0066A4' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#399D2F' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#C68700' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#BE1618' }]} />
+          <View style={[styles.progressSegment, { flex: 2, backgroundColor: '#1173BA' }]} />
+          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#49A11B' }]} />
+          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#C78800' }]} />
+          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#C81015' }]} />
         </View>
         <View style={styles.legendContainer}>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#0066A4' }]} /><Text style={styles.legendText}>Therapist</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#399D2F' }]} /><Text style={styles.legendText}>Teachers</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C68700' }]} /><Text style={styles.legendText}>Patient</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#BE1618' }]} /><Text style={styles.legendText}>Pending</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#1173BA' }]} /><Text style={styles.legendText}>Therapist</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#49A11B' }]} /><Text style={styles.legendText}>Teachers</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C78800' }]} /><Text style={styles.legendText}>Patient</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C81015' }]} /><Text style={styles.legendText}>Pending</Text></View>
         </View>
       </View>
 
       <View style={styles.statsGrid}>
 
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#E4F1FA', borderColor: '#B0D3ED', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
+        {/* Therapist Accounts Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#DDF0F9', borderColor: '#B9DFEE', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#0066A4' }]}>2</Text>
+            <Text style={[styles.solidCardNum, { color: '#1173BA' }]}>2</Text>
             <Image
               source={require('../../../assets/images/admin-therapist.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
               contentFit="contain"
             />
           </View>
-          <Text style={[styles.solidCardTitle, { color: '#0066A4' }]}>Therapist Accounts</Text>
+          <Text style={[styles.solidCardTitle, { color: '#1173BA' }]}>Therapist Accounts</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#E9F8E2', borderColor: '#C0E9A8', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
+        {/* Teacher Accounts Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#E2F7CE', borderColor: '#C6ECA7', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#399D2F' }]}>1</Text>
+            <Text style={[styles.solidCardNum, { color: '#49A11B' }]}>1</Text>
             <Image
               source={require('../../../assets/images/admin-teacher.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
               contentFit="contain"
             />
           </View>
-          <Text style={[styles.solidCardTitle, { color: '#399D2F' }]}>Teacher Accounts</Text>
+          <Text style={[styles.solidCardTitle, { color: '#49A11B' }]}>Teacher Accounts</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FDF2CC', borderColor: '#F3DB8B', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
+        {/* Patient Accounts Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FDE9AD', borderColor: '#F3D47B', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#C68700' }]}>1</Text>
+            <Text style={[styles.solidCardNum, { color: '#C78800' }]}>1</Text>
             <Image
               source={require('../../../assets/images/admin-patient.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
               contentFit="contain"
             />
           </View>
-          <Text style={[styles.solidCardTitle, { color: '#C68700' }]}>Patient Accounts</Text>
+          <Text style={[styles.solidCardTitle, { color: '#C78800' }]}>Patient Accounts</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FCE7E8', borderColor: '#F2B9BC', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('request')}>
+        {/* Pending Requests Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FBD7D7', borderColor: '#F2B9B9', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('request')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#BE1618' }]}>1</Text>
+            <Text style={[styles.solidCardNum, { color: '#C81015' }]}>1</Text>
             <Image
               source={require('../../../assets/images/admin-pending.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
               contentFit="contain"
             />
           </View>
-          <Text style={[styles.solidCardTitle, { color: '#BE1618' }]}>Pending Requests</Text>
+          <Text style={[styles.solidCardTitle, { color: '#C81015' }]}>Pending Requests</Text>
         </TouchableOpacity>
 
       </View>
@@ -411,7 +415,7 @@ export default function AdminDashboardScreen() {
 
         {MOCK_ACCOUNTS.map((acc, i) => (
           <View key={i} style={styles.fullCard}>
-            <View style={styles.cardHeaderRow}>
+             <View style={styles.cardHeaderRow}>
               <Image source={acc.avatar} style={styles.cardAvatarLarge} contentFit="cover" />
               <View style={styles.cardHeaderInfo}>
                 <Text style={styles.cardNameLarge}>{acc.name}</Text>
@@ -867,7 +871,6 @@ const styles = StyleSheet.create({
   pendingBadgeTextDashboard: { fontFamily: 'Inter-Bold', fontSize: 9, color: '#DB2777' },
   chevronCircle: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
 
-  // UPDATED RECENT ACTIVITY ITEM STYLES FOR LIGHT PASTEL BACKGROUNDS
   activityItem: {
     borderRadius: 10,
     paddingVertical: 14,

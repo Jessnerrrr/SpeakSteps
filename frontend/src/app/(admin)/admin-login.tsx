@@ -83,7 +83,7 @@ export default function AdminLoginScreen() {
                 {/* Center Administration Header in Card */}
                 <View style={styles.cardBrandHeader}>
                   <Image 
-                    source={require('../../../assets/images/bird-logo.gif')} 
+                    source={require('../../../assets/images/landing-logo.gif')} 
                     style={styles.cardLogoImage} 
                     contentFit="contain" 
                   />
