@@ -30,6 +30,7 @@ export type Professional = {
   invitation: InvitationStatus;
   joined: string;
   invitationUpdated: string;
+  lifecycleUpdatedAt?: string;
 };
 
 export type TherapistStaffRecord = {
@@ -63,6 +64,7 @@ export type Patient = {
   studentNumber: string;
   therapistId: string | null;
   access: PatientAccess;
+  membership?: 'Active' | 'Deactivated';
   setup?: 'Pending' | 'Completed';
   enrollment: EnrollmentStatus;
   therapyStatus: 'In progress' | 'On hold';
@@ -73,6 +75,7 @@ export type Patient = {
   grade?: string;
   section?: string;
   teacherId?: string;
+  lifecycleUpdatedAt?: string;
 };
 
 export type SuspensionRequest = {
@@ -82,17 +85,35 @@ export type SuspensionRequest = {
   reason: string;
   submitted: string;
   status: RequestStatus;
+  events?: RequestEvent[];
 };
 
 export type ReleaseRequest = {
   id: string;
   patientId: string;
   therapistId: string;
+  origin?: 'Guardian' | 'Teacher' | 'Therapist';
+  followupRecipient?: 'Guardian' | 'Teacher' | 'Therapist';
+  requestType?: 'Transfer' | 'Withdrawal' | 'Enrollment release' | 'Therapist assignment release';
+  workflowStage?: 'Awaiting Guardian Confirmation' | 'Awaiting Teacher Verification' | 'Ready for Admin Review' | 'Awaiting Supporting Evidence';
+  guardianConfirmation?: 'Confirmed' | 'Disputed' | 'Pending' | 'Not required';
+  teacherVerification?: 'Verified' | 'Unable to Verify' | 'More Information Needed' | 'Pending' | 'Not required';
+  events?: RequestEvent[];
+  reminderCount?: number;
+  lastReminderAt?: string;
   reason: 'Transferred to another school' | 'Officially withdrawn' | 'Discontinued attending classes' | 'No longer receiving services';
   explanation: string;
   attachment?: string;
   submitted: string;
   status: 'Pending' | 'More information requested' | 'Approved & reassigned' | 'Approved & archived' | 'Declined';
+};
+
+export type RequestEvent = {
+  id: string;
+  title: string;
+  detail: string;
+  actor: string;
+  date: string;
 };
 
 export type ActivityEntry = {
@@ -148,17 +169,18 @@ export const initialPatients: Patient[] = [
   { id: 'pt-7', name: 'Lucas Bautista', studentNumber: 'SS-23779', therapistId: 'pro-4', access: 'Active', enrollment: 'Enrolled', therapyStatus: 'In progress', registered: '2026-06-19', guardian: 'Nina Bautista', guardianContact: 'nina.bautista@example.org', school: 'Northview School', grade: 'Grade 3', section: 'Sampaguita', teacherId: 'pro-6' },
   { id: 'pt-8', name: 'Emma Torres', studentNumber: 'SS-22903', therapistId: 'pro-1', access: 'Active', enrollment: 'Archived', therapyStatus: 'On hold', registered: '2026-02-10', guardian: 'Rosa Torres', guardianContact: 'rosa.torres@example.org', school: 'Riverside Learning Center', grade: 'Grade 1', section: 'Molave', teacherId: 'pro-2' },
   { id: 'pt-9', name: 'Ava Mendoza', studentNumber: 'SS-24415', therapistId: 'pro-7', access: 'Active', setup: 'Pending', enrollment: 'Enrolled', therapyStatus: 'In progress', registered: '2026-10-28', guardian: 'Diego Mendoza', guardianContact: 'diego.mendoza@example.org', school: 'Eastfield Academy', grade: 'Grade 2', section: 'Narra', teacherId: 'pro-6' },
-  { id: 'pt-10', name: 'Caleb de la Cruz', studentNumber: 'SS-23950', therapistId: 'pro-7', access: 'Active', enrollment: 'Enrolled', therapyStatus: 'In progress', registered: '2026-08-03', guardian: 'Ana de la Cruz', guardianContact: 'ana.delacruz@example.org', school: 'Northview School', grade: 'Grade 3', section: 'Sampaguita', teacherId: 'pro-2' },
+  { id: 'pt-10', name: 'Caleb de la Cruz', studentNumber: 'SS-23950', therapistId: null, access: 'Active', enrollment: 'Enrolled', therapyStatus: 'In progress', registered: '2026-08-03', guardian: 'Ana de la Cruz', guardianContact: 'ana.delacruz@example.org', school: 'Northview School', grade: 'Grade 3', section: 'Sampaguita' },
 ];
 
 export const initialRequests: SuspensionRequest[] = [
-  { id: 'req-1008', patientId: 'pt-2', therapistId: 'pro-1', reason: 'Sophia’s family requested a temporary pause while they update their home internet access.', submitted: '2026-11-16', status: 'Pending' },
-  { id: 'req-1004', patientId: 'pt-5', therapistId: 'pro-4', reason: 'The family asked to pause account access during an extended school absence.', submitted: '2026-11-10', status: 'Pending' },
-  { id: 'req-0991', patientId: 'pt-1', therapistId: 'pro-1', reason: 'Duplicate request; the family confirmed access should remain active.', submitted: '2026-10-25', status: 'Declined' },
+  { id: 'req-1008', patientId: 'pt-2', therapistId: 'pro-1', reason: 'Sophia’s family requested a temporary pause while they update their home internet access.', submitted: '2026-11-16', status: 'Pending', events: [{ id: 'req-1008-created', title: 'Request submitted', detail: 'Original explanation received from the Therapist.', actor: 'Maria Santos', date: '2026-11-16T08:42:00' }] },
+  { id: 'req-1004', patientId: 'pt-5', therapistId: 'pro-4', reason: 'The family asked to pause account access during an extended school absence.', submitted: '2026-11-10', status: 'Pending', events: [{ id: 'req-1004-created', title: 'Request submitted', detail: 'Original explanation received from the Therapist.', actor: 'John Reyes', date: '2026-11-10T09:15:00' }] },
+  { id: 'req-0991', patientId: 'pt-1', therapistId: 'pro-1', reason: 'Duplicate request; the family confirmed access should remain active.', submitted: '2026-10-25', status: 'Declined', events: [{ id: 'req-0991-created', title: 'Request submitted', detail: 'Original explanation received from the Therapist.', actor: 'Maria Santos', date: '2026-10-25T09:30:00' }] },
 ];
 
 export const initialReleaseRequests: ReleaseRequest[] = [
-  { id: 'rel-2501', patientId: 'pt-1', therapistId: 'pro-1', reason: 'Transferred to another school', explanation: 'The family has moved and is confirming whether they will continue enrollment at the new school. Please keep Liam assigned until the transfer is verified.', submitted: '2026-11-15', status: 'Pending' },
+  { id: 'rel-2501', patientId: 'pt-1', therapistId: 'pro-1', origin: 'Therapist', requestType: 'Therapist assignment release', workflowStage: 'Ready for Admin Review', guardianConfirmation: 'Not required', teacherVerification: 'Not required', reason: 'No longer receiving services', explanation: 'The family has asked to end services with the assigned Therapist. Please review the assignment before making a change.', submitted: '2026-11-15', status: 'Pending', reminderCount: 0, events: [{ id: 'rel-2501-created', title: 'Request submitted', detail: 'Original explanation received from the Therapist.', actor: 'Maria Santos', date: '2026-11-15T10:16:00' }] },
+  { id: 'rel-2492', patientId: 'pt-3', therapistId: 'pro-1', origin: 'Guardian', followupRecipient: 'Teacher', requestType: 'Transfer', workflowStage: 'Awaiting Teacher Verification', guardianConfirmation: 'Confirmed', teacherVerification: 'Pending', reason: 'Transferred to another school', explanation: 'We moved to Northview School this month. Please confirm the school record before changing enrollment.', submitted: '2026-11-05', status: 'Pending', reminderCount: 2, lastReminderAt: '2026-11-12T09:00:00', events: [{ id: 'rel-2492-created', title: 'Guardian request submitted', detail: 'Guardian selected the transfer reason and submitted the original explanation.', actor: 'Teresa Lim', date: '2026-11-05T09:00:00' }, { id: 'rel-2492-day3', title: 'Day 3 reminder recorded', detail: 'Teacher verification reminder recorded in mock state. No message was sent.', actor: 'System simulation', date: '2026-11-08T09:00:00' }, { id: 'rel-2492-day7', title: 'Day 7 reminder recorded', detail: 'Second Teacher follow-up reminder recorded in mock state. No message was sent.', actor: 'System simulation', date: '2026-11-12T09:00:00' }, { id: 'rel-2492-day14', title: 'Day 14 admin follow-up flagged', detail: 'No Teacher verification is recorded. The request remains unresolved and Student enrollment is unchanged.', actor: 'System simulation', date: '2026-11-19T09:00:00' }] },
 ];
 
 export const initialActivity: ActivityEntry[] = [
@@ -171,6 +193,7 @@ export const initialActivity: ActivityEntry[] = [
 export const initialNotifications: AdminNotification[] = [
   { id: 'note-3', title: 'Student release request', detail: 'Maria Santos requested release of Liam Reyes. Review the student assignment.', date: '2026-11-15T10:16:00', read: false },
   { id: 'note-1', title: 'Student access request', detail: 'Maria Santos requested suspension for Sophia Garcia.', date: '2026-11-16T08:42:00', read: false },
+  { id: 'note-4', title: 'Student request overdue', detail: 'Teacher verification is overdue for Noah Lim. Review request rel-2492.', date: '2026-11-19T09:00:00', read: false },
   { id: 'note-2', title: 'Invitation awaiting setup', detail: 'Ana Cruz has not completed account setup.', date: '2026-10-30T14:10:00', read: false },
 ];
 

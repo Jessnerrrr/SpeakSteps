@@ -39,21 +39,21 @@ export default function ProfessionalDetails({ person, students, onClose, onOpenS
   const field = (label: string, value?: string) => <Value label={label} value={value?.trim() || (person.role === 'Therapist' ? 'Not provided' : 'Unavailable in school records')} />;
 
   return <View>
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 19 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
       <View style={{ flex: 1 }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 19 }}>{suspending ? 'Suspend access' : `${person.role} details`}</Text><Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>{suspending ? 'This prevents the account from signing in. Existing Student assignments stay unchanged.' : 'Account identity, setup, and assigned Students'}</Text></View>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={suspending ? 'Cancel suspension' : 'Close professional details'} onPress={suspending ? () => { setSuspending(false); setReason(''); setError(''); } : onClose} style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#F0F6FA' }}><Ionicons name={suspending ? 'arrow-back' : 'close'} size={19} color={C.ink} /></TouchableOpacity>
     </View>
 
     {suspending ? <>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 7, backgroundColor: C.yellowSoft, marginBottom: 16 }}><Ionicons name="warning-outline" size={18} color={C.yellow} /><Text style={{ flex: 1, color: C.ink, fontSize: 12, lineHeight: 17 }}>Suspending {person.name} blocks sign-in. Their professional history and current Student assignments will remain in the center.</Text></View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 7, backgroundColor: C.yellowSoft, marginBottom: 16 }}><Ionicons name="warning-outline" size={18} color={C.yellow} /><Text style={{ flex: 1, color: C.ink, fontSize: 12, lineHeight: 17 }}>Suspending {person.name} blocks sign-in and moves the account to Archive Center. Their professional history and current Student assignments remain preserved.</Text></View>
       <Text style={{ color: C.ink, fontSize: 12, fontFamily: 'Geist-SemiBold', marginBottom: 7 }}>Reason for suspension</Text>
       <TextInput value={reason} onChangeText={(value) => { setReason(value); setError(''); }} placeholder="Explain why access should be suspended" placeholderTextColor={C.subtle} multiline accessibilityLabel="Reason for suspension" style={{ minHeight: 90, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 7, borderWidth: 1, borderColor: error ? C.red : C.line, color: C.ink, fontSize: 13, textAlignVertical: 'top' }} />
       {error ? <Text accessibilityLiveRegion="polite" style={{ color: C.red, fontSize: 11, marginTop: 6 }}>{error}</Text> : null}
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, paddingTop: 17, marginTop: 14, borderTopWidth: 1, borderTopColor: C.line }}><Action label="Cancel" onPress={() => { setSuspending(false); setReason(''); setError(''); }} /><Action label="Suspend Access" tone="danger" onPress={suspend} /></View>
     </> : <>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 18, borderBottomWidth: 1, borderBottomColor: C.line }}><View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.blue, fontFamily: 'Geist-SemiBold', fontSize: 11 }}>{person.name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</Text></View><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 17 }}>{person.name}</Text><Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{person.email}</Text></View></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: C.line }}><View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.blue, fontFamily: 'Geist-SemiBold', fontSize: 11 }}>{person.name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</Text></View><View style={{ flex: 1, minWidth: 0 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 17 }}>{person.name}</Text>{access === 'Active' && membership === 'Active' ? <View accessibilityLabel="Active account" style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green }} /> : null}</View><Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{person.email}</Text></View></View>
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingVertical: 10 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingVertical: 14 }}>
         <Value label="Role" value={person.role} />
         <Value label={person.role === 'Therapist' ? 'Staff ID · admin provided' : 'Professional ID · school provided'} value={person.role === 'Therapist' ? person.staffId ?? 'Not recorded' : person.professionalIdentifier ?? 'Unavailable in school records'} />
         <Value label="Account access" value={access} />
@@ -64,7 +64,7 @@ export default function ProfessionalDetails({ person, students, onClose, onOpenS
 
       <View style={{ paddingTop: 14, borderTopWidth: 1, borderTopColor: C.line }}>
         <Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 13, marginBottom: 3 }}>{person.role === 'Therapist' ? 'Professional profile' : 'School record'}</Text>
-        <Text style={{ color: C.muted, fontSize: 11, lineHeight: 16, marginBottom: 6 }}>{person.role === 'Therapist' ? 'Prefilled from the staff record; the Therapist can update it after setup.' : 'Read-only information from the authoritative school directory.'}</Text>
+        <Text style={{ color: C.muted, fontSize: 11, lineHeight: 16, marginBottom: 8 }}>{person.role === 'Therapist' ? 'Prefilled from the staff record; the Therapist can update it after setup.' : 'Information sourced from the authoritative school directory.'}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {person.role === 'Therapist' ? <>
             <Value label="First name" value={person.firstName || 'Not provided'} />
@@ -81,13 +81,13 @@ export default function ProfessionalDetails({ person, students, onClose, onOpenS
         </View>
       </View>
 
-      <View style={{ paddingTop: 15, marginTop: 6, borderTopWidth: 1, borderTopColor: C.line }}>
+      <View style={{ paddingTop: 17, marginTop: 4, borderTopWidth: 1, borderTopColor: C.line }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 13 }}>Assigned Students</Text><Text style={{ color: C.muted, fontSize: 11 }}>{students.length}</Text></View>
         {students.map((student) => <TouchableOpacity key={student.id} accessibilityRole="link" accessibilityLabel={`Open ${student.name} in Students`} onPress={() => onOpenStudent(student)} style={{ minHeight: 53, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: C.line }}><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: C.ink, fontFamily: 'Geist-Medium', fontSize: 12 }}>{student.name}</Text><Text style={{ color: C.muted, fontSize: 11, marginTop: 3 }}>{student.studentNumber}</Text></View><Text style={{ color: student.enrollment === 'Enrolled' ? C.green : C.subtle, fontSize: 11 }}>{student.enrollment}</Text><Ionicons name="chevron-forward" size={15} color={C.subtle} /></TouchableOpacity>)}
         {students.length === 0 ? <Text style={{ color: C.muted, fontSize: 12, paddingVertical: 10 }}>No Students are currently assigned.</Text> : null}
       </View>
 
-      <View style={{ paddingTop: 15, marginTop: 7, borderTopWidth: 1, borderTopColor: C.line }}>
+      <View style={{ paddingTop: 17, marginTop: 7, borderTopWidth: 1, borderTopColor: C.line }}>
         <Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 13, marginBottom: 10 }}>Account management</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 }}>
           {person.invitation !== 'Completed' ? <Action label="Record invitation follow-up" onPress={onResendInvitation} /> : null}

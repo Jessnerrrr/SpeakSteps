@@ -58,7 +58,7 @@ export default function CreateProfessionalDialog({ role, existingProfessionals, 
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 15, marginBottom: 13 }}>
       <View style={{ flex: 1, paddingRight: 12 }}>
         <Text style={{ color: palette.ink, fontFamily: 'Geist-SemiBold', fontSize: 19 }}>Add a {role.toLowerCase()}</Text>
-        <Text style={{ color: palette.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>Enter a Staff ID to load the matching record.</Text>
+        <Text style={{ color: palette.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>Enter an existing Staff ID to load the matching record.</Text>
       </View>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close account form" onPress={onClose} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#F0F6FA' }}><Ionicons name="close" size={20} color={palette.ink} /></TouchableOpacity>
     </View>
@@ -79,7 +79,7 @@ export default function CreateProfessionalDialog({ role, existingProfessionals, 
         <Text style={{ color: palette.ink, fontSize: 12, fontFamily: 'Geist-SemiBold' }}>Staff ID</Text>
         <TextInput value={staffId} onChangeText={(value) => { setStaffId(value.toUpperCase()); setMatchedRecord(null); setError(''); }} onSubmitEditing={lookup} placeholder={role === 'Therapist' ? 'For example, TH-1234' : 'For example, TR-1234'} placeholderTextColor={palette.subtle} autoCapitalize="characters" autoCorrect={false} maxLength={40} accessibilityLabel="Staff ID" style={{ height: 42, paddingHorizontal: 11, borderRadius: 7, borderWidth: 1, borderColor: error ? palette.red : palette.line, backgroundColor: palette.white, color: palette.ink, fontSize: 13 }} />
       </View>
-      <TouchableOpacity accessibilityRole="button" onPress={lookup} style={{ minHeight: 42, paddingHorizontal: 14, borderRadius: 7, backgroundColor: palette.blue, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: palette.white, fontFamily: 'Geist-SemiBold', fontSize: 12 }}>Find {role}</Text></TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" onPress={lookup} style={{ minHeight: 42, paddingHorizontal: 14, borderRadius: 7, backgroundColor: palette.blue, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: palette.white, fontFamily: 'Geist-SemiBold', fontSize: 12 }}>Search</Text></TouchableOpacity>
     </View>
     {error ? <Text accessibilityLiveRegion="polite" style={{ color: palette.red, fontSize: 11, lineHeight: 16, marginTop: 5 }}>{error}</Text> : null}
 
