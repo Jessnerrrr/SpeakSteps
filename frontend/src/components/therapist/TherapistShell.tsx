@@ -1,12 +1,39 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState, useMemo } from 'react';
-import { useWindowDimensions, View, Modal, Pressable, Text, TouchableOpacity, ScrollView, TextInput, Switch, StyleSheet, Platform } from 'react-native';
+import {
+  useWindowDimensions,
+  View,
+  Modal,
+  Pressable,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  Switch,
+  StyleSheet,
+  Platform,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Bell,
+  SunMoon,
+  Lock,
+  ShieldCheck,
+  LogOut,
+  Camera,
+  X,
+} from 'lucide-react-native';
 
 import { BottomNav } from '@/components/therapist/BottomNav';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
+import { BellIcon } from '@/components/therapist/icons';
 import { AddPatientModal } from '@/Therapist-modules/therapist-patients/components/AddPatientModal';
 import type { TherapistTab } from '@/navigation/therapistTabs';
 import type { ReactNode } from 'react';
@@ -19,6 +46,17 @@ const INITIAL_NOTIFICATIONS = [
   { id: 'notif-2', name: 'Angelica', action: 'completed Sentences practice', detail: 'Achieved 80% accuracy score on Sibilant /s/ targets', time: '1h ago', unread: true },
   { id: 'notif-3', name: 'Jhonas', action: 'submitted Syllables home practice', detail: '15/20 correct trials recorded by parent', time: '3h ago', unread: true },
   { id: 'notif-4', name: 'Mcgravy', action: 'completed Phrases practice', detail: 'Achieved 75% accuracy rate', time: 'Today at 09:09 AM', unread: false },
+];
+
+const SPECIALTY_PALETTE = [
+  { border: '#38BDF8', text: '#0284C7', darkText: '#7DD3FC', darkBg: 'rgba(56, 189, 248, 0.14)' },
+  { border: '#FB923C', text: '#EA580C', darkText: '#FDBA74', darkBg: 'rgba(251, 146, 60, 0.14)' },
+  { border: '#FBBF24', text: '#D97706', darkText: '#FDE68A', darkBg: 'rgba(251, 191, 36, 0.14)' },
+  { border: '#4ADE80', text: '#16A34A', darkText: '#86EFAC', darkBg: 'rgba(74, 222, 128, 0.14)' },
+  { border: '#FBBF24', text: '#D97706', darkText: '#FDE68A', darkBg: 'rgba(251, 191, 36, 0.14)' },
+  { border: '#FB923C', text: '#EA580C', darkText: '#FDBA74', darkBg: 'rgba(251, 146, 60, 0.14)' },
+  { border: '#94A3B8', text: '#475569', darkText: '#CBD5E1', darkBg: 'rgba(148, 163, 184, 0.14)' },
+  { border: '#38BDF8', text: '#0284C7', darkText: '#7DD3FC', darkBg: 'rgba(56, 189, 248, 0.14)' },
 ];
 
 const getThemeColors = (isDark: boolean) => ({
@@ -53,7 +91,7 @@ const getThemeColors = (isDark: boolean) => ({
 // ==========================================
 export function TherapistShell({ active, children }: { active: TherapistTab; children: ReactNode }) {
   // Grab global theme state directly from Provider
-  const { isDark, themeMode, setThemeMode, addPatientOpen, profile } = useTherapist();
+  const { isDark, themeMode, setThemeMode, addPatientOpen } = useTherapist();
   const { width } = useWindowDimensions();
   const wide = width >= 760;
   const columnWidth = Math.min(width, wide ? 520 : width);
@@ -67,33 +105,52 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  const [profileOpenedFromSettings, setProfileOpenedFromSettings] = useState(false);
   
   const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Profile Form State (Prefilled with TherapistProvider Profile)
+  // Profile Form State (Screenshot 1 Exact Data)
   const [therapistProfile, setTherapistProfile] = useState({
-    name: profile?.fullName || 'Dr. Ameer Andres, SLP-CCC',
+    name: 'Dr. Ameer Andres',
+    credentials: 'SLP-CCC',
+    fullName: 'Dr. Ameer Andres, SLP-CCC',
     title: 'Speech-Language Pathologist',
-    license: 'SLP-PH-2024-8821',
-    clinic: 'SpeakSteps',
+    license: 'PRC #0048291',
+    clinic: 'LittleVoices Pediatric Speech Center',
     contact: '+63 9000 000 000',
     email: 'ameer@speakstep.com',
+    photoUri: null as string | null,
+    specializations: [
+      'Articulation',
+      'Phonological',
+      'Fluency',
+      'Voice',
+      'Early intervention',
+      'Bilingual',
+      'AAC',
+    ],
   });
   const [editProfileForm, setEditProfileForm] = useState({ ...therapistProfile });
 
-  // Settings State (Toggles)
+  // Settings State (Screenshot 2 Toggles)
   const [newRecordingsToggle, setNewRecordingsToggle] = useState(true);
   const [followUpAlertsToggle, setFollowUpAlertsToggle] = useState(true);
+  const [readyToLevelUpToggle, setReadyToLevelUpToggle] = useState(false);
+  const [missedExercisesToggle, setMissedExercisesToggle] = useState(true);
+  const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(true);
 
-  // Password State
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  // Active Sessions (Screenshot 2 Sessions)
+  const [activeSessions, setActiveSessions] = useState([
+    { id: '1', device: 'Redmi 15', isCurrent: true, location: 'Quezon City', lastActive: 'Active now' },
+    { id: '2', device: 'Samsung Galaxy Tab S9 FE', isCurrent: false, location: 'Android App', lastActive: 'Yesterday' },
+    { id: '3', device: 'Samsung Galaxy S24', isCurrent: false, location: 'Chrome', lastActive: 'Nov 10' },
+  ]);
+
+  // Specialty Input
+  const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
 
   // Handlers
   const triggerToast = (msg: string) => {
@@ -101,18 +158,65 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleSaveProfile = () => {
-    setTherapistProfile({ ...editProfileForm });
-    setShowEditProfileModal(false);
-    triggerToast('Profile updated successfully!');
+  const handlePickPhoto = async () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        setEditProfileForm((prev) => ({ ...prev, photoUri: url }));
+      };
+      input.click();
+    } else {
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 1,
+        });
+        if (!result.canceled && result.assets[0]?.uri) {
+          setEditProfileForm((prev) => ({ ...prev, photoUri: result.assets[0].uri }));
+        }
+      } catch (e) {}
+    }
   };
 
-  const handleChangePassword = () => {
-    if (!currentPassword || !newPassword || !confirmPassword) return triggerToast('Fill out all fields.');
-    if (newPassword !== confirmPassword) return triggerToast('New passwords do not match.');
-    setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
-    setShowChangePasswordModal(false);
-    triggerToast('Password changed successfully!');
+  const handleAddSpecialty = () => {
+    const trimmed = newSpecialtyInput.trim();
+    if (!trimmed) return;
+    if (!editProfileForm.specializations.includes(trimmed)) {
+      setEditProfileForm((prev) => ({
+        ...prev,
+        specializations: [...prev.specializations, trimmed],
+      }));
+    }
+    setNewSpecialtyInput('');
+  };
+
+  const handleRemoveSpecialty = (item: string) => {
+    setEditProfileForm((prev) => ({
+      ...prev,
+      specializations: prev.specializations.filter((s) => s !== item),
+    }));
+  };
+
+  const handleRevokeSession = (id: string) => {
+    setActiveSessions((current) => current.filter((s) => s.id !== id));
+    triggerToast('Session revoked successfully.');
+  };
+
+  const handleSaveProfile = () => {
+    setTherapistProfile({ ...editProfileForm });
+    setShowProfileModal(false);
+    triggerToast('Credentials saved successfully!');
+    if (profileOpenedFromSettings) {
+      setShowSettingsModal(true);
+      setProfileOpenedFromSettings(false);
+    }
   };
 
   const handleLogout = () => {
@@ -130,9 +234,9 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
         
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           {/* ==========================================
-              --- NEW TOP HEADER ---
+              --- TOP HEADER ---
               ========================================== */}
-          <View style={[styles.topHeader, { backgroundColor: colors.card, borderBottomColor: colors.borderLight }]}>
+          <View style={[styles.topHeader, { backgroundColor: colors.card }]}>
             <TouchableOpacity
               style={styles.iconButton}
               activeOpacity={0.7}
@@ -141,12 +245,10 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 setShowMenu(!showMenu);
               }}
             >
-              <Svg width="22" height="18" viewBox="0 0 24 18" fill="none">
-                <Path d="M1 1.5H23M1 9H23M1 16.5H23" stroke={colors.hamburger} strokeWidth="2.5" strokeLinecap="round" />
+              <Svg width="26" height="20" viewBox="0 0 26 20" fill="none">
+                <Path d="M1 2.5H25M1 10H25M1 17.5H25" stroke={colors.hamburger} strokeWidth="2.8" strokeLinecap="round" />
               </Svg>
             </TouchableOpacity>
-
-            <Text style={[styles.appTitle, { color: isDark ? '#38BDF8' : '#0284C7' }]}>SpeakSteps</Text>
 
             <TouchableOpacity
               style={styles.iconButton}
@@ -156,13 +258,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 setShowNotificationsDropdown(!showNotificationsDropdown);
               }}
             >
-              <View>
-                <Svg width="22" height="24" viewBox="0 0 24 24" fill="none">
-                  <Path d="M18 8A6 6 0 0 0 6 8C6 15 3 17 3 17H21S18 15 18 8Z" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M13.73 21A2 2 0 0 1 10.27 21" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-                {notifications.some((n) => n.unread) && <View style={styles.notificationDot} />}
-              </View>
+              <BellIcon color="#0284C7" size={26} alert={notifications.some((n) => n.unread)} />
             </TouchableOpacity>
           </View>
 
@@ -171,7 +267,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
             {children}
           </View>
 
-          {/* BOTTOM NAVIGATION (Existing) */}
+          {/* BOTTOM NAVIGATION */}
           <BottomNav active={active} />
         </SafeAreaView>
 
@@ -185,13 +281,22 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 <TouchableOpacity
                   style={styles.menuUserHeader}
                   activeOpacity={0.8}
-                  onPress={() => { setShowMenu(false); setShowProfileModal(true); }}
+                  onPress={() => {
+                    setProfileOpenedFromSettings(false);
+                    setEditProfileForm({ ...therapistProfile });
+                    setShowMenu(false);
+                    setShowProfileModal(true);
+                  }}
                 >
                   <View style={styles.menuAvatarCircle}>
-                    <Text style={styles.menuAvatarText}>{therapistProfile.name.charAt(0)}</Text>
+                    {therapistProfile.photoUri ? (
+                      <Image source={{ uri: therapistProfile.photoUri }} style={{ width: 38, height: 38, borderRadius: 19 }} />
+                    ) : (
+                      <Text style={styles.menuAvatarText}>{therapistProfile.name.charAt(0)}</Text>
+                    )}
                   </View>
                   <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.menuUserName} numberOfLines={1}>{therapistProfile.name}</Text>
+                    <Text style={styles.menuUserName} numberOfLines={1}>{therapistProfile.fullName}</Text>
                     <Text style={styles.menuUserRole} numberOfLines={1}>{therapistProfile.title}</Text>
                   </View>
                 </TouchableOpacity>
@@ -201,7 +306,12 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 <TouchableOpacity
                   style={styles.menuOptionRow}
                   activeOpacity={0.7}
-                  onPress={() => { setShowMenu(false); setShowProfileModal(true); }}
+                  onPress={() => {
+                    setProfileOpenedFromSettings(false);
+                    setEditProfileForm({ ...therapistProfile });
+                    setShowMenu(false);
+                    setShowProfileModal(true);
+                  }}
                 >
                   <View style={styles.menuIconCircle}>
                     <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -216,7 +326,10 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 <TouchableOpacity
                   style={styles.menuOptionRow}
                   activeOpacity={0.7}
-                  onPress={() => { setShowMenu(false); setShowSettingsModal(true); }}
+                  onPress={() => {
+                    setShowMenu(false);
+                    setShowSettingsModal(true);
+                  }}
                 >
                   <View style={styles.menuIconCircle}>
                     <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -290,64 +403,171 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
         )}
 
         {/* ==========================================
-            --- SETTINGS MODAL ---
+            --- SETTINGS MODAL (Screenshot 2) ---
             ========================================== */}
-        <Modal visible={showSettingsModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSettingsModal(false)}>
-          <SafeAreaView style={styles.settingsModalContainer} edges={['top']}>
-            <View style={styles.settingsTopBar}>
-              <Text style={styles.settingsNavTitle}>Settings</Text>
-              <TouchableOpacity onPress={() => setShowSettingsModal(false)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
+        <Modal
+          visible={showSettingsModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowSettingsModal(false)}
+        >
+          <SafeAreaView style={[styles.settingsModalContainer, { backgroundColor: colors.bgSecondary }]} edges={['top']}>
+            {/* Header Row */}
+            <View style={styles.newHeaderRow}>
+              <TouchableOpacity
+                onPress={() => setShowSettingsModal(false)}
+                style={styles.newBackButton}
+                accessibilityLabel="Back"
+              >
+                <ChevronLeft size={22} color={colors.text} />
               </TouchableOpacity>
+              <Text style={styles.newHeaderTitle}>Settings</Text>
             </View>
+
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
-              <View style={styles.settingsProfileHeaderRow}>
-                <View style={styles.settingsAvatarCircle}><Text style={styles.settingsAvatarLetter}>{therapistProfile.name.charAt(0)}</Text></View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.settingsDoctorName}>{therapistProfile.name}</Text>
-                  <Text style={styles.settingsDoctorRole}>{therapistProfile.title}</Text>
-                  <Text style={styles.settingsLicenseText}>License: {therapistProfile.license}</Text>
+              {/* Top Profile Card */}
+              <TouchableOpacity
+                style={styles.newProfileCard}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setProfileOpenedFromSettings(true);
+                  setEditProfileForm({ ...therapistProfile });
+                  setShowSettingsModal(false);
+                  setShowProfileModal(true);
+                }}
+              >
+                <View style={styles.newProfileAvatar}>
+                  {therapistProfile.photoUri ? (
+                    <Image source={{ uri: therapistProfile.photoUri }} style={styles.newProfileAvatarImg} />
+                  ) : (
+                    <Text style={styles.newProfileAvatarText}>A</Text>
+                  )}
+                </View>
+                <View style={styles.newProfileInfo}>
+                  <View style={styles.newProfileNameRow}>
+                    <Text style={styles.newProfileName}>{therapistProfile.fullName}</Text>
+                    <View style={styles.newVerifiedBadge}>
+                      <Check size={10} color="#FFFFFF" strokeWidth={3} />
+                    </View>
+                  </View>
+                  <Text style={styles.newProfileSubtitle}>
+                    {therapistProfile.license} {therapistProfile.title}
+                  </Text>
+                  <Text style={styles.newProfileHint}>Tap to edit credentials & specializations</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              {/* Notifications Section */}
+              <View style={styles.newSectionHeader}>
+                <Bell size={18} color={colors.text} />
+                <Text style={styles.newSectionTitle}>Notifications</Text>
+              </View>
+              <View style={styles.newCard}>
+                <View style={styles.newToggleRow}>
+                  <View style={styles.newToggleRowCopy}>
+                    <Text style={styles.newRowTitle}>New Recordings</Text>
+                    <Text style={styles.newRowSubtitle}>When a child or parent submits</Text>
+                  </View>
+                  <Switch
+                    value={newRecordingsToggle}
+                    onValueChange={(val) => {
+                      setNewRecordingsToggle(val);
+                      triggerToast(`New recordings alerts ${val ? 'enabled' : 'disabled'}`);
+                    }}
+                    trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+
+                <View style={styles.newDivider} />
+
+                <View style={styles.newToggleRow}>
+                  <View style={styles.newToggleRowCopy}>
+                    <Text style={styles.newRowTitle}>Follow-Up Alerts</Text>
+                    <Text style={styles.newRowSubtitle}>Patients who need practice follow-up</Text>
+                  </View>
+                  <Switch
+                    value={followUpAlertsToggle}
+                    onValueChange={(val) => {
+                      setFollowUpAlertsToggle(val);
+                      triggerToast(`Follow-up alerts ${val ? 'enabled' : 'disabled'}`);
+                    }}
+                    trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+
+                <View style={styles.newDivider} />
+
+                <View style={styles.newToggleRow}>
+                  <View style={styles.newToggleRowCopy}>
+                    <Text style={styles.newRowTitle}>Ready to level up</Text>
+                    <Text style={styles.newRowSubtitle}>A child reaches your threshold</Text>
+                  </View>
+                  <Switch
+                    value={readyToLevelUpToggle}
+                    onValueChange={(val) => {
+                      setReadyToLevelUpToggle(val);
+                      triggerToast(`Level up alerts ${val ? 'enabled' : 'disabled'}`);
+                    }}
+                    trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+
+                <View style={styles.newDivider} />
+
+                <View style={styles.newToggleRow}>
+                  <View style={styles.newToggleRowCopy}>
+                    <Text style={styles.newRowTitle}>Missed Exercises</Text>
+                    <Text style={styles.newRowSubtitle}>Alert after 3 consecutive missed practice days</Text>
+                  </View>
+                  <Switch
+                    value={missedExercisesToggle}
+                    onValueChange={(val) => {
+                      setMissedExercisesToggle(val);
+                      triggerToast(`Missed exercises alerts ${val ? 'enabled' : 'disabled'}`);
+                    }}
+                    trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                    thumbColor="#FFFFFF"
+                  />
                 </View>
               </View>
 
-              <Text style={styles.settingsSectionTitle}>Account</Text>
-              <View style={styles.settingsCard}>
-                <TouchableOpacity style={styles.settingsCardRow} onPress={() => { setEditProfileForm({ ...therapistProfile }); setShowEditProfileModal(true); }}>
-                  <View style={{ flex: 1 }}><Text style={styles.settingsRowTitle}>Edit Profile</Text><Text style={styles.settingsRowSub}>Name, clinic, contact</Text></View>
-                  <Text style={styles.settingsChevron}>›</Text>
-                </TouchableOpacity>
-                <View style={styles.settingsRowDivider} />
-                <View style={styles.settingsCardRow}><View style={{ flex: 1 }}><Text style={styles.settingsRowTitle}>Clinic</Text><Text style={styles.settingsRowSub}>{therapistProfile.clinic}</Text></View></View>
-                <View style={styles.settingsRowDivider} />
-                <TouchableOpacity style={styles.settingsCardRow} onPress={() => setShowChangePasswordModal(true)}>
-                  <View style={{ flex: 1 }}><Text style={styles.settingsRowTitle}>Change Password</Text></View>
-                  <Text style={styles.settingsChevron}>›</Text>
-                </TouchableOpacity>
+              {/* Appearance Section */}
+              <View style={styles.newSectionHeader}>
+                <Text style={styles.newSectionTitle}>Appearance</Text>
               </View>
-
-              <Text style={styles.settingsSectionTitle}>Notifications</Text>
-              <View style={styles.settingsCard}>
-                <View style={styles.settingsCardRow}>
-                  <View style={{ flex: 1, marginRight: 10 }}><Text style={styles.settingsRowTitle}>New Recordings</Text><Text style={styles.settingsRowSub}>When a child submits</Text></View>
-                  <Switch value={newRecordingsToggle} onValueChange={setNewRecordingsToggle} trackColor={{ false: colors.switchTrackFalse, true: colors.switchTrackTrue }} thumbColor={newRecordingsToggle ? colors.switchThumbOn : colors.switchThumbOff} />
-                </View>
-              </View>
-
-              <Text style={styles.settingsSectionTitle}>Appearance</Text>
-              <View style={styles.settingsCard}>
-                <View style={styles.themeRow}>
-                  <Text style={styles.settingsRowTitle}>Theme</Text>
-                  <View style={styles.themeSegmentControl}>
+              <View style={styles.newCard}>
+                <View style={styles.newThemeRow}>
+                  <View style={styles.newThemeLeft}>
+                    <SunMoon size={18} color={colors.text} />
+                    <Text style={styles.newRowTitle}>Theme</Text>
+                  </View>
+                  <View style={styles.newThemeSegmentControl}>
                     {(['auto', 'light', 'dark'] as const).map((mode) => (
-                      <TouchableOpacity 
-                        key={mode} 
-                        style={[styles.themeSegmentBtn, themeMode === mode && styles.themeSegmentBtnActive]} 
+                      <TouchableOpacity
+                        key={mode}
+                        style={[
+                          styles.newThemeSegmentBtn,
+                          themeMode === mode && styles.newThemeSegmentBtnActive,
+                        ]}
                         onPress={() => {
                           setThemeMode(mode);
-                          triggerToast(`${mode.charAt(0).toUpperCase() + mode.slice(1)} theme enabled`);
+                          triggerToast(
+                            mode === 'auto'
+                              ? `Auto theme enabled`
+                              : `${mode.charAt(0).toUpperCase() + mode.slice(1)} theme enabled`
+                          );
                         }}
                       >
-                        <Text style={[styles.themeSegmentText, themeMode === mode && styles.themeSegmentTextActive]}>
+                        <Text
+                          style={[
+                            styles.newThemeSegmentText,
+                            themeMode === mode && styles.newThemeSegmentTextActive,
+                          ]}
+                        >
                           {mode.charAt(0).toUpperCase() + mode.slice(1)}
                         </Text>
                       </TouchableOpacity>
@@ -356,64 +576,310 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.settingsLogoutButton} activeOpacity={0.8} onPress={() => setShowLogoutConfirm(true)}>
-                <Text style={styles.settingsLogoutButtonText}>Log Out</Text>
+              {/* Privacy & Security Section */}
+              <View style={styles.newSectionHeader}>
+                <Lock size={18} color={colors.text} />
+                <Text style={styles.newSectionTitle}>Privacy & Security</Text>
+              </View>
+              <View style={styles.newCard}>
+                <View style={styles.newToggleRow}>
+                  <View style={styles.newShieldIcon}>
+                    <ShieldCheck size={26} color="#22C55E" />
+                  </View>
+                  <View style={styles.newToggleRowCopy}>
+                    <Text style={styles.newRowTitle}>Two-Factor Authentication</Text>
+                    <Text style={styles.newRowSubtitle}>Required for pediatric audio playback</Text>
+                  </View>
+                  <Switch
+                    value={twoFactorAuthToggle}
+                    onValueChange={(val) => {
+                      setTwoFactorAuthToggle(val);
+                      triggerToast(`Two-factor authentication ${val ? 'enabled' : 'disabled'}`);
+                    }}
+                    trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
+                    thumbColor="#FFFFFF"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.newSubSectionTitle}>Active Mobile Session</Text>
+              <View style={styles.newCard}>
+                {activeSessions.map((session, index) => (
+                  <View key={session.id}>
+                    <View style={styles.newSessionRow}>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.newRowTitle}>{session.device}</Text>
+                          {session.isCurrent ? (
+                            <View style={styles.newThisDeviceBadge}>
+                              <Text style={styles.newThisDeviceText}>This Device</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <Text style={styles.newRowSubtitle}>{session.location} • {session.lastActive}</Text>
+                      </View>
+                      {!session.isCurrent ? (
+                        <TouchableOpacity
+                          onPress={() => handleRevokeSession(session.id)}
+                          style={styles.newRevokeBtn}
+                        >
+                          <Text style={styles.newRevokeBtnText}>Revoke</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                    {index < activeSessions.length - 1 ? <View style={styles.newDivider} /> : null}
+                  </View>
+                ))}
+              </View>
+
+              {/* About Help Section */}
+              <View style={styles.newSectionHeader}>
+                <Text style={styles.newSectionTitle}>About Help</Text>
+              </View>
+              <View style={styles.newCard}>
+                <View style={styles.newAboutRow}>
+                  <Text style={styles.newRowTitle}>Help center</Text>
+                  <Text style={styles.newRowSubtitle}>Guides and FAQs</Text>
+                </View>
+                <View style={styles.newDivider} />
+                <View style={styles.newAboutRow}>
+                  <Text style={styles.newRowTitle}>Contact support</Text>
+                  <Text style={styles.newRowSubtitle}>We reply within a day</Text>
+                </View>
+                <View style={styles.newDivider} />
+                <View style={styles.newAboutRow}>
+                  <Text style={styles.newRowTitle}>Terms & privacy policy</Text>
+                  <Text style={styles.newRowSubtitle}>Updated this year</Text>
+                </View>
+              </View>
+
+              {/* Log Out Button */}
+              <TouchableOpacity
+                style={styles.newSignOutBtn}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setShowSettingsModal(false);
+                  setShowLogoutConfirm(true);
+                }}
+              >
+                <LogOut size={18} color={colors.isDark ? '#FED7AA' : '#C48B5A'} style={{ marginRight: 8 }} />
+                <Text style={styles.newSignOutBtnText}>Log Out</Text>
               </TouchableOpacity>
             </ScrollView>
           </SafeAreaView>
         </Modal>
 
         {/* ==========================================
-            --- PROFILE / EDIT MODALS ---
+            --- PROFILE & CREDENTIALS MODAL (Screenshot 1) ---
             ========================================== */}
-        <Modal visible={showProfileModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProfileModal(false)}>
-          <SafeAreaView style={styles.settingsModalContainer} edges={['top']}>
-            <View style={styles.settingsTopBar}>
-              <Text style={styles.settingsNavTitle}>Therapist Profile</Text>
-              <TouchableOpacity onPress={() => setShowProfileModal(false)} style={styles.closeButton}><Text style={styles.closeButtonText}>✕</Text></TouchableOpacity>
+        <Modal
+          visible={showProfileModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            setShowProfileModal(false);
+            if (profileOpenedFromSettings) {
+              setShowSettingsModal(true);
+              setProfileOpenedFromSettings(false);
+            }
+          }}
+        >
+          <SafeAreaView style={[styles.settingsModalContainer, { backgroundColor: colors.bgSecondary }]} edges={['top']}>
+            {/* Top User Summary Card (Screenshot 1 Top Header) */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
+              <View style={[styles.newProfileCard, { paddingVertical: 10 }]}>
+                <View style={[styles.newProfileAvatar, { width: 40, height: 40, borderRadius: 20 }]}>
+                  {editProfileForm.photoUri ? (
+                    <Image source={{ uri: editProfileForm.photoUri }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                  ) : (
+                    <Text style={[styles.newProfileAvatarText, { fontSize: 17 }]}>{editProfileForm.name.charAt(0) || 'A'}</Text>
+                  )}
+                </View>
+                <View style={styles.newProfileInfo}>
+                  <Text style={styles.newProfileName}>{therapistProfile.fullName}</Text>
+                  <Text style={styles.newProfileSubtitle}>
+                    {therapistProfile.license} {therapistProfile.title}
+                  </Text>
+                </View>
+              </View>
             </View>
+
+            {/* Header Row */}
+            <View style={styles.newHeaderRow}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowProfileModal(false);
+                  if (profileOpenedFromSettings) {
+                    setShowSettingsModal(true);
+                    setProfileOpenedFromSettings(false);
+                  }
+                }}
+                style={styles.newBackButton}
+                accessibilityLabel="Back"
+              >
+                <ChevronLeft size={22} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.newHeaderTitle}>Profile & Credentials</Text>
+            </View>
+
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
-              <View style={styles.profileHeroCard}>
-                <View style={styles.profileBigAvatarCircle}><Text style={styles.profileBigAvatarLetter}>{therapistProfile.name.charAt(0)}</Text></View>
-                <Text style={styles.profileHeroName}>{therapistProfile.name}</Text>
-                <Text style={styles.profileHeroRole}>{therapistProfile.title}</Text>
-                <View style={styles.licenseBadge}><Text style={styles.licenseBadgeText}>{therapistProfile.license}</Text></View>
+              {/* Upload Photo Card */}
+              <TouchableOpacity
+                style={styles.newUploadPhotoCard}
+                activeOpacity={0.8}
+                onPress={handlePickPhoto}
+              >
+                <View style={styles.newPhotoAvatarWrapper}>
+                  <View style={styles.newPhotoAvatar}>
+                    {editProfileForm.photoUri ? (
+                      <Image source={{ uri: editProfileForm.photoUri }} style={styles.newPhotoAvatarImg} />
+                    ) : (
+                      <Text style={styles.newPhotoAvatarText}>A</Text>
+                    )}
+                  </View>
+                  <View style={styles.newCameraBadge}>
+                    <Camera size={14} color="#FFFFFF" />
+                  </View>
+                </View>
+                <Text style={styles.newUploadPhotoLabel}>Upload Photo</Text>
+              </TouchableOpacity>
+
+              {/* Profile Section */}
+              <Text style={styles.newSectionTitleStandalone}>Profile</Text>
+              <View style={styles.newCard}>
+                <View style={styles.newProfileFieldRow}>
+                  <Text style={styles.newFieldLabel}>Name</Text>
+                  <TextInput
+                    style={styles.newFieldInput}
+                    value={editProfileForm.name}
+                    onChangeText={(text) =>
+                      setEditProfileForm((prev) => ({
+                        ...prev,
+                        name: text,
+                        fullName: `${text}, ${prev.credentials}`,
+                      }))
+                    }
+                    placeholder="Dr. Ameer Andres"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+                <View style={styles.newDivider} />
+
+                <View style={styles.newProfileFieldRow}>
+                  <Text style={styles.newFieldLabel}>Professional Title</Text>
+                  <TextInput
+                    style={styles.newFieldInput}
+                    value={editProfileForm.title}
+                    onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, title: text }))}
+                    placeholder="Speech-Language Pathologist"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+                <View style={styles.newDivider} />
+
+                <View style={styles.newProfileFieldRow}>
+                  <Text style={styles.newFieldLabel}>Contact Number</Text>
+                  <TextInput
+                    style={styles.newFieldInput}
+                    value={editProfileForm.contact}
+                    onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, contact: text }))}
+                    placeholder="+63 9000 000 000"
+                    keyboardType="phone-pad"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+                <View style={styles.newDivider} />
+
+                <View style={styles.newProfileFieldRow}>
+                  <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
+                  <TextInput
+                    style={styles.newFieldInput}
+                    value={editProfileForm.license}
+                    onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, license: text }))}
+                    placeholder="PRC #0048291"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+                <View style={styles.newDivider} />
+
+                <View style={styles.newProfileFieldRow}>
+                  <Text style={styles.newFieldLabel}>Clinic/School</Text>
+                  <TextInput
+                    style={styles.newFieldInput}
+                    value={editProfileForm.clinic}
+                    onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, clinic: text }))}
+                    placeholder="LittleVoices Pediatric Speech Center"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
               </View>
-              <Text style={styles.settingsSectionTitle}>Clinical Credentials</Text>
-              <View style={styles.settingsCard}>
-                <View style={styles.settingsCardRow}><View><Text style={styles.settingsRowSub}>Clinic Organization</Text><Text style={styles.settingsRowTitle}>{therapistProfile.clinic}</Text></View></View>
-                <View style={styles.settingsRowDivider} />
-                <View style={styles.settingsCardRow}><View><Text style={styles.settingsRowSub}>Email</Text><Text style={styles.settingsRowTitle}>{therapistProfile.email}</Text></View></View>
+
+              {/* Specialization Section */}
+              <Text style={styles.newSectionTitleStandalone}>Specialization</Text>
+              <View style={styles.newSpecialtyContainer}>
+                <View style={styles.newChipsRow}>
+                  {editProfileForm.specializations.map((spec, index) => {
+                    const colorInfo = SPECIALTY_PALETTE[index % SPECIALTY_PALETTE.length];
+                    return (
+                      <View
+                        key={spec}
+                        style={[
+                          styles.newChip,
+                          {
+                            borderColor: colorInfo.border,
+                            backgroundColor: colors.isDark ? colorInfo.darkBg : 'transparent',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.newChipText,
+                            { color: colors.isDark ? colorInfo.darkText : colorInfo.text },
+                          ]}
+                        >
+                          {spec}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handleRemoveSpecialty(spec)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.newChipRemove}
+                        >
+                          <X size={12} color={colors.isDark ? colorInfo.darkText : colorInfo.text} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.newAddSpecialtyRow}>
+                  <TextInput
+                    style={styles.newAddSpecialtyInput}
+                    value={newSpecialtyInput}
+                    onChangeText={setNewSpecialtyInput}
+                    onSubmitEditing={handleAddSpecialty}
+                    placeholder="Add Specialty e.g., Articulation"
+                    placeholderTextColor={colors.textMuted}
+                    returnKeyType="done"
+                  />
+                </View>
               </View>
-              <View style={styles.previewActionsRow}>
-                <TouchableOpacity style={styles.outlineBtn} onPress={() => { setEditProfileForm({ ...therapistProfile }); setShowEditProfileModal(true); }}><Text style={styles.outlineBtnText}>Edit Profile</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.solidBlueBtn} onPress={() => { setShowProfileModal(false); setShowSettingsModal(true); }}><Text style={styles.solidBlueBtnText}>Go to Settings ›</Text></TouchableOpacity>
+
+              {/* Save Credentials Button */}
+              <View style={styles.newSaveContainer}>
+                <TouchableOpacity
+                  style={styles.newSaveCredentialsBtn}
+                  activeOpacity={0.8}
+                  onPress={handleSaveProfile}
+                >
+                  <Text style={styles.newSaveCredentialsBtnText}>Save Credentials</Text>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </SafeAreaView>
         </Modal>
 
-        <Modal visible={showEditProfileModal} animationType="fade" transparent onRequestClose={() => setShowEditProfileModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalTitleText}>Edit Profile</Text>
-                <TouchableOpacity onPress={() => setShowEditProfileModal(false)} style={styles.closeButton}><Text style={styles.closeButtonText}>✕</Text></TouchableOpacity>
-              </View>
-              <Text style={styles.formLabel}>Full Name</Text>
-              <TextInput style={styles.formInput} value={editProfileForm.name} onChangeText={(t) => setEditProfileForm({ ...editProfileForm, name: t })} />
-              <Text style={styles.formLabel}>Clinic</Text>
-              <TextInput style={styles.formInput} value={editProfileForm.clinic} onChangeText={(t) => setEditProfileForm({ ...editProfileForm, clinic: t })} />
-              <View style={[styles.previewActionsRow, { marginTop: 12 }]}>
-                <TouchableOpacity style={styles.outlineBtn} onPress={() => setShowEditProfileModal(false)}><Text style={styles.outlineBtnText}>Cancel</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.solidBlueBtn} onPress={handleSaveProfile}><Text style={styles.solidBlueBtnText}>Save</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
         {/* ==========================================
-            --- LOGOUT CONFIRM & OTHER UTILITIES ---
+            --- LOGOUT CONFIRM MODAL ---
             ========================================== */}
         <Modal visible={showLogoutConfirm} animationType="fade" transparent onRequestClose={() => setShowLogoutConfirm(false)}>
           <View style={styles.modalOverlay}>
@@ -438,7 +904,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
           </View>
         )}
 
-        {/* Original Modals untouched */}
+        {/* Add Patient Modal */}
         {addPatientOpen ? <AddPatientModal /> : null}
 
       </View>
@@ -451,7 +917,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
 // ==========================================
 function createStyles(colors: ReturnType<typeof getThemeColors>) {
   return StyleSheet.create({
-    topHeader: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4 },
+    topHeader: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
     iconButton: { padding: 8 },
     appTitle: { fontFamily: 'SourGummy-Bold', fontSize: 22 },
     notificationDot: { position: 'absolute', top: 0, right: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
@@ -459,7 +925,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     menuOverlay: { flex: 1, backgroundColor: colors.menuOverlay },
     menuDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, left: 14, width: 250, backgroundColor: colors.card, borderRadius: 16, padding: 10, shadowColor: '#000', shadowOpacity: 0.12, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: colors.border },
     menuUserHeader: { flexDirection: 'row', alignItems: 'center', padding: 6, borderRadius: 10 },
-    menuAvatarCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE', justifyContent: 'center', alignItems: 'center' },
+    menuAvatarCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
     menuAvatarText: { fontSize: 16, fontWeight: '800', color: colors.isDark ? '#38BDF8' : '#0284C7' },
     menuUserName: { fontSize: 13, fontWeight: '700', color: colors.text },
     menuUserRole: { fontSize: 11, color: colors.textSub },
@@ -483,49 +949,383 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     markAllReadBtn: { marginTop: 10, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', backgroundColor: colors.card },
     markAllReadBtnText: { fontSize: 11, color: colors.textSub, fontWeight: '600' },
 
-    settingsModalContainer: { flex: 1, backgroundColor: colors.bgSecondary },
-    settingsTopBar: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-    settingsNavTitle: { fontFamily: 'SourGummy-Bold', fontSize: 18, color: colors.heading },
+    settingsModalContainer: { flex: 1 },
     settingsScrollContent: { padding: 16, paddingBottom: 40 },
-    settingsProfileHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 6 },
-    settingsAvatarCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6', justifyContent: 'center', alignItems: 'center' },
-    settingsAvatarLetter: { fontFamily: 'SourGummy-Bold', fontSize: 28, color: colors.isDark ? '#38BDF8' : '#0284C7' },
-    settingsDoctorName: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: colors.heading, marginBottom: 2 },
-    settingsDoctorRole: { fontSize: 12, fontWeight: '600', color: colors.text, marginBottom: 2 },
-    settingsLicenseText: { fontSize: 11, color: colors.textMuted },
-    settingsSectionTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 8, marginTop: 12 },
-    settingsCard: { backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border, overflow: 'hidden', marginBottom: 12 },
-    settingsCardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-    settingsRowDivider: { height: 1, backgroundColor: colors.divider, marginHorizontal: 16 },
-    settingsRowTitle: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 2 },
-    settingsRowSub: { fontSize: 12, color: colors.textSub },
-    settingsChevron: { fontSize: 16, color: colors.textMuted, fontWeight: '700' },
-    themeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-    themeSegmentControl: { flexDirection: 'row', backgroundColor: colors.segmentBg, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 3 },
-    themeSegmentBtn: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 16 },
-    themeSegmentBtnActive: { backgroundColor: '#38BDF8' },
-    themeSegmentText: { fontSize: 12, color: colors.textSub, fontWeight: '600' },
-    themeSegmentTextActive: { color: '#FFFFFF', fontWeight: '700' },
-    settingsLogoutButton: { backgroundColor: colors.logoutBtnBg, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 24, marginBottom: 10 },
-    settingsLogoutButtonText: { fontSize: 14, fontWeight: '700', color: colors.logoutBtnText },
 
-    profileHeroCard: { backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 20, alignItems: 'center', marginBottom: 14 },
-    profileBigAvatarCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-    profileBigAvatarLetter: { fontFamily: 'SourGummy-Bold', fontSize: 34, color: colors.isDark ? '#38BDF8' : '#0284C7' },
-    profileHeroName: { fontFamily: 'SourGummy-Bold', fontSize: 18, color: colors.heading, marginBottom: 2 },
-    profileHeroRole: { fontSize: 13, color: colors.text, fontWeight: '600', marginBottom: 6 },
-    licenseBadge: { backgroundColor: colors.cardSubtle, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-    licenseBadgeText: { fontSize: 11, color: colors.isDark ? '#38BDF8' : '#0284C7', fontWeight: '600' },
+    // --- Exact Profile & Settings Modal Styles ---
+    newHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 8,
+    },
+    newBackButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newHeaderTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newProfileCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    newProfileAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    newProfileAvatarImg: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+    },
+    newProfileAvatarText: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    newProfileInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    newProfileNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    newProfileName: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newVerifiedBadge: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: '#22C55E',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newProfileSubtitle: {
+      fontSize: 12,
+      color: colors.textSub,
+    },
+    newProfileHint: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+    newSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 14,
+      marginBottom: 4,
+    },
+    newSectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newSectionTitleStandalone: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: 14,
+      marginBottom: 6,
+    },
+    newSubSectionTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSub,
+      marginTop: 12,
+      marginBottom: 4,
+    },
+    newCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      overflow: 'hidden',
+    },
+    newToggleRow: {
+      minHeight: 56,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    newToggleRowCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    newRowTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newRowSubtitle: {
+      fontSize: 12,
+      color: colors.textSub,
+    },
+    newDivider: {
+      height: 1,
+      backgroundColor: colors.divider,
+    },
+    newShieldIcon: {
+      marginRight: 2,
+    },
+    newThemeRow: {
+      minHeight: 54,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    newThemeLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    newThemeSegmentControl: {
+      flexDirection: 'row',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.isDark ? '#0F172A' : '#F8FAFC',
+      padding: 2,
+      gap: 2,
+    },
+    newThemeSegmentBtn: {
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newThemeSegmentBtnActive: {
+      backgroundColor: colors.isDark ? 'rgba(196,139,90,0.28)' : 'rgba(196,139,90,0.18)',
+    },
+    newThemeSegmentText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    newThemeSegmentTextActive: {
+      color: colors.isDark ? '#FED7AA' : '#C48B5A',
+      fontWeight: '700',
+    },
+    newSessionRow: {
+      minHeight: 54,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    newThisDeviceBadge: {
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      backgroundColor: colors.isDark ? 'rgba(34,197,94,0.22)' : 'rgba(34,197,94,0.15)',
+    },
+    newThisDeviceText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#22C55E',
+    },
+    newRevokeBtn: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#7F1D1D' : '#FCA5A5',
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 4,
+      backgroundColor: colors.isDark ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.06)',
+    },
+    newRevokeBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.isDark ? '#FCA5A5' : '#DC2626',
+    },
+    newAboutRow: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 2,
+    },
+    newSignOutBtn: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#C48B5A' : '#C48B5A',
+      backgroundColor: colors.isDark ? 'rgba(196,139,90,0.14)' : 'rgba(196,139,90,0.08)',
+      borderRadius: 12,
+      height: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      alignSelf: 'center',
+      width: 200,
+      marginTop: 14,
+      marginBottom: 24,
+    },
+    newSignOutBtnText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.isDark ? '#FED7AA' : '#C48B5A',
+    },
+    newUploadPhotoCard: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      paddingVertical: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+    },
+    newPhotoAvatarWrapper: {
+      position: 'relative',
+    },
+    newPhotoAvatar: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.isDark ? '#082F49' : '#CFE4F6',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    newPhotoAvatarImg: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+    },
+    newPhotoAvatarText: {
+      fontSize: 32,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    newCameraBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 2,
+      borderColor: colors.card,
+      backgroundColor: colors.isDark ? '#334155' : '#0F172A',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newUploadPhotoLabel: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    newProfileFieldRow: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 4,
+    },
+    newFieldLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textSub,
+    },
+    newFieldInput: {
+      fontSize: 14,
+      color: colors.text,
+      padding: 0,
+      minHeight: 22,
+    },
+    newSpecialtyContainer: {
+      gap: 12,
+    },
+    newChipsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    newChip: {
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    newChipText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    newChipRemove: {
+      padding: 2,
+    },
+    newAddSpecialtyRow: {
+      width: '100%',
+    },
+    newAddSpecialtyInput: {
+      height: 42,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      fontSize: 13,
+      color: colors.text,
+    },
+    newSaveContainer: {
+      alignItems: 'center',
+      marginTop: 16,
+      marginBottom: 28,
+    },
+    newSaveCredentialsBtn: {
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#C48B5A' : '#C48B5A',
+      backgroundColor: colors.isDark ? 'rgba(196,139,90,0.18)' : 'rgba(196,139,90,0.12)',
+      borderRadius: 10,
+      paddingHorizontal: 36,
+      paddingVertical: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    newSaveCredentialsBtnText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.isDark ? '#FED7AA' : '#C48B5A',
+    },
 
     modalOverlay: { flex: 1, backgroundColor: colors.modalOverlay, justifyContent: 'center', padding: 16 },
     modalContent: { backgroundColor: colors.card, borderRadius: 20, padding: 18, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10, elevation: 8 },
     modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-    modalTitleText: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: colors.heading },
     modalPatientName: { fontSize: 15, fontWeight: '700', color: colors.text },
-    closeButton: { padding: 6 },
-    closeButtonText: { fontSize: 18, color: colors.textSub, fontWeight: '700' },
-    formLabel: { fontSize: 12, fontWeight: '700', color: colors.text, marginTop: 10, marginBottom: 4 },
-    formInput: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: colors.inputText, marginBottom: 8 },
     previewActionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 18 },
     outlineBtn: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.isDark ? '#38BDF8' : '#0284C7', justifyContent: 'center', alignItems: 'center', marginRight: 8, backgroundColor: colors.card },
     outlineBtnText: { fontSize: 13, fontWeight: '700', color: colors.isDark ? '#38BDF8' : '#0284C7' },

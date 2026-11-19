@@ -1,1 +1,1 @@
-export { default } from '@/Therapist-modules/therapist-activities/pages/ActivityEditPage';
+export { TherapistActivityEdit as default } from '@/Therapist/TherapistActivities';
