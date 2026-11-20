@@ -19,7 +19,7 @@ export default function SpeechCheckInScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
-  // FIXED FONT PATHS: Removed the /fonts/ folder segment
+  // Font Paths
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
@@ -32,7 +32,6 @@ export default function SpeechCheckInScreen() {
     <View style={styles.screenContainer}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* FIXED IMAGE PATH: 3 levels up */}
       <ImageBackground
         source={require('../../../assets/images/landing-bg-pattern.png')}
         style={styles.background}
@@ -40,13 +39,10 @@ export default function SpeechCheckInScreen() {
         resizeMode="cover"
       >
         <View style={[styles.container, isTablet && styles.containerTablet]}>
-          
-          {/* Main Card Wrapper positioned in the upper section */}
+          {/* Main Card Wrapper positioned in the center */}
           <View style={styles.cardWrapper}>
-            
             {/* Overlapping Bird Graphic */}
             <View style={styles.birdWrapper}>
-              {/* FIXED IMAGE PATH: 3 levels up */}
               <Image
                 source={require('../../../assets/images/bird-logo.gif')}
                 style={styles.birdImage}
@@ -66,7 +62,6 @@ export default function SpeechCheckInScreen() {
                 7 quick questions • 4 sound checks •{'\n'}speech delay screening
               </Text>
             </LinearGradient>
-
           </View>
 
           {/* Middle Info Card */}
@@ -78,14 +73,13 @@ export default function SpeechCheckInScreen() {
           </View>
 
           {/* Bottom Start Button Connected to Questions */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.startButton}
             activeOpacity={0.85}
             onPress={() => router.push('/speech-checkin-questions' as any)}
           >
             <Text style={styles.startButtonText}>Start Check-in</Text>
           </TouchableOpacity>
-
         </View>
       </ImageBackground>
     </View>
@@ -104,28 +98,27 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 25,
-    paddingTop: 80,
+    paddingHorizontal: 18,
+    paddingVertical: 28,
   },
-  // Added Tablet MaxWidth Constraint
   containerTablet: {
-    maxWidth: 600,
+    maxWidth: 640,
     alignSelf: 'center',
     width: '100%',
   },
   cardWrapper: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 55,
+    marginBottom: 24,
+    marginTop: 64,
   },
   birdWrapper: {
-    width: 170,
-    height: 170,
+    width: 190,
+    height: 190,
     position: 'absolute',
-    top: -90,
+    top: -102,
     zIndex: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -136,10 +129,10 @@ const styles = StyleSheet.create({
   },
   topCard: {
     width: '100%',
-    borderRadius: 32,
-    paddingTop: 105,
-    paddingBottom: 60,
-    paddingHorizontal: 20,
+    borderRadius: 36,
+    paddingTop: 112,
+    paddingBottom: 68,
+    paddingHorizontal: 22,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -149,26 +142,27 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: 'SourGummy-Bold',
-    fontSize: 34,
+    fontSize: 38,
     color: '#FFFFFF',
-    marginBottom: 10,
+    marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
     fontFamily: 'SourGummy-Medium',
-    fontSize: 13.5,
+    fontSize: 15,
     color: '#EAF4FC',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
   infoCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#D0E6F5',
     width: '100%',
-    borderRadius: 24,
-    padding: 22,
-    marginBottom: 20,
+    borderRadius: 28,
+    paddingVertical: 26,
+    paddingHorizontal: 24,
+    marginBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -177,21 +171,21 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontFamily: 'SourGummy-Bold',
-    fontSize: 16,
+    fontSize: 18.5,
     color: '#FEB723',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   infoText: {
     fontFamily: 'SourGummy-Medium',
-    fontSize: 14,
+    fontSize: 15.5,
     color: '#0C66AD',
-    lineHeight: 20,
+    lineHeight: 23,
   },
   startButton: {
     backgroundColor: '#FEB723',
     width: '100%',
-    paddingVertical: 18,
-    borderRadius: 28,
+    paddingVertical: 21,
+    borderRadius: 30,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -202,6 +196,6 @@ const styles = StyleSheet.create({
   startButtonText: {
     fontFamily: 'SourGummy-Bold',
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
   },
 });
