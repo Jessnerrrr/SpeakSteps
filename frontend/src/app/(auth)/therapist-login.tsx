@@ -35,8 +35,8 @@ export default function TherapistLoginScreen() {
     }
 
     if (email.trim().toLowerCase() === 'therapist@speaksteps.com' && password === 'Therapist@123') {
-      // Routes to the therapist dashboard
-      router.replace('/therapist' as never);
+      // Routes to the auth selection screen and passes 'therapist' as the role
+      router.push({ pathname: '/auth-selection', params: { role: 'therapist' } } as any);
     } else {
       setLoginError('Invalid email or password');
     }

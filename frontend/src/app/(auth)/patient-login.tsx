@@ -36,13 +36,13 @@ export default function PatientLoginScreen() {
     
     const emailLower = email.trim().toLowerCase();
 
-    // Account 1: NEW Patient -> Goes to Speech Check-in
+    // Account 1: NEW Patient -> Goes to Auth Selection (passing status 'new')
     if (emailLower === 'new@speaksteps.com' && password === 'Patient@123') {
-      router.push('/speech-checkin' as any);
+      router.push({ pathname: '/auth-selection', params: { role: 'patient', status: 'new' } } as any);
     } 
-    // Account 2: OLD Patient -> Goes straight to Patient Dashboard
+    // Account 2: OLD Patient -> Goes to Auth Selection (passing status 'old')
     else if (emailLower === 'old@speaksteps.com' && password === 'Patient@123') {
-      router.push('/patient-dashboard' as any);
+      router.push({ pathname: '/auth-selection', params: { role: 'patient', status: 'old' } } as any);
     } 
     // Invalid Login
     else {

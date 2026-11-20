@@ -13,73 +13,55 @@ export function MenuIcon({ color = '#1E293B', size = 22 }: IconProps) {
   );
 }
 
-export function BellIcon({ color = '#1E293B', size = 22, alert = false }: IconProps & { alert?: boolean }) {
+export function BellIcon({ color = '#0284C7', size = 24, alert = true }: IconProps & { alert?: boolean }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M6 9.1a6 6 0 0 1 12 0c0 4.1.9 5.5 1.7 6.3.3.3.1.9-.4.9H4.7c-.5 0-.7-.6-.4-.9C5.1 14.6 6 13.2 6 9.1Z"
-        stroke={color}
-        strokeWidth={1.7}
-        strokeLinejoin="round"
+        d="M12 2C10.9 2 10 2.9 10 4c0 .3.05.6.14.88C7.68 5.86 6 8.23 6 11v5l-2 2v1h16v-1l-2-2v-5c0-2.77-1.68-5.14-4.14-6.12.09-.28.14-.58.14-.88 0-1.1-.9-2-2-2Z"
+        fill={color}
       />
-      <Path d="M9.8 18.5a2.2 2.2 0 0 0 4.4 0" stroke={color} strokeWidth={1.7} strokeLinecap="round" />
-      {alert ? <Circle cx={17.4} cy={4.6} r={2.35} fill="#F04438" /> : null}
+      <Path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2Z" fill={color} />
+      {alert && <Circle cx={18} cy={5} r={3.5} fill="#EF4444" />}
     </Svg>
   );
 }
 
-export function HomeIcon({ color = '#8B9AAB', size = 22 }: IconProps) {
+export function HomeIcon({ color = '#63778A', size = 24 }: IconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M4.2 11.2 12 4.4l7.8 6.8V20a1 1 0 0 1-1 1h-4.6v-5.6H9.8V21H5.2a1 1 0 0 1-1-1v-8.8Z"
-        stroke={color}
-        strokeWidth={1.7}
-        strokeLinejoin="round"
-      />
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M12 3 2 12h3v8a1 1 0 0 0 1 1h4v-6a2 2 0 0 1 2-2 2 2 0 0 1 2 2v6h4a1 1 0 0 0 1-1v-8h3L12 3Z" />
     </Svg>
   );
 }
 
-export function StudentsIcon({ color = '#8B9AAB', size = 22 }: IconProps) {
+export function StudentsIcon({ color = '#63778A', size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3Zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z" />
+    </Svg>
+  );
+}
+
+export function ActivitiesIcon({ color = '#63778A', size = 24 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="9" cy="9" r="2.3" stroke={color} strokeWidth={1.7} />
-      <Circle cx="16" cy="10" r="1.8" stroke={color} strokeWidth={1.7} />
+      <Circle cx="9" cy="8" r="3.5" fill={color} />
+      <Path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5v1H3v-1Z" fill={color} />
       <Path
-        d="M4.6 18.2c.6-2.5 2.4-3.8 4.4-3.8s3.8 1.3 4.4 3.8"
+        d="M17.5 9.5a3.5 3.5 0 0 1 0 5M20 7.5a6.5 6.5 0 0 1 0 9"
         stroke={color}
-        strokeWidth={1.7}
+        strokeWidth={2.2}
         strokeLinecap="round"
-      />
-      <Path d="M13.4 14.7c1.4-.2 2.9.5 3.6 2.3" stroke={color} strokeWidth={1.7} strokeLinecap="round" />
-    </Svg>
-  );
-}
-
-export function ActivitiesIcon({ color = '#8B9AAB', size = 22 }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M3 12h3.2l2.1-5.2 3.4 10.2 2.2-5H21"
-        stroke={color}
-        strokeWidth={1.7}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        fill="none"
       />
     </Svg>
   );
 }
 
-export function ReviewsIcon({ color = '#8B9AAB', size = 22 }: IconProps) {
+export function ReviewsIcon({ color = '#0284C7', size = 24 }: IconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M12 3.7 14.2 8.7l5.4.5-4.1 3.5 1.2 5.3L12 15.4 7.3 18l1.2-5.3-4.1-3.5 5.4-.5L12 3.7Z"
-        stroke={color}
-        strokeWidth={1.7}
-        strokeLinejoin="round"
-      />
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M12 2.5l2.9 6.2 6.8.8-5 4.7 1.3 6.7L12 17.5 6 20.9l1.3-6.7-5-4.7 6.8-.8L12 2.5Z" />
     </Svg>
   );
 }
