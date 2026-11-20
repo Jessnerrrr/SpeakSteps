@@ -8,7 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TherapistShell } from '@/components/therapist/TherapistShell';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
-import { PeopleIcon, PersonIcon } from '@/components/therapist/icons';
+import { PersonIcon } from '@/components/therapist/icons';
 import type { TherapistRoute } from '@/navigation/therapistTabs';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ function toneColor(tone: StatTone, palette: { green: string; alert: string; prim
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function QuickActions({ onAssign, onAddPatient }: { onAssign: () => void; onAddPatient: () => void }) {
+function QuickActions({ onAssign }: { onAssign: () => void }) {
   const { palette } = useTherapist();
   return (
     <View style={styles.quickRow}>
@@ -91,14 +91,6 @@ function QuickActions({ onAssign, onAddPatient }: { onAssign: () => void; onAddP
       >
         <PersonIcon color={palette.primaryText} size={18} />
         <Text style={[styles.quickLabel, { color: palette.primaryText }]}>Assign Activity</Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onAddPatient}
-        style={({ pressed }) => [styles.quickButton, { backgroundColor: palette.greenSoft, opacity: pressed ? 0.8 : 1 }]}
-      >
-        <PeopleIcon color={palette.greenText} />
-        <Text style={[styles.quickLabel, { color: palette.greenText }]}>Add Patient</Text>
       </Pressable>
     </View>
   );
@@ -185,7 +177,7 @@ function RecentSubmissions({ onViewAll, onOpen }: { onViewAll: () => void; onOpe
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TherapistDashboard() {
-  const { palette, profile, notificationsOpen, setAddPatientOpen } = useTherapist();
+  const { palette, profile, notificationsOpen } = useTherapist();
   const openReviews = (_submission?: Submission) => {
     router.push('/therapist/reviews' as never);
   };
@@ -205,7 +197,6 @@ export default function TherapistDashboard() {
         <View style={styles.block}>
           <QuickActions
             onAssign={() => router.push('/therapist/activities/assign?id=ready-set-r' as never)}
-            onAddPatient={() => setAddPatientOpen(true)}
           />
         </View>
         <View style={styles.block}>
@@ -222,37 +213,58 @@ export default function TherapistDashboard() {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 20 },
   date: { fontSize: 13, marginBottom: 4 },
-  greeting: { fontSize: 26, lineHeight: 32, fontWeight: '700' },
-  subtitle: { fontSize: 14, marginTop: 4, marginBottom: 16 },
+  greeting: { fontFamily: 'SourGummy-Bold', fontSize: 24, lineHeight: 30, marginBottom: 4 },
+  subtitle: { fontSize: 14, marginTop: 4, marginBottom: 14 },
   block: { marginBottom: 14 },
 
   // Quick Actions
-  quickRow: { flexDirection: 'row', gap: 10 },
-  quickButton: { flex: 1, minHeight: 42, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 10 },
-  quickLabel: { fontSize: 13, fontWeight: '700' },
+  quickRow: { flexDirection: 'row' },
+  quickButton: {
+    alignSelf: 'flex-start',
+    minHeight: 38,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  quickLabel: { fontFamily: 'SourGummy-Bold', fontSize: 13 },
 
   // Stat Grid
   statGrid: { gap: 12 },
   statRow: { flexDirection: 'row', gap: 12 },
-  statCard: { flex: 1, minHeight: 108, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 14, justifyContent: 'space-between', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1 },
+  statCard: {
+    flex: 1,
+    minHeight: 108,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    justifyContent: 'space-between',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
+  },
   statTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 },
-  statValue: { fontSize: 28, fontWeight: '700', lineHeight: 32 },
+  statValue: { fontFamily: 'SourGummy-Bold', fontSize: 28, lineHeight: 32 },
   statBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   statBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
-  statLabel: { fontSize: 13, lineHeight: 17, fontWeight: '500' },
+  statLabel: { fontSize: 13, lineHeight: 17, fontWeight: '600' },
 
   // Recent Submissions
   recentPanel: { borderRadius: 18, padding: 12, gap: 10 },
   recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: 2 },
-  recentTitle: { fontSize: 16, fontWeight: '700' },
+  recentTitle: { fontFamily: 'SourGummy-Bold', fontSize: 16 },
   viewAll: { fontSize: 13, fontWeight: '600' },
   recentCard: { borderRadius: 14, padding: 12 },
   recentIdentity: { flexDirection: 'row', gap: 10 },
   recentAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E7EDF2' },
-  recentInitials: { color: '#7B8B9C', fontSize: 12, fontWeight: '700' },
+  recentInitials: { fontFamily: 'SourGummy-Bold', color: '#7B8B9C', fontSize: 12 },
   recentCopy: { flex: 1, gap: 4 },
   recentNameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  recentName: { fontSize: 13, fontWeight: '700', flex: 1, marginRight: 8 },
+  recentName: { fontSize: 14, fontWeight: '700', flex: 1, marginRight: 8 },
   recentTime: { fontSize: 11 },
   recentDetail: { fontSize: 12 },
   recentStage: { fontSize: 11 },

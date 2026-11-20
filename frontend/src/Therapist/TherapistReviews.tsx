@@ -402,7 +402,7 @@ export function TherapistReviewDetail() {
 const reviewStyles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 24 },
   kicker: { fontSize: 11, letterSpacing: 0.6, fontWeight: '700' },
-  title: { fontSize: 28, fontWeight: '700', marginTop: 4 },
+  title: { fontFamily: 'SourGummy-Bold', fontSize: 24, marginTop: 4 },
   subtitle: { fontSize: 13, marginTop: 4, marginBottom: 14 },
   tabs: { flexDirection: 'row', gap: 18, borderBottomWidth: 1, marginBottom: 14 },
   tab: { fontSize: 14, fontWeight: '700', paddingBottom: 8, borderBottomWidth: 2, marginBottom: -1 },

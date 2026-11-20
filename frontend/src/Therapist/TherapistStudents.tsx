@@ -451,7 +451,7 @@ const studentStyles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12 },
   back: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   titleBlock: { flex: 1 },
-  title: { fontSize: 26, fontWeight: '700', lineHeight: 30 },
+  title: { fontFamily: 'SourGummy-Bold', fontSize: 24, lineHeight: 30 },
   subtitle: { fontSize: 12, marginTop: 2 },
   plus: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   plusText: { fontSize: 24, lineHeight: 26, fontWeight: '500' },

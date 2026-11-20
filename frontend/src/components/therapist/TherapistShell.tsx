@@ -972,8 +972,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       justifyContent: 'center',
     },
     newHeaderTitle: {
+      fontFamily: 'SourGummy-Bold',
       fontSize: 20,
-      fontWeight: '700',
       color: colors.text,
     },
     newProfileCard: {
