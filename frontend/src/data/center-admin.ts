@@ -3,7 +3,28 @@ export type ProfessionalStatus = 'Active' | 'Suspended' | 'Deactivated';
 export type InvitationStatus = 'Not sent' | 'Pending' | 'Failed' | 'Completed';
 export type PatientAccess = 'Active' | 'Suspended' | 'Setup pending';
 export type EnrollmentStatus = 'Enrolled' | 'Archived';
-export type RequestStatus = 'Pending' | 'Approved' | 'Declined';
+export type CareEpisodeClosureCategory = 'Clinical discharge' | 'Authorized withdrawal' | 'External transfer' | 'Other authorized administrative closure';
+export type CareEpisode = {
+  id: string;
+  patientId: string;
+  status: 'Active' | 'Closed';
+  startedAt?: string;
+  effectiveCloseDate?: string;
+  closureCategory?: CareEpisodeClosureCategory;
+  closureReason?: string;
+  authorizedBy?: string;
+  authorizationReference?: string;
+  therapistIdAtClose?: string | null;
+};
+export type AssignmentHistory = {
+  id: string;
+  patientId: string;
+  professionalId: string;
+  role: ProfessionalRole;
+  endedAt?: string;
+  endReason?: string;
+};
+export type RequestStatus = 'Pending' | 'More information requested' | 'Approved' | 'Declined';
 
 export type Professional = {
   id: string;
@@ -86,6 +107,9 @@ export type SuspensionRequest = {
   submitted: string;
   status: RequestStatus;
   events?: RequestEvent[];
+  resolvedBy?: string;
+  resolvedAt?: string;
+  resolutionReason?: string;
 };
 
 export type ReleaseRequest = {
@@ -106,6 +130,11 @@ export type ReleaseRequest = {
   attachment?: string;
   submitted: string;
   status: 'Pending' | 'More information requested' | 'Approved & reassigned' | 'Approved & archived' | 'Declined';
+  resolvedBy?: string;
+  resolvedAt?: string;
+  resolutionReason?: string;
+  effectiveCloseDate?: string;
+  authorizationReference?: string;
 };
 
 export type RequestEvent = {

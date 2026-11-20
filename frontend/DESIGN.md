@@ -44,3 +44,14 @@ Center administrators use this Operate workspace to manage professional accounts
 - **Required states:** Directory search and sorting, setup pending, archived or suspended records, no results, recovery confirmation, and eligibility blocks.
 - **Out of scope:** Backend persistence, duplicate archive records, and a separate account data store.
 - **Signature:** Accounts opens into dedicated Directory, Student Requests, and Archive Center routes. The selected child is reflected in the sidebar and breadcrumb, while account and request records stay in one shared in-memory store across route changes.
+
+## Student Requests review contract
+
+- **Product and user:** Center Admin identifying, verifying, and resolving Student related requests.
+- **Surface:** Operate.
+- **Primary action:** Review the original submission and applicable verification, then record an eligible decision.
+- **Content:** Searchable request ID and Student number, named submitter and role, request date, workflow stage, resolution status, follow-up schedule, original explanation, evidence, event history, and request-specific decision.
+- **Reuse:** Existing shared request records, account drawer, Geist, blue actions, restrained status colors, activity logs, and notifications.
+- **Required states:** Open and resolved, pending external confirmation, missing evidence, overdue day 14 escalation, action selected, validation blocked, and empty search/filter results.
+- **Out of scope:** External message delivery, school record lookup, backend persistence, and unrelated Accounts or dashboard redesign.
+- **Signature:** A compact request table opens a sticky identity drawer; resolution status remains separate from follow-up, and the contextual footer exposes only an eligible action.

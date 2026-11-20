@@ -1,102 +1,93 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
-import type { Patient, Professional } from '../../data/center-admin';
+import React from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
+import type { AssignmentHistory, Patient, Professional } from '../../data/center-admin';
+import AccountDetailsActionRow from './AccountDetailsActionRow';
 
-const C = { ink: '#17364D', muted: '#48657A', subtle: '#60788D', blue: '#0865AD', soft: '#EAF7FF', line: '#D9E5EE', white: '#FFFFFF', green: '#287A4B', greenSoft: '#E8F5EC', yellow: '#8A5B00', yellowSoft: '#FFF4D8', red: '#AD3B42', redSoft: '#FDEBED' };
+const C = { ink: '#17364D', muted: '#48657A', subtle: '#60788D', line: '#D9E5EE', green: '#287A4B' };
 
 function Value({ label, value }: { label: string; value: string }) {
-  return <View style={{ width: '50%', minWidth: 145, paddingVertical: 9, paddingRight: 14 }}><Text style={{ color: C.subtle, fontSize: 10, marginBottom: 4 }}>{label}</Text><Text style={{ color: C.ink, fontSize: 12, fontFamily: 'Geist-Medium' }}>{value}</Text></View>;
+  return <View style={{ width: '50%', minWidth: 145, paddingVertical: 8, paddingRight: 14 }}>
+    <Text style={{ color: C.subtle, fontSize: 11, lineHeight: 15, marginBottom: 3 }}>{label}</Text>
+    <Text style={{ color: C.ink, fontSize: 14, lineHeight: 20, fontFamily: 'Geist-Medium' }}>{value}</Text>
+  </View>;
 }
 
-function Action({ label, onPress, tone = 'secondary' }: { label: string; onPress: () => void; tone?: 'primary' | 'secondary' | 'danger' }) {
-  const background = tone === 'primary' ? C.blue : tone === 'danger' ? C.redSoft : C.white;
-  const border = tone === 'primary' ? C.blue : tone === 'danger' ? '#F1C7CC' : C.line;
-  const color = tone === 'primary' ? C.white : tone === 'danger' ? C.red : C.ink;
-  return <TouchableOpacity accessibilityRole="button" onPress={onPress} style={{ minHeight: 42, paddingHorizontal: 13, borderWidth: 1, borderColor: border, borderRadius: 7, backgroundColor: background, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color, fontFamily: 'Geist-SemiBold', fontSize: 12 }}>{label}</Text></TouchableOpacity>;
+function Section({ title, children, divider = false }: { title: string; children: React.ReactNode; divider?: boolean }) {
+  return <View style={{ paddingTop: 18, marginTop: 4, borderTopWidth: divider ? 1 : 0, borderTopColor: C.line }}>
+    <Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 15, lineHeight: 20, marginBottom: 7 }}>{title}</Text>
+    {children}
+  </View>;
 }
 
-export default function ProfessionalDetails({ person, students, onClose, onOpenStudent, onResendInvitation, onSuspend, onReactivate, onDeactivate }: {
+const displayDate = (date: string) => {
+  const parsed = new Date(`${date.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? 'Not recorded' : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+};
+
+export default function ProfessionalDetails({ person, students, historicalAssignments = [], onOpenStudent, onResendInvitation, onSuspend, onReactivate, onDeactivate }: {
   person: Professional;
   students: Patient[];
-  onClose: () => void;
+  historicalAssignments?: { assignment: AssignmentHistory; student?: Patient }[];
   onOpenStudent: (student: Patient) => void;
   onResendInvitation: () => void;
-  onSuspend: (reason: string) => void;
+  onSuspend: () => void;
   onReactivate: () => void;
   onDeactivate: () => void;
 }) {
-  const [suspending, setSuspending] = useState(false);
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
   const access = person.access ?? (person.status === 'Suspended' ? 'Suspended' : 'Active');
   const membership = person.membership ?? (person.status === 'Deactivated' ? 'Deactivated' : 'Active');
   const setup = person.invitation === 'Completed' ? 'Completed' : person.invitation === 'Failed' ? 'Needs attention' : 'Pending';
-  const suspend = () => {
-    if (!reason.trim()) { setError('Enter a reason to suspend access.'); return; }
-    onSuspend(reason.trim());
-  };
+  const activeStudents = students.filter((student) => student.enrollment === 'Enrolled');
   const field = (label: string, value?: string) => <Value label={label} value={value?.trim() || (person.role === 'Therapist' ? 'Not provided' : 'Unavailable in school records')} />;
 
   return <View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
-      <View style={{ flex: 1 }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 19 }}>{suspending ? 'Suspend access' : `${person.role} details`}</Text><Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>{suspending ? 'This prevents the account from signing in. Existing Student assignments stay unchanged.' : 'Account identity, setup, and assigned Students'}</Text></View>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel={suspending ? 'Cancel suspension' : 'Close professional details'} onPress={suspending ? () => { setSuspending(false); setReason(''); setError(''); } : onClose} style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#F0F6FA' }}><Ionicons name={suspending ? 'arrow-back' : 'close'} size={19} color={C.ink} /></TouchableOpacity>
-    </View>
-
-    {suspending ? <>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 7, backgroundColor: C.yellowSoft, marginBottom: 16 }}><Ionicons name="warning-outline" size={18} color={C.yellow} /><Text style={{ flex: 1, color: C.ink, fontSize: 12, lineHeight: 17 }}>Suspending {person.name} blocks sign-in and moves the account to Archive Center. Their professional history and current Student assignments remain preserved.</Text></View>
-      <Text style={{ color: C.ink, fontSize: 12, fontFamily: 'Geist-SemiBold', marginBottom: 7 }}>Reason for suspension</Text>
-      <TextInput value={reason} onChangeText={(value) => { setReason(value); setError(''); }} placeholder="Explain why access should be suspended" placeholderTextColor={C.subtle} multiline accessibilityLabel="Reason for suspension" style={{ minHeight: 90, paddingHorizontal: 11, paddingVertical: 10, borderRadius: 7, borderWidth: 1, borderColor: error ? C.red : C.line, color: C.ink, fontSize: 13, textAlignVertical: 'top' }} />
-      {error ? <Text accessibilityLiveRegion="polite" style={{ color: C.red, fontSize: 11, marginTop: 6 }}>{error}</Text> : null}
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, paddingTop: 17, marginTop: 14, borderTopWidth: 1, borderTopColor: C.line }}><Action label="Cancel" onPress={() => { setSuspending(false); setReason(''); setError(''); }} /><Action label="Suspend Access" tone="danger" onPress={suspend} /></View>
-    </> : <>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: C.line }}><View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: C.soft, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.blue, fontFamily: 'Geist-SemiBold', fontSize: 11 }}>{person.name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</Text></View><View style={{ flex: 1, minWidth: 0 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 17 }}>{person.name}</Text>{access === 'Active' && membership === 'Active' ? <View accessibilityLabel="Active account" style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green }} /> : null}</View><Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{person.email}</Text></View></View>
-
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingVertical: 14 }}>
-        <Value label="Role" value={person.role} />
-        <Value label={person.role === 'Therapist' ? 'Staff ID · admin provided' : 'Professional ID · school provided'} value={person.role === 'Therapist' ? person.staffId ?? 'Not recorded' : person.professionalIdentifier ?? 'Unavailable in school records'} />
-        <Value label="Account access" value={access} />
-        <Value label="Center membership" value={membership} />
-        <Value label="Setup" value={setup} />
-        <Value label="Created" value={person.joined} />
+    <Section title="Current Caseload" divider>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+        <Text style={{ color: C.muted, fontSize: 12, lineHeight: 17 }}>Students currently assigned</Text>
+        <Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, textAlign: 'right' }}>{activeStudents.length} {activeStudents.length === 1 ? 'student' : 'students'}</Text>
       </View>
-
-      <View style={{ paddingTop: 14, borderTopWidth: 1, borderTopColor: C.line }}>
-        <Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 13, marginBottom: 3 }}>{person.role === 'Therapist' ? 'Professional profile' : 'School record'}</Text>
-        <Text style={{ color: C.muted, fontSize: 11, lineHeight: 16, marginBottom: 8 }}>{person.role === 'Therapist' ? 'Prefilled from the staff record; the Therapist can update it after setup.' : 'Information sourced from the authoritative school directory.'}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {person.role === 'Therapist' ? <>
-            <Value label="First name" value={person.firstName || 'Not provided'} />
-            <Value label="Middle name" value={person.middleName || 'Not provided'} />
-            <Value label="Last name" value={person.lastName || 'Not provided'} />
-            {field('Professional title', person.professionalTitle)}
-            {field('Specialization', person.specialization)}
-            {field('License / registration', person.licenseNumber)}
-            {field('Contact number', person.contactNumber)}
-          </> : <>
-            {field('School', person.school)}
-            {field('Grade / section', person.gradeSections?.join(', '))}
-          </>}
+      {activeStudents.map((student) => <TouchableOpacity key={student.id} accessibilityRole="button" accessibilityLabel={`Open ${student.name}, currently assigned Student`} onPress={() => onOpenStudent(student)} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ color: C.ink, fontFamily: 'Geist-Medium', fontSize: 14, lineHeight: 19 }}>{student.name}</Text>
+          <Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>{student.studentNumber}</Text>
         </View>
-      </View>
+        <Text style={{ color: C.green, fontFamily: 'Geist-Medium', fontSize: 12 }}>Current</Text>
+        <Ionicons name="chevron-forward" size={16} color={C.subtle} />
+      </TouchableOpacity>)}
+      {activeStudents.length === 0 ? <View style={{ paddingVertical: 24, alignItems: 'center' }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 15, lineHeight: 20 }}>No active assignments</Text><Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 3, textAlign: 'center' }}>This {person.role.toLowerCase()} has no students currently assigned.</Text></View> : null}
+    </Section>
 
-      <View style={{ paddingTop: 17, marginTop: 4, borderTopWidth: 1, borderTopColor: C.line }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 13 }}>Assigned Students</Text><Text style={{ color: C.muted, fontSize: 11 }}>{students.length}</Text></View>
-        {students.map((student) => <TouchableOpacity key={student.id} accessibilityRole="link" accessibilityLabel={`Open ${student.name} in Students`} onPress={() => onOpenStudent(student)} style={{ minHeight: 53, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: C.line }}><View style={{ flex: 1, minWidth: 0 }}><Text style={{ color: C.ink, fontFamily: 'Geist-Medium', fontSize: 12 }}>{student.name}</Text><Text style={{ color: C.muted, fontSize: 11, marginTop: 3 }}>{student.studentNumber}</Text></View><Text style={{ color: student.enrollment === 'Enrolled' ? C.green : C.subtle, fontSize: 11 }}>{student.enrollment}</Text><Ionicons name="chevron-forward" size={15} color={C.subtle} /></TouchableOpacity>)}
-        {students.length === 0 ? <Text style={{ color: C.muted, fontSize: 12, paddingVertical: 10 }}>No Students are currently assigned.</Text> : null}
-      </View>
+    {historicalAssignments.length ? <Section title="Historical assignments" divider>
+      {historicalAssignments.map(({ assignment, student }) => <View key={assignment.id} style={{ minHeight: 54, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }}>
+        <Text style={{ color: C.ink, fontFamily: 'Geist-Medium', fontSize: 13, lineHeight: 18 }}>{student?.name ?? 'Student record unavailable'} · {student?.studentNumber ?? 'Student number unavailable'}</Text>
+        <Text style={{ color: C.muted, fontSize: 11, lineHeight: 16, marginTop: 2 }}>{assignment.role} assignment · {assignment.endReason || 'Reason not recorded'} · {assignment.endedAt ? displayDate(assignment.endedAt) : 'End date not recorded'}</Text>
+      </View>)}
+    </Section> : null}
 
-      <View style={{ paddingTop: 17, marginTop: 7, borderTopWidth: 1, borderTopColor: C.line }}>
-        <Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 13, marginBottom: 10 }}>Account management</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 }}>
-          {person.invitation !== 'Completed' ? <Action label="Record invitation follow-up" onPress={onResendInvitation} /> : null}
-          {membership === 'Deactivated' ? <Action label="Reactivate account" tone="primary" onPress={onReactivate} /> : <>
-            {access === 'Suspended' ? <Action label="Reactivate access" tone="primary" onPress={onReactivate} /> : <Action label="Suspend access" tone="danger" onPress={() => setSuspending(true)} />}
-            <Action label="Deactivate account" onPress={onDeactivate} />
-          </>}
-        </View>
+    <Section title={person.role === 'Therapist' ? 'Professional information' : 'School information'}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {person.role === 'Therapist' ? <>
+          {field('Professional title', person.professionalTitle)}
+          {field('Specialization', person.specialization)}
+          {field('License / registration', person.licenseNumber)}
+          {field('Contact number', person.contactNumber)}
+        </> : <>
+          {field('School', person.school)}
+          {field('Grade / section', person.gradeSections?.join(', '))}
+        </>}
+        <Value label="Account created" value={displayDate(person.joined)} />
       </View>
-    </>}
+    </Section>
+
+    <Section title="Account actions" divider>
+      {setup !== 'Completed' ? <AccountDetailsActionRow title="Follow up on setup" detail="No email is sent." label="Follow up" onPress={onResendInvitation} tone="primary" /> : null}
+      {membership === 'Deactivated' ? <AccountDetailsActionRow title="Reinstate professional" detail="Restore center membership." label="Reinstate" onPress={onReactivate} tone="primary" /> : <>
+        {access === 'Suspended'
+          ? <AccountDetailsActionRow title="Restore account access" detail="Allow this professional to sign in." label="Reactivate access" onPress={onReactivate} tone="primary" />
+          : <AccountDetailsActionRow title="Suspend access" detail="Require a reason to continue." label="Suspend" onPress={onSuspend} />}
+        <AccountDetailsActionRow title="Deactivate professional" detail={`${activeStudents.length} enrolled Students linked.`} label="Deactivate" onPress={onDeactivate} tone="danger" />
+      </>}
+    </Section>
   </View>;
 }
