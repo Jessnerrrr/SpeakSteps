@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
@@ -14,13 +14,26 @@ import {
   useWindowDimensions,
   Modal,
 } from 'react-native';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 export default function SpeechCheckinResult() {
   const router = useRouter();
-  const { role } = useLocalSearchParams();
+  const { checkinId } = useLocalSearchParams<{ checkinId?: string }>();
+  const { checkins, refresh, loading, error } = usePatientLearning();
 
   // State to control the custom alert modal
   const [showSetupAlert, setShowSetupAlert] = useState(false);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+  const savedCheckin = useMemo(
+    () => checkins.find((item) => item.id === checkinId) || null,
+    [checkins, checkinId],
+  );
+  const responses = savedCheckin?.responses && typeof savedCheckin.responses === 'object'
+    ? Object.values(savedCheckin.responses as Record<string, { question?: string; answer?: string }>)
+    : [];
+  const mainGoal = responses.find((item) => item.question?.toLowerCase().includes('main goal'))?.answer;
 
   // Responsive Hooks
   const { width } = useWindowDimensions();
@@ -40,13 +53,10 @@ export default function SpeechCheckinResult() {
     setShowSetupAlert(true);
   };
 
-  // Function to proceed to the setup screen when they click the modal button
+  // Continue without claiming that an unsupported MFA setup was completed.
   const proceedToSetup = () => {
     setShowSetupAlert(false);
-    router.replace({
-      pathname: '/totp-setup',
-      params: { role: role }
-    } as any);
+    router.replace('/patient-dashboard' as any);
   };
 
   return (
@@ -101,15 +111,15 @@ export default function SpeechCheckinResult() {
                 style={styles.levelCard}
               >
                 <Text style={styles.recommendedSub}>
-                  Your recommended starting point
+                  Check-in saved
                 </Text>
 
                 <Text style={styles.levelTitle}>
-                  Level 4 · Sentences
+                  No score assigned
                 </Text>
 
                 <Text style={styles.levelDescription}>
-                  Great job! Let's keep learning!
+                  Your therapist will set the practice level.
                 </Text>
               </LinearGradient>
             </View>
@@ -117,18 +127,19 @@ export default function SpeechCheckinResult() {
             {/* Speech Development */}
             <View style={styles.developmentCard}>
               <Text style={styles.sectionTitle}>
-                🌟 Speech Development
+                🌟 Check-in Status
               </Text>
 
               <View style={styles.ageBadge}>
                 <Text style={styles.ageText}>
-                  Meeting expectations for age 5
+                  {loading ? 'Loading saved responses…' : savedCheckin ? 'Responses saved successfully' : 'No saved responses found'}
                 </Text>
               </View>
 
               <Text style={styles.description}>
-                You're doing great! Keep practicing a little every day.
+                This check-in is not scored automatically. Your therapist controls practice progression.
               </Text>
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
 
             {/* What We Noticed */}
@@ -137,23 +148,14 @@ export default function SpeechCheckinResult() {
                 👀 What We Noticed
               </Text>
 
-              <View style={styles.noticedItem}>
-                <Text style={styles.itemEmoji}>🐶</Text>
-                <Text style={styles.itemText}>Dog</Text>
-
-                <View style={styles.clearBadge}>
-                  <Text style={styles.clearText}>✓ Clear!</Text>
-                </View>
-              </View>
-
-              <View style={styles.noticedItem}>
-                <Text style={styles.itemEmoji}>🥛</Text>
-                <Text style={styles.itemText}>More milk</Text>
-
-                <View style={styles.clearBadge}>
-                  <Text style={styles.clearText}>✓ Clear!</Text>
-                </View>
-              </View>
+              {responses.length > 0
+                ? responses.map((item, index) => (
+                  <View key={`${item.question || 'response'}-${index}`} style={styles.responseItem}>
+                    <Text style={styles.itemText}>{item.question || `Response ${index + 1}`}</Text>
+                    <Text style={styles.responseAnswer}>{item.answer || 'No answer provided'}</Text>
+                  </View>
+                ))
+                : <Text style={styles.description}>Saved answers will appear here when available.</Text>}
             </View>
 
             {/* Main Goal */}
@@ -163,7 +165,7 @@ export default function SpeechCheckinResult() {
               </Text>
 
               <Text style={styles.goalHighlight}>
-                Speak more clearly!
+                {mainGoal || 'Discuss goals with your therapist'}
               </Text>
 
               <Text style={styles.goalDescription}>
@@ -198,16 +200,16 @@ export default function SpeechCheckinResult() {
               <View style={styles.alertIconContainer}>
                 <Text style={styles.alertIcon}>🔒</Text>
               </View>
-              <Text style={styles.alertTitle}>Secure Your Account</Text>
+              <Text style={styles.alertTitle}>Multi-factor setup unavailable</Text>
               <Text style={styles.alertMessage}>
-                Before you can access your dashboard, you need to set up your Time-based OTP (Authenticator App) to keep your account secure.
+                TOTP setup is not connected to the backend. No authenticator was enrolled or verification performed.
               </Text>
               <TouchableOpacity
                 style={styles.alertButton}
                 onPress={proceedToSetup}
                 activeOpacity={0.85}
               >
-                <Text style={styles.alertButtonText}>Set Up Now</Text>
+                <Text style={styles.alertButtonText}>Continue to dashboard</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -439,6 +441,22 @@ const styles = StyleSheet.create({
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,
     color: '#356B28',
+  },
+  responseItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D6E8F4',
+  },
+  responseAnswer: {
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 14,
+    color: '#0C66AD',
+    marginTop: 2,
+  },
+  errorText: {
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 13,
+    color: '#B91C1C',
   },
 
   // Main Goal

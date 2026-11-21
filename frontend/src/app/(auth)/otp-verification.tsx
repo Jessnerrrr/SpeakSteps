@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, Stack } from 'expo-router';
+import { useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -10,13 +10,11 @@ export default function OtpVerificationScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
-  const { email } = useLocalSearchParams();
-  
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const inputRefs = useRef<any[]>([]);
 
   // Timer State (5 minutes = 300 seconds)
-  const [timeLeft, setTimeLeft] = useState(300);
+  const timeLeft = 0;
 
   // Custom Alert States
   const [alertVisible, setAlertVisible] = useState(false);
@@ -29,13 +27,6 @@ export default function OtpVerificationScreen() {
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
-
-  useEffect(() => {
-    const timerId = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timerId);
-  }, []);
 
   if (!fontsLoaded) return null; 
 
@@ -57,32 +48,18 @@ export default function OtpVerificationScreen() {
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
   const handleSubmit = () => {
-    const enteredOtp = otp.join('');
-    
-    if (enteredOtp.length < 6) {
-      setAlertTitle("Incomplete OTP");
-      setAlertMessage("Please enter the full 6-digit verification code before submitting.");
-      setAlertType('error');
-      setAlertVisible(true);
-      return;
-    }
-
-    router.push('/new-password' as any);
+    setAlertTitle('Recovery unavailable');
+    setAlertMessage('No verification was performed. Password recovery is not connected to the backend.');
+    setAlertType('error');
+    setAlertVisible(true);
   };
 
   const handleResend = () => {
-    setAlertTitle("OTP Resent!");
-    setAlertMessage(`A new 6-digit OTP has been sent to ${email ? email : 'your email'}.`);
-    setAlertType('success');
+    setAlertTitle('Recovery unavailable');
+    setAlertMessage('No OTP was sent. Password recovery is not connected to the backend.');
+    setAlertType('error');
     setAlertVisible(true);
-    setTimeLeft(300);
   };
 
   const canResend = timeLeft <= 180; 
@@ -164,13 +141,13 @@ export default function OtpVerificationScreen() {
                 
                 {/* Text color now matches the ring color! */}
                 <Text style={[styles.timerText, { color: getRingColor() }]}>
-                  {formatTime(timeLeft)}
+                  Unavailable
                 </Text>
               </View>
 
               <View style={styles.textContainer}>
                 <Text style={styles.subText}>
-                  Enter the OTP sent to {email ? email : 'your email'}:
+                  No OTP was sent. Password recovery verification is not available.
                 </Text>
               </View>
 
@@ -191,7 +168,7 @@ export default function OtpVerificationScreen() {
                   ))}
                 </View>
 
-                <Text style={styles.timeBasedLabel}>TIME-BASED ONE-TIME-PASSWORD</Text>
+                <Text style={styles.timeBasedLabel}>VERIFICATION NOT CONFIGURED</Text>
 
                 <View style={styles.buttonStack}>
                   <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>

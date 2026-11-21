@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 
@@ -6,6 +6,7 @@ import { useTherapist } from '@/components/therapist/TherapistProvider';
 import { ChevronLeftIcon } from '@/components/therapist/icons';
 import { targetSounds } from '@/Therapist-modules/therapist-patients/data/options';
 import { patientMeta, patientName, type AccuracyTone, type PatientRecord } from '@/Therapist-modules/therapist-patients/data/samplePatients';
+import { searchPatients, type PatientSearchResult } from '@/services/user-api';
 
 const toneColors: Record<AccuracyTone, { background: string; text: string }> = {
   green: { background: '#E5F6EA', text: '#43B05C' },
@@ -18,6 +19,41 @@ export function PatientDirectory() {
   const [query, setQuery] = useState('');
   const [target, setTarget] = useState('All Targets');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [liveResults, setLiveResults] = useState<PatientSearchResult[] | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+
+  useEffect(() => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      setLiveResults(null);
+      setLiveError(null);
+      setLiveLoading(false);
+      return;
+    }
+
+    let active = true;
+    setLiveResults(null);
+    setLiveLoading(true);
+    setLiveError(null);
+    const timeout = setTimeout(() => {
+      searchPatients(trimmedQuery)
+        .then((results) => {
+          if (active) setLiveResults(results);
+        })
+        .catch((error: unknown) => {
+          if (active) setLiveError(error instanceof Error ? error.message : 'Patient search failed.');
+        })
+        .finally(() => {
+          if (active) setLiveLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [query]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -25,7 +61,7 @@ export function PatientDirectory() {
       const targetMatch = target === 'All Targets' || patient.targetSound === target;
       if (!targetMatch) return false;
       if (!needle) return true;
-      const haystack = [patientName(patient), patient.diagnosis, patient.targetSound, patientMeta(patient), patient.initials]
+      const haystack = [patient.patientCode, patientName(patient), patient.diagnosis, patient.targetSound, patientMeta(patient), patient.initials]
         .join(' ')
         .toLowerCase();
       return haystack.includes(needle);
@@ -57,7 +93,7 @@ export function PatientDirectory() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search by name, sounds"
+            placeholder="Search by name, 9-digit ID, sounds"
             placeholderTextColor={palette.faint}
             style={[styles.searchInput, { color: palette.text }]}
           />
@@ -95,7 +131,25 @@ export function PatientDirectory() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {visible.length === 0 ? (
+        {query.trim() ? (
+          <>
+            {liveLoading ? <Text style={[styles.empty, { color: palette.muted }]}>Searching saved patients…</Text> : null}
+            {liveError ? <Text style={[styles.empty, { color: palette.alert }]}>{liveError}</Text> : null}
+            {!liveLoading && !liveError && liveResults?.length === 0 ? (
+              <Text style={[styles.empty, { color: palette.muted }]}>No saved patients match this search.</Text>
+            ) : null}
+            {liveResults?.map((patient) => (
+              <View key={patient.id} style={[styles.card, { backgroundColor: palette.card, borderColor: palette.line }]}>
+                <Text style={[styles.name, { color: palette.text }]}>
+                  {[patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ')}
+                </Text>
+                <Text style={[styles.meta, { color: palette.faint }]}>
+                  Patient ID: {patient.patientCode || 'Not assigned'}
+                </Text>
+              </View>
+            ))}
+          </>
+        ) : visible.length === 0 ? (
           <Text style={[styles.empty, { color: palette.muted }]}>No patients match this search.</Text>
         ) : (
           visible.map((patient) => <PatientCard key={patient.id} patient={patient} />)
@@ -121,7 +175,9 @@ function PatientCard({ patient }: { patient: PatientRecord }) {
         </View>
         <View style={styles.copy}>
           <Text style={[styles.name, { color: palette.text }]}>{patientName(patient)}</Text>
-          <Text style={[styles.meta, { color: palette.faint }]}>{patientMeta(patient)}</Text>
+          <Text style={[styles.meta, { color: palette.faint }]}>
+            {patient.patientCode ? `ID ${patient.patientCode} · ` : ''}{patientMeta(patient)}
+          </Text>
         </View>
         <View style={[styles.badge, { backgroundColor: tone.background }]}>
           <Text style={[styles.badgeText, { color: tone.text }]}>{patient.accuracy}%</Text>

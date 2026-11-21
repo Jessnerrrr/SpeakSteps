@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   ViewStyle,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
 import { ChildModeConfirmModal } from '@/components/child-mode-confirm-modal';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
+import { clearSession } from '@/services/user-api';
 
 export interface ParentHeaderProps {
   title?: string;
@@ -75,9 +77,14 @@ export function ParentHeader({
     setIsSignOutModalVisible(true);
   };
 
-  const handleConfirmSignOut = () => {
-    setIsSignOutModalVisible(false);
-    router.replace('/patient-login' as any);
+  const handleConfirmSignOut = async () => {
+    try {
+      await clearSession();
+      setIsSignOutModalVisible(false);
+      router.replace('/patient-login' as any);
+    } catch (error) {
+      Alert.alert('Sign out failed', error instanceof Error ? error.message : 'Could not clear your session.');
+    }
   };
 
   return (

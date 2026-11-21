@@ -10,7 +10,7 @@ import {
 interface SignOutConfirmModalProps {
   visible: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 }
 
 export function SignOutConfirmModal({
@@ -51,7 +51,7 @@ export function SignOutConfirmModal({
             <TouchableOpacity
               style={styles.signOutButton}
               activeOpacity={0.85}
-              onPress={onConfirm}
+              onPress={() => { void onConfirm(); }}
             >
               <Text style={styles.signOutButtonText}>Sign out</Text>
             </TouchableOpacity>

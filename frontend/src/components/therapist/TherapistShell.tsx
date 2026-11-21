@@ -1,9 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useWindowDimensions, View, Modal, Pressable, Text, TouchableOpacity, ScrollView, TextInput, Switch, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { router } from 'expo-router';
+import { clearSession } from '@/services/user-api';
 
 import { BottomNav } from '@/components/therapist/BottomNav';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
@@ -53,7 +54,7 @@ const getThemeColors = (isDark: boolean) => ({
 // ==========================================
 export function TherapistShell({ active, children }: { active: TherapistTab; children: ReactNode }) {
   // Grab global theme state directly from Provider
-  const { isDark, themeMode, setThemeMode, addPatientOpen, profile } = useTherapist();
+  const { isDark, themeMode, setThemeMode, addPatientOpen, profile, updateProfile, updatePassword } = useTherapist();
   const { width } = useWindowDimensions();
   const wide = width >= 760;
   const columnWidth = Math.min(width, wide ? 520 : width);
@@ -76,15 +77,18 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Profile Form State (Prefilled with TherapistProvider Profile)
-  const [therapistProfile, setTherapistProfile] = useState({
-    name: profile?.fullName || 'Dr. Ameer Andres, SLP-CCC',
-    title: 'Speech-Language Pathologist',
-    license: 'SLP-PH-2024-8821',
-    clinic: 'SpeakSteps',
-    contact: '+63 9000 000 000',
-    email: 'ameer@speakstep.com',
-  });
+  const therapistProfile = {
+    name: profile.fullName || 'Therapist',
+    title: profile.role,
+    license: profile.license,
+    clinic: profile.clinic,
+    contact: profile.contact,
+    email: profile.email,
+  };
   const [editProfileForm, setEditProfileForm] = useState({ ...therapistProfile });
+  useEffect(() => {
+    setEditProfileForm({ ...therapistProfile });
+  }, [profile]);
 
   // Settings State (Toggles)
   const [newRecordingsToggle, setNewRecordingsToggle] = useState(true);
@@ -101,26 +105,42 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleSaveProfile = () => {
-    setTherapistProfile({ ...editProfileForm });
-    setShowEditProfileModal(false);
-    triggerToast('Profile updated successfully!');
+  const handleSaveProfile = async () => {
+    try {
+      await updateProfile({
+        fullName: editProfileForm.name.trim(),
+        role: editProfileForm.title.trim(),
+        license: editProfileForm.license.trim(),
+        clinic: editProfileForm.clinic.trim(),
+        contact: editProfileForm.contact.trim(),
+      });
+      setShowEditProfileModal(false);
+      triggerToast('Profile updated successfully!');
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not save your therapist profile.');
+    }
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) return triggerToast('Fill out all fields.');
     if (newPassword !== confirmPassword) return triggerToast('New passwords do not match.');
+    const error = await updatePassword(currentPassword, newPassword);
+    if (error) return triggerToast(error);
     setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
     setShowChangePasswordModal(false);
     triggerToast('Password changed successfully!');
   };
 
-  const handleLogout = () => {
-    setShowLogoutConfirm(false);
-    setShowMenu(false);
-    setShowSettingsModal(false);
-    triggerToast('Logged out successfully.');
-    router.replace('/login' as any);
+  const handleLogout = async () => {
+    try {
+      await clearSession();
+      setShowLogoutConfirm(false);
+      setShowMenu(false);
+      setShowSettingsModal(false);
+      router.replace('/therapist-login' as any);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not clear your session. Please try again.');
+    }
   };
 
   return (
@@ -402,8 +422,14 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
               </View>
               <Text style={styles.formLabel}>Full Name</Text>
               <TextInput style={styles.formInput} value={editProfileForm.name} onChangeText={(t) => setEditProfileForm({ ...editProfileForm, name: t })} />
+              <Text style={styles.formLabel}>Professional Title</Text>
+              <TextInput style={styles.formInput} value={editProfileForm.title} onChangeText={(t) => setEditProfileForm({ ...editProfileForm, title: t })} />
+              <Text style={styles.formLabel}>License</Text>
+              <TextInput style={styles.formInput} value={editProfileForm.license} onChangeText={(t) => setEditProfileForm({ ...editProfileForm, license: t })} />
               <Text style={styles.formLabel}>Clinic</Text>
               <TextInput style={styles.formInput} value={editProfileForm.clinic} onChangeText={(t) => setEditProfileForm({ ...editProfileForm, clinic: t })} />
+              <Text style={styles.formLabel}>Contact</Text>
+              <TextInput style={styles.formInput} value={editProfileForm.contact} onChangeText={(t) => setEditProfileForm({ ...editProfileForm, contact: t })} keyboardType="phone-pad" />
               <View style={[styles.previewActionsRow, { marginTop: 12 }]}>
                 <TouchableOpacity style={styles.outlineBtn} onPress={() => setShowEditProfileModal(false)}><Text style={styles.outlineBtnText}>Cancel</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.solidBlueBtn} onPress={handleSaveProfile}><Text style={styles.solidBlueBtnText}>Save</Text></TouchableOpacity>

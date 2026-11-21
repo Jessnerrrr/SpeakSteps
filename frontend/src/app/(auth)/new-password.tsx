@@ -68,17 +68,17 @@ export default function NewPasswordScreen() {
       return;
     }
 
-    setAlertTitle("Success!");
-    setAlertMessage("Your password has been changed. You will now be redirected to sign in.");
-    setAlertType('success');
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setAlertTitle('Recovery unavailable');
+    setAlertMessage('Password reset is not connected to the backend. No password was changed.');
+    setAlertType('error');
     setAlertVisible(true);
   };
 
   const handleAlertClose = () => {
     setAlertVisible(false);
-    if (alertType === 'success') {
-      router.push('/login' as any);
-    }
   };
 
   // Reusable component for the checklist items

@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { Alert, ImageBackground, StyleSheet, Text, TouchableOpacity, View, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import React from 'react';
 
 export default function ForgotPasswordScreen() {
@@ -62,14 +62,14 @@ export default function ForgotPasswordScreen() {
               <TouchableOpacity 
                 style={[styles.roleCard, { backgroundColor: '#FDE4AB' }]}
                 activeOpacity={0.7}
-                onPress={() => router.push('/multi-factor' as any)} 
+                onPress={() => Alert.alert('Recovery unavailable', 'Password recovery is not connected to the backend. No code was sent and no password was changed.')}
               >
                 <View style={styles.iconBoxWhite}>
                   <Image source={require('../../../assets/images/shieldplus.png')} style={styles.placeholderIcon} />
                 </View>
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Multi-Factor Authenticator</Text>
-                  <Text style={styles.roleSubtitle}>Get an OTP by email or phone number</Text>
+                  <Text style={styles.roleSubtitle}>Unavailable: no verification API is configured</Text>
                 </View>
                 <Text style={styles.arrowIconBlue}>›</Text>
               </TouchableOpacity>
@@ -78,14 +78,14 @@ export default function ForgotPasswordScreen() {
               <TouchableOpacity 
                 style={[styles.roleCard, { backgroundColor: '#CBE6F6' }]}
                 activeOpacity={0.7}
-                onPress={() => router.push('/security-questions' as any)} 
+                onPress={() => Alert.alert('Recovery unavailable', 'Security-question recovery is not connected to the backend. No answer was verified and no password was changed.')}
               >
                 <View style={styles.iconBoxWhite}>
                   <Image source={require('../../../assets/images/shieldquestion.png')} style={styles.placeholderIcon} />
                 </View>
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Security Questions</Text>
-                  <Text style={styles.roleSubtitle}>Answer your secret questions</Text>
+                  <Text style={styles.roleSubtitle}>Unavailable: recovery is not connected to the backend</Text>
                 </View>
                 <Text style={styles.arrowIconBlue}>›</Text>
               </TouchableOpacity>

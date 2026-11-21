@@ -1,5 +1,5 @@
 import { useFonts } from 'expo-font';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   BackHandler,
@@ -11,7 +11,8 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
-import { sentences } from '@/data/sentences';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { getPracticeItems } from '@/services/user-api';
 import type { Language, Position, Sentence } from '@/types/sentences';
 import { POSITIONS } from '@/types/sentences';
 
@@ -110,6 +111,57 @@ function SentenceCard({
 export default function SentencesScreen() {
   const [language, setLanguage] = useState<Language>('English');
   const [position, setPosition] = useState<Position>('Initial');
+  const params = useLocalSearchParams<{
+    assignmentId?: string;
+    activityId?: string;
+    patientId?: string;
+    patientCode?: string;
+  }>();
+  const { assignments, loading, error, refresh } = usePatientLearning();
+  const [practiceItems, setPracticeItems] = useState<Awaited<ReturnType<typeof getPracticeItems>>>([]);
+  const [practiceItemsLoading, setPracticeItemsLoading] = useState(false);
+  const [practiceItemsError, setPracticeItemsError] = useState('');
+  const assignmentId = Array.isArray(params.assignmentId) ? params.assignmentId[0] : params.assignmentId;
+  const assignment = assignments.find((item) => item.id === assignmentId);
+
+  useEffect(() => {
+    if (assignment) {
+      const savedLanguage = assignment.activity.language.toLowerCase();
+      setLanguage(savedLanguage.includes('tagalog') && !savedLanguage.includes('english') ? 'Tagalog' : 'English');
+      const firstPosition = assignment.activity.positions[0] as Position | undefined;
+      if (firstPosition && POSITIONS.includes(firstPosition)) setPosition(firstPosition);
+    }
+  }, [assignment]);
+
+  useEffect(() => {
+    const hasAssignedWords = (assignment?.activity.words || []).some((word) => word.position === position);
+    if (!assignment || hasAssignedWords) {
+      setPracticeItems([]);
+      setPracticeItemsError('');
+      setPracticeItemsLoading(false);
+      return;
+    }
+    let active = true;
+    setPracticeItemsLoading(true);
+    setPracticeItemsError('');
+    getPracticeItems({
+      sound: assignment.activity.sound,
+      position,
+      language,
+    })
+      .then((items) => {
+        if (active) setPracticeItems(items);
+      })
+      .catch((loadError: unknown) => {
+        if (active) setPracticeItemsError(loadError instanceof Error ? loadError.message : 'Could not load practice items.');
+      })
+      .finally(() => {
+        if (active) setPracticeItemsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [assignment, language, position]);
 
   // Responsive Hooks
   const { width } = useWindowDimensions();
@@ -145,7 +197,25 @@ export default function SentencesScreen() {
 
   if (!fontsLoaded) return null;
 
-  const items = sentences[language][position];
+  const assignedItems: Sentence[] = (assignment?.activity.words || [])
+    .filter((word) => word.position === position)
+    .map((word) => ({
+      id: word.id,
+      sound: word.sound || assignment?.activity.sound || '',
+      syllable: word.phrase || word.text,
+      stars: 0,
+    }));
+  const items: Sentence[] = assignedItems.length > 0
+    ? assignedItems
+    : practiceItems
+      .filter((item) => item.sentenceText || item.syllable)
+      .map((item) => ({
+        id: item.id,
+        practiceItemId: item.id,
+        sound: item.sound,
+        syllable: item.sentenceText || item.syllable,
+        stars: 0,
+      }));
 
   const handleSelect = (sentence: Sentence) => {
     router.push({
@@ -156,6 +226,10 @@ export default function SentencesScreen() {
         syllable: sentence.syllable,
         stars: sentence.stars,
         position,
+        assignmentId: assignment?.id,
+        practiceItemId: sentence.practiceItemId,
+        patientId: Array.isArray(params.patientId) ? params.patientId[0] : params.patientId,
+        patientCode: Array.isArray(params.patientCode) ? params.patientCode[0] : params.patientCode,
       },
     } as any);
   };
@@ -193,8 +267,16 @@ export default function SentencesScreen() {
               <View style={styles.contentHeader}>
                 <Text style={styles.pageTitle}>Choose a sound to practice</Text>
                 <Text style={styles.pageSubtitle}>
-                  Build confidence one clear sentence at a time.
+                  {assignment ? `Practice targets from ${assignment.activity.title}.` : 'Choose an assigned activity to get started.'}
                 </Text>
+                {loading ? <Text style={styles.pageSubtitle}>Loading assigned practice…</Text> : null}
+                {error ? (
+                  <TouchableOpacity onPress={() => void refresh()}>
+                    <Text style={styles.pageSubtitle}>{error} Tap to retry.</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {practiceItemsLoading ? <Text style={styles.pageSubtitle}>Loading standard practice items…</Text> : null}
+                {practiceItemsError ? <Text style={styles.pageSubtitle}>{practiceItemsError}</Text> : null}
                 <Text style={styles.controlLabel}>Language</Text>
                 <LanguageToggle value={language} onChange={setLanguage} />
                 <View style={styles.positionHeading}>

@@ -16,12 +16,13 @@ import {
   TouchableOpacity,
   View,
   Modal,
+  Alert,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 export default function AuthSelectionScreen() {
   // Added 'email' to the params so you can pass it from the Login screen!
-  const { role, status, email } = useLocalSearchParams(); 
+  const { status, email } = useLocalSearchParams();
 
   const [showPinModal, setShowPinModal] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('');
@@ -71,9 +72,7 @@ export default function AuthSelectionScreen() {
 
   const handleGetPin = (method: string) => {
     setSelectedMethod(method);
-    setPinCode('');
-    setTimeLeft(300); 
-    setShowPinModal(true);
+    Alert.alert('Verification unavailable', `${method} verification is not connected to the backend. No code was sent.`);
   };
 
   const handleCloseModal = () => {
@@ -82,24 +81,7 @@ export default function AuthSelectionScreen() {
   };
 
   const handleVerifyAndLogin = () => {
-    if (pinCode.length >= 4 && timeLeft > 0) {
-      setShowPinModal(false);
-      setSelectedMethod('');
-      
-      if (role === 'therapist') {
-        router.replace('/therapist' as any);
-      } else if (role === 'teacher') {
-        router.replace('/teacher/teacher-dashboard' as any);
-      } else if (role === 'patient') {
-        if (status === 'new') {
-          router.replace('/speech-checkin' as any);
-        } else {
-          router.replace('/patient-dashboard' as any);
-        }
-      } else {
-        router.replace('/' as any);
-      }
-    }
+    Alert.alert('Verification unavailable', 'No verification was performed. Sign in with your account credentials instead.');
   };
 
   return (
@@ -129,7 +111,7 @@ export default function AuthSelectionScreen() {
               <View style={styles.infoBanner}>
                 <Ionicons name="information-circle-outline" size={24} color="#0F69AF" style={styles.infoIcon} />
                 <Text style={styles.infoBannerText}>
-                  Select ONE(1) option and click/tap to get your PIN and proceed.
+                  Secondary verification is not configured. No PIN will be sent or accepted.
                 </Text>
               </View>
 
@@ -154,7 +136,7 @@ export default function AuthSelectionScreen() {
                 <View style={styles.methodTextContainer}>
                   <Text style={[styles.methodTitle, isNewAccount && styles.textDisabled]}>Time-based OTP</Text>
                   <Text style={[styles.methodSubtitle, isNewAccount && styles.textDisabled]}>
-                    {isNewAccount ? 'Setup required after first login' : 'Use Authenticator App'}
+                    {isNewAccount ? 'Setup unavailable: no backend support' : 'Unavailable: no verification API'}
                   </Text>
                 </View>
                 {!isNewAccount && (
@@ -180,7 +162,7 @@ export default function AuthSelectionScreen() {
                 </View>
                 <View style={styles.methodTextContainer}>
                   <Text style={styles.methodTitle}>Email OTP</Text>
-                  <Text style={styles.methodSubtitle}>Code sent to your email</Text>
+                  <Text style={styles.methodSubtitle}>Unavailable: no code will be sent</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={24} color={selectedMethod === 'Email' ? '#0F69AF' : '#94A3B8'} />
               </TouchableOpacity>
@@ -219,9 +201,7 @@ export default function AuthSelectionScreen() {
 
                 {/* DYNAMIC INSTRUCTION TEXT BASED ON SELECTED METHOD */}
                 <Text style={styles.modalInstruction}>
-                  {selectedMethod === 'Email' 
-                    ? `Please check the one-time pin sent to ${maskedEmailToDisplay}` 
-                    : 'Enter your Single Sign-On credentials:'}
+                  No code was sent. Secondary verification is not configured.
                 </Text>
 
                 <TextInput
@@ -237,9 +217,7 @@ export default function AuthSelectionScreen() {
                   editable={timeLeft > 0} 
                 />
 
-                <Text style={styles.methodLabel}>
-                  {selectedMethod === 'TOTP' ? 'TIME-BASED ONE-TIME-PASSWORD' : 'EMAIL ONE-TIME PIN'}
-                </Text>
+                <Text style={styles.methodLabel}>VERIFICATION NOT CONFIGURED</Text>
               </View>
 
               <TouchableOpacity 

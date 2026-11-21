@@ -4,6 +4,7 @@ export type NavTab = 'Home' | 'Play' | 'Stars' | 'Buddy';
 
 export interface Sentence {
   id: string;
+  practiceItemId?: string;
   sound: string;   // e.g. "/s/"
   syllable: string; // e.g. "sa"
   stars: 0 | 1 | 2 | 3;

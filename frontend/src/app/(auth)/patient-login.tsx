@@ -3,6 +3,16 @@ import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { loginAccount } from '@/services/user-api';
+
+function RequirementItem({ text, isValid }: { text: string; isValid: boolean }) {
+  return (
+    <View style={styles.reqItem}>
+      <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
+      <Text style={styles.reqText}>{text}</Text>
+    </View>
+  );
+}
 
 export default function PatientLoginScreen() {
   // Responsive Hooks
@@ -12,10 +22,12 @@ export default function PatientLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form States
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
@@ -25,7 +37,14 @@ export default function PatientLoginScreen() {
 
   if (!fontsLoaded) return null; 
 
-  const handleLogin = () => {
+  // --- Real-time Password Validation Logic ---
+  const isLengthValid = password.length >= 8 && password.length <= 20;
+  const hasLowercase = /[a-z]/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(password);
+  // --- STRICT VALIDATION LOGIC ---
+  const handleLogin = async () => {
     setHasSubmitted(true);
     setLoginError(''); // Reset error on new attempt
     
@@ -33,20 +52,15 @@ export default function PatientLoginScreen() {
       setLoginError('Please enter both Email and Password.');
       return; 
     }
-    
-    const emailLower = email.trim().toLowerCase();
 
-    // Account 1: NEW Patient -> Goes to Auth Selection (passing status 'new')
-    if (emailLower === 'new@speaksteps.com' && password === 'Patient@123') {
-      router.push({ pathname: '/auth-selection', params: { role: 'patient', status: 'new' } } as any);
-    } 
-    // Account 2: OLD Patient -> Goes to Auth Selection (passing status 'old')
-    else if (emailLower === 'old@speaksteps.com' && password === 'Patient@123') {
-      router.push({ pathname: '/auth-selection', params: { role: 'patient', status: 'old' } } as any);
-    } 
-    // Invalid Login
-    else {
-      setLoginError('Invalid email or password');
+    setIsSubmitting(true);
+    try {
+      await loginAccount(email, password, 'parent');
+      router.replace('/patient-dashboard' as any);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -139,6 +153,8 @@ export default function PatientLoginScreen() {
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={handlePasswordChange}
+                      onFocus={() => setIsPasswordFocused(true)}
+                      onBlur={() => setIsPasswordFocused(false)}
                     />
                     <TouchableOpacity 
                       style={styles.showButton}
@@ -156,8 +172,26 @@ export default function PatientLoginScreen() {
                   </View>
                 )}
 
-                <TouchableOpacity style={styles.signInBtn} onPress={handleLogin}>
-                  <Text style={styles.signInText}>Sign in</Text>
+                {/* Only renders the box if the password input is focused */}
+                {isPasswordFocused && (
+                  <View style={styles.requirementsBox}>
+                    <View style={styles.requirementsHeader}>
+                      <Text style={styles.requirementsHeaderText}>
+                        The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
+                      </Text>
+                    </View>
+                    <View style={styles.requirementsList}>
+                      <RequirementItem text="Number of characters" isValid={isLengthValid} />
+                      <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
+                      <RequirementItem text="Capital letter" isValid={hasUppercase} />
+                      <RequirementItem text="Number" isValid={hasNumber} />
+                      <RequirementItem text="Special character" isValid={hasSpecial} />
+                    </View>
+                  </View>
+                )}
+
+                <TouchableOpacity style={styles.signInBtn} onPress={handleLogin} disabled={isSubmitting}>
+                  <Text style={styles.signInText}>{isSubmitting ? 'Signing in…' : 'Sign in'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => router.push('/forgot-password' as any)}>
@@ -250,6 +284,14 @@ const styles = StyleSheet.create({
   passwordInput: { flex: 1, paddingHorizontal: 15, fontFamily: 'SourGummy', color: '#333' },
   showButton: { backgroundColor: '#CBE6F6', paddingVertical: 5, paddingHorizontal: 12, borderRadius: 15, marginRight: 8 },
   showButtonText: { color: '#0865AD', fontFamily: 'SourGummy-Bold', fontSize: 12 },
+  requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
+  requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
+  requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
+  requirementsList: { padding: 12, gap: 10 },
+  reqItem: { flexDirection: 'row', alignItems: 'center' },
+  reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
+  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 },
+  reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
   
   // Custom Error UI Styling
   errorBorder: { 

@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import React, { useState } from 'react';
+import { loginAccount } from '@/services/user-api';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -21,6 +22,7 @@ export default function AdminLoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ title: '', message: '' });
@@ -41,16 +43,23 @@ export default function AdminLoginScreen() {
     setAlertVisible(true);
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!userId.trim() || !password.trim()) {
       showAlert("Missing Fields", "Please enter both User ID and Password.");
       return;
     }
 
-    if (userId.trim().toLowerCase() === 'admin@center.org' && password === 'Admin@123') {
+    setIsSubmitting(true);
+    try {
+      await loginAccount(userId.trim(), password, 'admin');
       router.replace('/(admin)/admin-dashboard' as any);
-    } else {
-      showAlert("Login Failed", "Invalid User ID or Password. Please try again.");
+    } catch (error) {
+      showAlert(
+        'Login Failed',
+        error instanceof Error ? error.message : 'Unable to sign in. Please try again.',
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -104,7 +113,10 @@ export default function AdminLoginScreen() {
                     placeholder="userid@center.org"
                     placeholderTextColor="#94A3B8"
                     value={userId}
-                    onChangeText={setUserId}
+                    onChangeText={(value) => {
+                      setUserId(value);
+                      setAlertVisible(false);
+                    }}
                     autoCapitalize="none"
                     keyboardType="email-address"
                   />
@@ -118,7 +130,10 @@ export default function AdminLoginScreen() {
                     placeholder="Enter your password"
                     placeholderTextColor="#94A3B8"
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(value) => {
+                      setPassword(value);
+                      setAlertVisible(false);
+                    }}
                     secureTextEntry={!showPassword}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
@@ -139,8 +154,8 @@ export default function AdminLoginScreen() {
                 </View>
 
                 {/* Pill-shaped Button */}
-                <TouchableOpacity style={styles.loginBtn} activeOpacity={0.8} onPress={handleLogin}>
-                  <Text style={styles.loginBtnText}>Log In</Text>
+                <TouchableOpacity style={styles.loginBtn} activeOpacity={0.8} onPress={handleLogin} disabled={isSubmitting}>
+                  <Text style={styles.loginBtnText}>{isSubmitting ? 'Signing in…' : 'Log In'}</Text>
                 </TouchableOpacity>
               </View>
 

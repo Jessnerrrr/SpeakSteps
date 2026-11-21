@@ -4,6 +4,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
+import { registerFamilyAccount } from '@/services/user-api';
+
+const MAX_IMAGE_BASE64_LENGTH = 1_398_104;
+
+function RequirementItem({ text, isValid }: { text: string; isValid: boolean }) {
+  return (
+    <View style={styles.reqItem}>
+      <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
+      <Text style={styles.reqText}>{text}</Text>
+    </View>
+  );
+}
 
 export default function PatientRegistrationScreen() {
   // Responsive Hooks
@@ -16,6 +28,7 @@ export default function PatientRegistrationScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [profileImage, setProfileImage] = useState<string | undefined>(undefined);
+  const [profileImageData, setProfileImageData] = useState<string | undefined>(undefined);
   
   const [childName, setChildName] = useState('');
   const [childAge, setChildAge] = useState('');
@@ -24,6 +37,8 @@ export default function PatientRegistrationScreen() {
 
   const [studentId, setStudentId] = useState('');
   const [idImage, setIdImage] = useState<string | undefined>(undefined);
+  const [verificationImageData, setVerificationImageData] = useState<string | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -41,14 +56,26 @@ export default function PatientRegistrationScreen() {
 
   if (!fontsLoaded) return null; 
 
-  const pickImage = async (setImageSetter: (uri: string) => void) => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  const pickImage = async (setImageSetter: (uri: string) => void, setImageDataSetter: (data: string) => void) => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 1,
+      quality: 0.5,
+      base64: true,
     });
-    if (!result.canceled) setImageSetter(result.assets[0].uri);
+    if (!result.canceled) {
+      const asset = result.assets[0];
+      if (!asset.base64 || asset.base64.length > MAX_IMAGE_BASE64_LENGTH) {
+        setAlertTitle('Image Too Large');
+        setAlertMessage('Choose an image smaller than 1 MB after cropping.');
+        setAlertType('error');
+        setAlertVisible(true);
+        return;
+      }
+      setImageSetter(asset.uri);
+      setImageDataSetter(asset.base64);
+    }
   };
 
   const isLengthValid = password.length >= 8 && password.length <= 20;
@@ -58,7 +85,7 @@ export default function PatientRegistrationScreen() {
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(password);
   const isPasswordValid = isLengthValid && hasLowercase && hasUppercase && hasNumber && hasSpecial;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setHasSubmitted(true);
     if (!fullName || !email || !contactNo || !password || !childName || !childAge || !startingLevel || !studentId || !idImage) {
       setAlertTitle("Missing Details");
@@ -76,16 +103,46 @@ export default function PatientRegistrationScreen() {
       return;
     }
     
-    setAlertTitle("Success!");
-    setAlertMessage("Registered successfully, wait for the approval of the account.");
-    setAlertType('success');
-    setAlertVisible(true);
+    if (!verificationImageData) {
+      setAlertTitle('Missing Verification Photo');
+      setAlertMessage('Please select the verification photo again before submitting.');
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await registerFamilyAccount({
+        fullName,
+        email,
+        contactNo,
+        password,
+        childName,
+        childAge,
+        startingLevel,
+        studentId,
+        profileImageData,
+        verificationImageData,
+      });
+      setAlertTitle('Success!');
+      setAlertMessage(`${result.message} Patient ID: ${result.patientCode}`);
+      setAlertType('success');
+      setAlertVisible(true);
+    } catch (error) {
+      setAlertTitle('Registration Failed');
+      setAlertMessage(error instanceof Error ? error.message : 'Unable to create your account. Please try again.');
+      setAlertType('error');
+      setAlertVisible(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const closeAlert = () => {
     setAlertVisible(false);
     if (alertType === 'success') {
-      router.push('/login' as any);
+      router.push('/patient-login' as any);
     }
   };
 
@@ -100,13 +157,6 @@ export default function PatientRegistrationScreen() {
     const numericOnly = text.replace(/[^0-9]/g, '');
     setContactNo(numericOnly);
   };
-
-  const RequirementItem = ({ text, isValid }: { text: string, isValid: boolean }) => (
-    <View style={styles.reqItem}>
-      <View style={[styles.reqCircle, isValid && styles.reqCircleFilled]} />
-      <Text style={styles.reqText}>{text}</Text>
-    </View>
-  );
 
   return (
     <>
@@ -140,7 +190,7 @@ export default function PatientRegistrationScreen() {
                 </View>
 
                 <Text style={styles.welcomeText}>Create Patient Account</Text>
-                <Text style={styles.subText}>Fill up the form. Your child's Student ID must be on the Center's records.</Text>
+                <Text style={styles.subText}>Fill up the form. Your child&apos;s Student ID must be on the Center&apos;s records.</Text>
 
                 <View style={styles.sectionContainer}>
                   <Text style={styles.sectionTitle}>1 - Parent / Guardian</Text>
@@ -198,7 +248,7 @@ export default function PatientRegistrationScreen() {
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Upload Profile Picture</Text>
-                    <TouchableOpacity style={[styles.uploadButton, profileImage ? styles.uploadButtonWithImage : null]} onPress={() => pickImage(setProfileImage)}>
+                    <TouchableOpacity style={[styles.uploadButton, profileImage ? styles.uploadButtonWithImage : null]} onPress={() => pickImage(setProfileImage, setProfileImageData)}>
                       {profileImage ? (
                         <Image source={{ uri: profileImage }} style={styles.uploadedImage} contentFit="cover" />
                       ) : (
@@ -209,10 +259,10 @@ export default function PatientRegistrationScreen() {
                 </View>
 
                 <View style={styles.sectionContainer}>
-                  <Text style={styles.sectionTitle}>2 - Child's profile</Text>
+                  <Text style={styles.sectionTitle}>2 - Child&apos;s profile</Text>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Child's name</Text>
+                    <Text style={styles.inputLabel}>Child&apos;s name</Text>
                     <TextInput style={[styles.input, hasSubmitted && !childName && styles.errorBorder]} placeholder="" placeholderTextColor="#999" value={childName} onChangeText={setChildName} />
                   </View>
 
@@ -258,7 +308,7 @@ export default function PatientRegistrationScreen() {
                     <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID <Text style={styles.asterisk}>*</Text></Text>
                     <TouchableOpacity 
                       style={[styles.uploadButton, idImage ? styles.uploadButtonWithImage : null, hasSubmitted && !idImage && styles.errorBorder]} 
-                      onPress={() => pickImage(setIdImage)}
+                      onPress={() => pickImage(setIdImage, setVerificationImageData)}
                     >
                       {idImage ? (
                         <Image source={{ uri: idImage }} style={styles.uploadedImage} contentFit="cover" />
@@ -269,8 +319,8 @@ export default function PatientRegistrationScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                  <Text style={styles.submitText}>Create Account</Text>
+                <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={isSubmitting}>
+                  <Text style={styles.submitText}>{isSubmitting ? 'Creating Account…' : 'Create Account'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => router.push('/login' as any)}>

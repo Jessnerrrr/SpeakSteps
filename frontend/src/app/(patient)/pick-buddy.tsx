@@ -6,6 +6,7 @@ import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ImageBackground,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,7 @@ import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
+import { clearSession } from '@/services/user-api';
 
 export default function PickBuddyScreen() {
   const { width } = useWindowDimensions();
@@ -268,9 +270,14 @@ export default function PickBuddyScreen() {
         <SignOutConfirmModal
           visible={isSignOutModalVisible}
           onClose={() => setIsSignOutModalVisible(false)}
-          onConfirm={() => {
-            setIsSignOutModalVisible(false);
-            router.replace('/patient-login' as any);
+          onConfirm={async () => {
+            try {
+              await clearSession();
+              setIsSignOutModalVisible(false);
+              router.replace('/patient-login' as any);
+            } catch (error) {
+              Alert.alert('Sign out failed', error instanceof Error ? error.message : 'Could not clear your session.');
+            }
           }}
         />
       </SafeAreaView>

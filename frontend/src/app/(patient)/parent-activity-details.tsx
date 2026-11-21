@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
   ImageBackground,
@@ -19,8 +19,7 @@ import {
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import { ChildModeConfirmModal } from '../../components/child-mode-confirm-modal';
-import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
-import { AssignedActivity, getActivityById, TaskStore } from '../../data/parent-tasks-mock';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 export default function ParentActivityDetailsScreen() {
   // Responsive Hooks
@@ -35,19 +34,11 @@ export default function ParentActivityDetailsScreen() {
   });
 
   const params = useLocalSearchParams<{ id?: string }>();
-  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
+  const { assignments, patient, user, loading, error, refresh } = usePatientLearning();
   const [isChildModeModalVisible, setIsChildModeModalVisible] = useState(false);
-
-  const activity: AssignedActivity = getActivityById(params.id || TaskStore.getActiveTaskId());
-
-  useEffect(() => {
-    const unsubscribe = ChildProfileStore.subscribe((updated: ChildProfile) => {
-      setChildProfile(updated);
-    });
-    return unsubscribe;
-  }, []);
-
-  if (!fontsLoaded) return null;
+  const assignmentId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const assignment = assignments.find((item) => item.id === assignmentId);
+  const activity = assignment?.activity;
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -68,12 +59,32 @@ export default function ParentActivityDetailsScreen() {
     router.push({
       pathname: '/sentences',
       params: {
-        activityId: activity?.id,
-        sound: activity?.title,
+        assignmentId: assignment?.id,
+        activityId: assignment?.activityId,
+        patientId: patient?.id,
+        patientCode: patient?.patientCode,
+        sound: activity?.sound,
         level: activity?.level,
       },
     } as any);
   };
+
+  if (!fontsLoaded) return null;
+  if (!activity || !assignment) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ParentHeader title="Activity Details" showBack onBack={handleBack} />
+        <View style={styles.mainContainer}>
+          <Text style={styles.emptyState}>{loading ? 'Loading activity…' : error || 'This activity is not assigned to this patient.'}</Text>
+          {!loading ? (
+            <TouchableOpacity onPress={() => void refresh()}>
+              <Text style={styles.emptyStateAction}>Tap to retry</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <>
@@ -110,7 +121,7 @@ export default function ParentActivityDetailsScreen() {
                   <View
                     style={[
                       styles.statusBadge,
-                      activity.status === 'completed'
+                      assignment.status === 'Completed'
                         ? styles.statusBadgeCompleted
                         : styles.statusBadgePending,
                     ]}
@@ -118,26 +129,26 @@ export default function ParentActivityDetailsScreen() {
                     <Text
                       style={[
                         styles.statusBadgeText,
-                        activity.status === 'completed'
+                        assignment.status === 'Completed'
                           ? styles.statusTextCompleted
                           : styles.statusTextPending,
                       ]}
                     >
-                      {activity.status === 'completed' ? 'Completed' : 'Pending'}
+                      {assignment.status === 'Completed' ? 'Completed' : 'Pending'}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.illustrationWrapper}>
                   <Image
-                    source={activity.thumbnail}
+                    source={require('../../../assets/images/sheep.png')}
                     style={styles.illustrationImage}
                     contentFit="contain"
                   />
                 </View>
 
                 <Text style={styles.assigneeText}>
-                  Assigned: {activity.assignedBy}
+                  Assigned by your therapist
                 </Text>
 
                 <TouchableOpacity
@@ -155,17 +166,17 @@ export default function ParentActivityDetailsScreen() {
               {/* 2. THREE METRIC / STAT CARDS ROW */}
               <View style={styles.metricsRow}>
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activity.attempts ?? 0}</Text>
+                  <Text style={styles.metricValue}>—</Text>
                   <Text style={styles.metricLabel}>Attempts</Text>
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activity.bestScore ?? '—'}</Text>
+                  <Text style={styles.metricValue}>—</Text>
                   <Text style={styles.metricLabel}>Best Score</Text>
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activity.stars ?? '—'}</Text>
+                  <Text style={styles.metricValue}>—</Text>
                   <Text style={styles.metricLabel}>Stars</Text>
                 </View>
               </View>
@@ -256,10 +267,10 @@ export default function ParentActivityDetailsScreen() {
           mode="practice"
           onClose={() => setIsChildModeModalVisible(false)}
           onConfirm={handleConfirmChildPractice}
-          childName={childProfile.displayName}
+          childName={user?.childName || patient?.firstName || 'your child'}
           activityTitle={activity?.title}
           activityLevel={activity?.level}
-          activityThumbnail={activity?.thumbnail}
+          activityThumbnail={require('../../../assets/images/sheep.png')}
         />
       </SafeAreaView>
     </>
@@ -267,6 +278,8 @@ export default function ParentActivityDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
+  emptyState: { textAlign: 'center', color: '#0D68AC', padding: 24, fontFamily: 'SourGummy-Medium' },
+  emptyStateAction: { textAlign: 'center', color: '#F5A623', padding: 12, fontFamily: 'SourGummy-Bold' },
   safeArea: {
     flex: 1,
     backgroundColor: '#CCE5F6',

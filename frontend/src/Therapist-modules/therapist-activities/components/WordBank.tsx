@@ -29,6 +29,8 @@ export function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
   const [sound, setSound] = useState<TargetSound>('/r/');
   const [position, setPosition] = useState<WordPosition>('Initial');
   const [language, setLanguage] = useState<string>('English');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -63,11 +65,28 @@ export function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
     setSelected(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
   };
 
-  const save = () => {
+  const save = async () => {
     const text = word.trim().toLowerCase();
     if (!text) return;
-    addBankWord({ id: `bank-${Date.now()}`, text, sound, position, language });
-    setWord('');
+    setSaving(true);
+    setError('');
+    try {
+      await addBankWord({ id: '', text, sound, position, language });
+      setWord('');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save this word.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    setError('');
+    try {
+      await removeBankWord(id);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'Could not remove this word.');
+    }
   };
 
   return (
@@ -176,11 +195,13 @@ export function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
           <View style={styles.menuField}>
             <FieldMenu label="Language" value={language} options={activityLanguages} onChange={setLanguage} />
           </View>
-          <Pressable accessibilityRole="button" onPress={save} style={[styles.save, { backgroundColor: palette.primary }]}>
-            <Text style={styles.saveText}>Save Phrase</Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Pressable accessibilityRole="button" disabled={saving} onPress={() => void save()} style={[styles.save, { backgroundColor: palette.primary }]}>
+            <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Word'}</Text>
           </Pressable>
         </View>
       ) : null}
+      {!adding && error ? <Text style={styles.error}>{error}</Text> : null}
 
       <View style={styles.listHeader}>
         <Text style={[styles.listTitle, { color: palette.text }]}>Word Bank List</Text>
@@ -201,9 +222,11 @@ export function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
           <View key={item.id} style={[styles.row, index > 0 && { borderTopColor: palette.line, borderTopWidth: 1 }]}>
             <Text style={[styles.word, { color: palette.text }]}>{item.text}</Text>
             {editing ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.text}`} onPress={() => removeBankWord(item.id)} hitSlop={8}>
-                <Text style={[styles.minus, { color: palette.faint }]}>—</Text>
-              </Pressable>
+              item.isStandard ? <Text style={[styles.badgeText, { color: palette.faint }]}>Standard</Text> : (
+                <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.text}`} onPress={() => void remove(item.id)} hitSlop={8}>
+                  <Text style={[styles.minus, { color: palette.faint }]}>—</Text>
+                </Pressable>
+              )
             ) : (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{item.position}</Text>
@@ -258,4 +281,5 @@ const styles = StyleSheet.create({
   badgeText: { color: '#38B6E6', fontSize: 12, fontWeight: '700' },
   minus: { fontSize: 18, fontWeight: '700', paddingHorizontal: 6 },
   empty: { padding: 16, textAlign: 'center' },
+  error: { color: '#F5693F', fontSize: 13, marginBottom: 8 },
 });

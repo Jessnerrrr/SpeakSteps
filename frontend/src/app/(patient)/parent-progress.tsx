@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
-import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -18,12 +17,8 @@ import {
 // CORRECTED RELATIVE PATHS
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
-import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
-import {
-  CategoryProgress,
-  INITIAL_PROGRESS_DATA,
-  ProgressSummary,
-} from '../../data/parent-progress-mock';
+import type { CategoryProgress } from '../../data/parent-progress-mock';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 type FilterKey = 'overall' | 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
 
@@ -38,7 +33,7 @@ export default function ParentProgressScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
+  const { progress, loading, error, refresh } = usePatientLearning();
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
   const [selectedFilters, setSelectedFilters] = useState<Record<FilterKey, boolean>>({
@@ -49,14 +44,39 @@ export default function ParentProgressScreen() {
     Sentences: false,
   });
 
-  const [data] = useState<ProgressSummary>(INITIAL_PROGRESS_DATA);
-
-  useEffect(() => {
-    const unsubscribe = ChildProfileStore.subscribe((updated) => {
-      setChildProfile(updated);
+  const categories = useMemo(() => {
+    const definitions = [
+      { id: 'sounds', name: 'Sounds' as const, iconType: 'sounds' as const, levels: ['Isolation', 'Syllables'], color: '#4DAEEB' },
+      { id: 'words', name: 'Words' as const, iconType: 'words' as const, levels: ['Words'], color: '#6BB34C' },
+      { id: 'phrases', name: 'Phrases' as const, iconType: 'phrases' as const, levels: ['Phrases'], color: '#F6A823' },
+      { id: 'sentences', name: 'Sentences' as const, iconType: 'sentences' as const, levels: ['Sentences', 'Conversation'], color: '#EB4444' },
+    ];
+    return definitions.map((definition) => {
+      const completedCount = definition.levels.reduce(
+        (sum, level) => sum + (progress?.completedByLevel[level] || 0),
+        0,
+      );
+      const totalCount = definition.levels.reduce(
+        (sum, level) => sum + (progress?.assignedByLevel[level] || 0),
+        0,
+      );
+      const attempts = definition.levels.reduce(
+        (sum, level) => sum + (progress?.attemptsByLevel[level] || 0),
+        0,
+      );
+      return {
+        id: definition.id,
+        name: definition.name,
+        iconType: definition.iconType,
+        completedCount,
+        totalCount,
+        attempts,
+        pendingCount: totalCount - completedCount,
+        barColor: definition.color,
+        circleBg: definition.color,
+      };
     });
-    return unsubscribe;
-  }, []);
+  }, [progress]);
 
   if (!fontsLoaded) return null;
 
@@ -96,19 +116,19 @@ export default function ParentProgressScreen() {
   };
 
   const activeCategories: CategoryProgress[] = selectedFilters.overall
-    ? data.categories
-    : data.categories.filter((cat) => selectedFilters[cat.name as FilterKey]);
+    ? categories
+    : categories.filter((cat) => selectedFilters[cat.name as FilterKey]);
 
   const totalCompleted = selectedFilters.overall
-    ? data.completed
+    ? progress?.completedCount || 0
     : activeCategories.reduce((sum, c) => sum + c.completedCount, 0);
 
   const totalPending = selectedFilters.overall
-    ? data.pending
+    ? Math.max(0, (progress?.assignedCount || 0) - (progress?.completedCount || 0))
     : activeCategories.reduce((sum, c) => sum + c.pendingCount, 0);
 
   const totalAttempts = selectedFilters.overall
-    ? data.practiceAttempts
+    ? progress?.submissionCount || 0
     : activeCategories.reduce((sum, c) => sum + c.attempts, 0);
 
   const getFilterButtonLabel = () => {
@@ -259,6 +279,12 @@ export default function ParentProgressScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
+              {loading ? <Text style={styles.heroCardSubtext}>Loading saved progress…</Text> : null}
+              {error ? (
+                <TouchableOpacity onPress={() => void refresh()}>
+                  <Text style={styles.heroCardSubtext}>{error} Tap to retry.</Text>
+                </TouchableOpacity>
+              ) : null}
               <View style={styles.heroCardsRow}>
                 <View style={styles.heroCard}>
                   <Text style={styles.heroCardNumber}>{totalCompleted}</Text>

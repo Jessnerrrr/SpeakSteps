@@ -22,6 +22,7 @@ import {
   type PhonemePosition,
 } from '@/Therapist-modules/therapist-patients/data/options';
 import { type NewPatientInput } from '@/Therapist-modules/therapist-patients/data/samplePatients';
+import { createTherapistPatient } from '@/services/user-api';
 
 const emptyForm = (): NewPatientInput => ({
   firstName: '',
@@ -50,6 +51,7 @@ export function AddPatientModal() {
   const { palette, setAddPatientOpen, addPatient } = useTherapist();
   const [form, setForm] = useState<NewPatientInput>(emptyForm);
   const [errors, setErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof NewPatientInput>(key: K, value: NewPatientInput[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -69,13 +71,21 @@ export function AddPatientModal() {
     setForm((current) => ({ ...current, dateOfBirth: value, age: age || current.age }));
   };
 
-  const save = () => {
+  const save = async () => {
     const nextErrors = validatePatient(form);
     setErrors(nextErrors);
     if (nextErrors.length > 0) return;
-    addPatient(form);
-    setForm(emptyForm());
-    setAddPatientOpen(false);
+    setSaving(true);
+    try {
+      const patient = await createTherapistPatient(form);
+      addPatient(form, patient.patientCode);
+      setForm(emptyForm());
+      setAddPatientOpen(false);
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : 'Unable to save patient. Please try again.']);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const close = () => setAddPatientOpen(false);
@@ -192,8 +202,8 @@ export function AddPatientModal() {
             <Pressable accessibilityRole="button" onPress={close} style={styles.cancel}>
               <Text style={[styles.cancelText, { color: palette.muted }]}>Cancel</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={save} style={[styles.save, { backgroundColor: palette.primary }]}>
-              <Text style={styles.saveText}>Save Patient</Text>
+            <Pressable accessibilityRole="button" onPress={save} disabled={saving} style={[styles.save, { backgroundColor: palette.primary, opacity: saving ? 0.6 : 1 }]}>
+              <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Patient'}</Text>
             </Pressable>
           </View>
         </View>

@@ -11,13 +11,11 @@ const tabs = ['Unassigned', 'Assigned', 'Completed'] as const;
 
 export function ActivityLibrary() {
   const { palette } = useTherapist();
-  const { activities, beginNewActivity, wordBank } = useActivities();
+  const { activities, beginNewActivity, wordBank, loading, error, refresh } = useActivities();
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<(typeof tabs)[number]>('Unassigned');
   const [filters, setFilters] = useState<PracticeLevel[]>([]);
   const [section, setSection] = useState<'library' | 'bank'>('library');
-
-  if (section === 'bank') return <WordBank onOpenLibrary={() => setSection('library')} />;
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -33,11 +31,19 @@ export function ActivityLibrary() {
     setFilters((current) => (current.includes(level) ? current.filter((item) => item !== level) : [...current, level]));
   };
 
+  if (section === 'bank') return <WordBank onOpenLibrary={() => setSection('library')} />;
+
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
       <Text style={[styles.kicker, { color: palette.faint }]}>PURPOSEFUL PRACTICE</Text>
       <Text style={[styles.title, { color: palette.primary }]}>The activity library.</Text>
       <Text style={[styles.subtitle, { color: palette.muted }]}>Build the small steps that make a big difference.</Text>
+      {loading ? <Text style={[styles.empty, { color: palette.muted }]}>Loading activities…</Text> : null}
+      {error ? (
+        <Pressable accessibilityRole="button" onPress={() => void refresh()}>
+          <Text style={[styles.empty, { color: palette.alert }]}>{error}  Tap to retry.</Text>
+        </Pressable>
+      ) : null}
 
       <View style={[styles.sectionTabs, { borderBottomColor: palette.line }]}>
         <Text style={[styles.sectionTab, styles.sectionTabOn, { color: palette.primary, borderBottomColor: palette.primary }]}>Activity Library</Text>

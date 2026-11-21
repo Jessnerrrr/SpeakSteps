@@ -29,6 +29,7 @@ export function ActivityEditor() {
   const { palette } = useTherapist();
   const { draft, setDraft, saveActivity, wordBank, addBankWord } = useActivities();
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [bankQuery, setBankQuery] = useState('');
   const phraseMode = usesPhraseFields(draft.level);
   const positions = positionsFromLabel(draft.positionLabel);
@@ -61,7 +62,28 @@ export function ActivityEditor() {
       customWords: draft.customWords.some((item) => item.text === text) ? draft.customWords : [...draft.customWords, word],
       customInput: '',
     });
-    if (draft.saveToBank) addBankWord(word);
+    if (draft.saveToBank) {
+      void addBankWord(word).catch((saveError: unknown) => {
+        setError(saveError instanceof Error ? saveError.message : 'Could not save this word.');
+      });
+    }
+  };
+
+  const persistActivity = async () => {
+    if (!draft.title.trim()) {
+      setError('Enter an activity title.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await saveActivity();
+      router.push('/therapist/activities' as never);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save this activity.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleWord = (id: string, position: WordPosition) => {
@@ -91,6 +113,7 @@ export function ActivityEditor() {
           );
         })}
       </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {draft.step === 'focus' ? (
         <View style={styles.block}>
@@ -103,10 +126,9 @@ export function ActivityEditor() {
           <FieldMenu label="Language" value={draft.language} options={activityLanguages} onChange={(language) => setDraft({ language })} />
           <Field label="Instructions for Student/Facilitator" value={draft.instructions} onChangeText={(instructions) => setDraft({ instructions })} placeholder="Listen to the model..." />
           <Field label="Articulatory Guide" value={draft.guide} onChangeText={(guide) => setDraft({ guide })} placeholder="Pull tongue tip back, lips slightly relaxed." />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
           <View style={styles.actions}>
-            <Pressable accessibilityRole="button" onPress={() => { if (!draft.title.trim()) { setError('Enter an activity title.'); return; } saveActivity(); router.push('/therapist/activities' as never); }} style={[styles.secondary, { borderColor: palette.line }]}>
-              <Text style={[styles.secondaryText, { color: palette.text }]}>Save Draft</Text>
+            <Pressable accessibilityRole="button" disabled={saving} onPress={() => void persistActivity()} style={[styles.secondary, { borderColor: palette.line }]}>
+              <Text style={[styles.secondaryText, { color: palette.text }]}>{saving ? 'Saving…' : 'Save Draft'}</Text>
             </Pressable>
             <Pressable accessibilityRole="button" onPress={continueFocus} style={styles.primary}>
               <Text style={styles.primaryText}>Continue</Text>
@@ -290,13 +312,11 @@ export function ActivityEditor() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => {
-                saveActivity();
-                router.push('/therapist/activities' as never);
-              }}
+              disabled={saving}
+              onPress={() => void persistActivity()}
               style={styles.primary}
             >
-              <Text style={styles.primaryText}>Save Activity</Text>
+              <Text style={styles.primaryText}>{saving ? 'Saving…' : 'Save Activity'}</Text>
             </Pressable>
           </View>
         </View>

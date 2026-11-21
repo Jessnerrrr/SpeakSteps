@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { loginAccount } from '@/services/user-api';
 
 export default function TherapistLoginScreen() {
   // Responsive Hooks
@@ -12,6 +13,7 @@ export default function TherapistLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form States
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -25,7 +27,7 @@ export default function TherapistLoginScreen() {
 
   if (!fontsLoaded) return null; 
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setHasSubmitted(true);
     setLoginError(''); // Reset error on new attempt
     
@@ -34,11 +36,14 @@ export default function TherapistLoginScreen() {
       return;
     }
 
-    if (email.trim().toLowerCase() === 'therapist@speaksteps.com' && password === 'Therapist@123') {
-      // Routes to the auth selection screen and passes 'therapist' as the role
-      router.push({ pathname: '/auth-selection', params: { role: 'therapist' } } as any);
-    } else {
-      setLoginError('Invalid email or password');
+    setIsSubmitting(true);
+    try {
+      await loginAccount(email, password, 'therapist');
+      router.replace('/therapist' as any);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -137,8 +142,8 @@ export default function TherapistLoginScreen() {
                   </View>
                 )}
 
-                <TouchableOpacity style={styles.signInBtn} onPress={handleLogin}>
-                  <Text style={styles.signInText}>Sign in</Text>
+                <TouchableOpacity style={styles.signInBtn} onPress={handleLogin} disabled={isSubmitting}>
+                  <Text style={styles.signInText}>{isSubmitting ? 'Signing in…' : 'Sign in'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => router.push('/forgot-password' as any)}>

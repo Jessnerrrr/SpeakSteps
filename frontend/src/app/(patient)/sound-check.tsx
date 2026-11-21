@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useFonts } from 'expo-font';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Image,
   ImageBackground,
@@ -10,6 +10,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { createSpeechCheckin } from '@/services/user-api';
 
 const soundChecksData = [
   { 
@@ -28,6 +30,8 @@ const soundChecksData = [
 
 export default function SoundCheckScreen() {
   const router = useRouter();
+  const { responses } = useLocalSearchParams<{ responses?: string }>();
+  const { patient } = usePatientLearning();
   
   // Responsive Hooks
   const { width } = useWindowDimensions();
@@ -35,6 +39,8 @@ export default function SoundCheckScreen() {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // FIXED FONT PATHS: Removed the /fonts/ folder segment
   const [fontsLoaded] = useFonts({
@@ -47,12 +53,36 @@ export default function SoundCheckScreen() {
 
   const activeCheck = soundChecksData[currentIndex];
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (currentIndex < soundChecksData.length - 1) {
       setCurrentIndex(currentIndex + 1);
       setIsRecording(false);
     } else {
-      router.push('/speech-checkin-result' as any);
+      if (!patient) {
+        setSaveError('Your child profile is not available. Return to the parent dashboard and try again.');
+        return;
+      }
+      if (typeof responses !== 'string') {
+        setSaveError('The check-in answers are missing. Please start the check-in again.');
+        return;
+      }
+      let questionResponses: unknown;
+      try {
+        questionResponses = JSON.parse(responses);
+      } catch {
+        setSaveError('The check-in answers could not be read. Please start the check-in again.');
+        return;
+      }
+      setIsSaving(true);
+      setSaveError('');
+      try {
+        const saved = await createSpeechCheckin({ patientId: patient.id, responses: questionResponses });
+        router.push({ pathname: '/speech-checkin-result', params: { checkinId: saved.id } } as any);
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : 'Could not save this check-in.');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -140,10 +170,12 @@ export default function SoundCheckScreen() {
             <TouchableOpacity 
               style={styles.submitButton}
               activeOpacity={0.85}
+              disabled={isSaving}
               onPress={handleSubmit}
             >
-              <Text style={styles.submitButtonText}>Submit</Text>
+              <Text style={styles.submitButtonText}>{isSaving ? 'Saving…' : 'Submit'}</Text>
             </TouchableOpacity>
+            {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
 
           </View>
 
@@ -336,5 +368,11 @@ const styles = StyleSheet.create({
     fontFamily: 'SourGummy-Bold', 
     color: '#FFFFFF', 
     fontSize: 19, 
+  },
+  saveErrorText: {
+    fontFamily: 'SourGummy-Medium',
+    color: '#B91C1C',
+    textAlign: 'center',
+    marginTop: 10,
   },
 });

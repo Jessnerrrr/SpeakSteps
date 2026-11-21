@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 
@@ -10,18 +10,25 @@ import { patientName } from '@/Therapist-modules/therapist-patients/data/sampleP
 import { useActivities } from '@/Therapist-modules/therapist-activities/state/ActivitiesProvider';
 
 export function AssignActivity() {
-  const { palette, patients } = useTherapist();
-  const { activities, assignActivity, beginEdit } = useActivities();
+  const { palette, patients, patientsLoading } = useTherapist();
+  const { activities, assignActivity, beginEdit, loading } = useActivities();
   const params = useLocalSearchParams<{ id?: string }>();
-  const initialId = (Array.isArray(params.id) ? params.id[0] : params.id) || 'ready-set-r';
-  const studentNames = patients.map((patient) => patientName(patient));
-  const [student, setStudent] = useState(studentNames[0] || '');
+  const initialId = (Array.isArray(params.id) ? params.id[0] : params.id) || '';
+  const studentNames = patients
+    .filter((patient) => patient.patientCode)
+    .map((patient) => `${patientName(patient)} · ${patient.patientCode}`);
+  const [student, setStudent] = useState('');
   const [activityId, setActivityId] = useState(initialId || activities[0]?.id || '');
-  const [dueDate, setDueDate] = useState('01/11/2026');
+  const [dueDate, setDueDate] = useState('');
   const activity = activities.find((item) => item.id === activityId) || activities[0];
   const [instructions, setInstructions] = useState(activity?.instructions || '');
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!student && studentNames.length) setStudent(studentNames[0]);
+  }, [student, studentNames]);
 
   const chooseActivity = (title: string) => {
     const next = activities.find((item) => item.title === title);
@@ -31,7 +38,7 @@ export function AssignActivity() {
     setPreview(false);
   };
 
-  const assign = () => {
+  const assign = async () => {
     if (!student || !activity) {
       setError('Choose a student and an activity.');
       return;
@@ -40,8 +47,22 @@ export function AssignActivity() {
       setError('Enter the due date as mm/dd/yyyy.');
       return;
     }
-    assignActivity(activity.id, student, dueDate, instructions);
-    router.push('/therapist/activities' as never);
+    const [, month, day, year] = dueDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/) || [];
+    const selectedPatient = patients.find((patient) => student.endsWith(`· ${patient.patientCode}`));
+    if (!selectedPatient?.patientCode || !month || !day || !year) {
+      setError('Choose a patient with a saved patient ID and enter a valid due date.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await assignActivity(activity.id, selectedPatient.patientCode, `${year}-${month}-${day}`, instructions);
+      router.push('/therapist/activities' as never);
+    } catch (assignError) {
+      setError(assignError instanceof Error ? assignError.message : 'Could not assign this activity.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -50,6 +71,8 @@ export function AssignActivity() {
         <ChevronLeftIcon color={palette.text} size={18} />
       </Pressable>
       <Text style={[styles.title, { color: palette.text }]}>Assign Activity</Text>
+      {patientsLoading || loading ? <Text style={{ color: palette.muted }}>Loading saved patients and activities…</Text> : null}
+      {!patientsLoading && studentNames.length === 0 ? <Text style={styles.error}>No saved patients with patient IDs are available in your caseload.</Text> : null}
       <FieldMenu label="Student" value={student} options={studentNames} onChange={setStudent} />
       <FieldMenu label="Activity" value={activity?.title || 'Select activity'} options={activities.map((item) => item.title)} onChange={chooseActivity} />
       <Pressable accessibilityRole="button" onPress={() => setPreview((open) => !open)} style={styles.previewToggle}>
@@ -70,8 +93,8 @@ export function AssignActivity() {
             >
               <Text style={[styles.secondaryText, { color: palette.text }]}>Edit Activity</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={assign} style={styles.primary}>
-              <Text style={styles.primaryText}>Assign Activity</Text>
+            <Pressable accessibilityRole="button" disabled={saving} onPress={() => void assign()} style={styles.primary}>
+              <Text style={styles.primaryText}>{saving ? 'Assigning…' : 'Assign Activity'}</Text>
             </Pressable>
           </View>
         </View>
@@ -90,8 +113,8 @@ export function AssignActivity() {
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={[styles.secondary, { borderColor: palette.line }]}>
           <Text style={[styles.secondaryText, { color: palette.text }]}>Cancel</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={assign} style={styles.primary}>
-          <Text style={styles.primaryText}>Assign Activity</Text>
+        <Pressable accessibilityRole="button" disabled={saving} onPress={() => void assign()} style={styles.primary}>
+          <Text style={styles.primaryText}>{saving ? 'Assigning…' : 'Assign Activity'}</Text>
         </Pressable>
       </View>
     </ScrollView>

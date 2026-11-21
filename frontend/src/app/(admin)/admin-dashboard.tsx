@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ImageBackground,
   Platform,
@@ -17,7 +17,18 @@ import {
   Switch,
   Pressable,
   useWindowDimensions,
+  TextInput,
+  Alert,
 } from 'react-native';
+import {
+  clearSession,
+  getAdminUsers,
+  getNotifications,
+  searchPatients,
+  updateAdminUserStatus,
+  type AdminUser,
+  type PatientSearchResult,
+} from '@/services/user-api';
 
 const RECENT_REQUESTS_DASHBOARD = [
   { id: '1', name: 'Khyl Shervin Sude', role: 'Therapist', time: 'Today AT 11:12 AM', status: 'Pending', avatar: require('../../../assets/images/person1.jpg') },
@@ -102,6 +113,15 @@ export default function AdminDashboardScreen() {
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [accounts, setAccounts] = useState<AdminUser[]>([]);
+  const [adminLoading, setAdminLoading] = useState(true);
+  const [adminError, setAdminError] = useState('');
+  const [updatingAccountId, setUpdatingAccountId] = useState<string | null>(null);
+  const [accountSearch, setAccountSearch] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientResults, setPatientResults] = useState<PatientSearchResult[]>([]);
+  const [patientSearchLoading, setPatientSearchLoading] = useState(false);
+  const [patientSearchError, setPatientSearchError] = useState('');
 
   const [newRequestToggle, setNewRequestToggle] = useState(true);
   const [securityAlertsToggle, setSecurityAlertsToggle] = useState(true);
@@ -115,6 +135,82 @@ export default function AdminDashboardScreen() {
     'Inter-Bold': require('../../../assets/Inter-Bold.ttf'),
   });
 
+  useEffect(() => {
+    let active = true;
+    Promise.all([getAdminUsers(), getNotifications()])
+      .then(([loadedAccounts, loadedNotifications]) => {
+        if (!active) return;
+        setAccounts(loadedAccounts);
+        setNotifications(loadedNotifications);
+      })
+      .catch((error: unknown) => {
+        if (active) setAdminError(error instanceof Error ? error.message : 'Could not load admin data.');
+      })
+      .finally(() => {
+        if (active) setAdminLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const query = patientSearch.trim();
+    if (!query) {
+      setPatientResults([]);
+      setPatientSearchError('');
+      setPatientSearchLoading(false);
+      return;
+    }
+    let active = true;
+    setPatientSearchLoading(true);
+    setPatientSearchError('');
+    const timeout = setTimeout(() => {
+      searchPatients(query)
+        .then((results) => {
+          if (active) setPatientResults(results);
+        })
+        .catch((error: unknown) => {
+          if (active) setPatientSearchError(error instanceof Error ? error.message : 'Patient search failed.');
+        })
+        .finally(() => {
+          if (active) setPatientSearchLoading(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [patientSearch]);
+
+  const visibleAccounts = useMemo(() => {
+    const roleFilter = accountSubTab === 'Patient' ? 'parent' : accountSubTab.toLowerCase();
+    const query = accountSearch.trim().toLowerCase();
+    return accounts.filter((account) => (
+      (accountSubTab === 'All' || account.role === roleFilter) &&
+      (!query || `${account.name} ${account.email} ${account.childName} ${account.studentId}`.toLowerCase().includes(query))
+    ));
+  }, [accounts, accountSubTab, accountSearch]);
+  const visibleRequests = useMemo(() => {
+    if (requestSubTab === 'All') return accounts;
+    return accounts.filter((account) => account.status === requestSubTab.toLowerCase());
+  }, [accounts, requestSubTab]);
+
+  const handleUpdateAccountStatus = async (userId: string, status: 'verified' | 'rejected') => {
+    setUpdatingAccountId(userId);
+    setAdminError('');
+    try {
+      const updated = await updateAdminUserStatus(userId, status);
+      setAccounts((current) => current.map((account) => account.id === updated.id
+        ? { ...account, status: updated.status as AdminUser['status'] }
+        : account));
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'Could not update the account status.');
+    } finally {
+      setUpdatingAccountId(null);
+    }
+  };
+
   if (!fontsLoaded) return null;
 
   const triggerAlert = (title: string, message: string, confirmText: string, confirmColor: string, iconName: any, onConfirm: () => void) => {
@@ -122,6 +218,18 @@ export default function AdminDashboardScreen() {
     setShowSettingsModal(false);
     setAlertConfig({ title, message, confirmText, confirmColor, iconName, onConfirm });
     setAlertVisible(true);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await clearSession();
+      router.replace('/(admin)/admin-login' as any);
+    } catch (error) {
+      Alert.alert(
+        'Sign out failed',
+        error instanceof Error ? error.message : 'Could not clear the session. Please try again.',
+      );
+    }
   };
 
   const renderTopHeader = (title: string, showBackButton = false) => (
@@ -180,12 +288,12 @@ export default function AdminDashboardScreen() {
 
       <View style={styles.heroCard}>
         <Text style={styles.heroLabel}>Active Accounts</Text>
-        <Text style={styles.heroNumber}>4</Text>
+        <Text style={styles.heroNumber}>{accounts.filter((account) => account.status === 'verified').length}</Text>
         <View style={styles.progressContainer}>
-          <View style={[styles.progressSegment, { flex: 2, backgroundColor: '#1173BA' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#49A11B' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#C78800' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#C81015' }]} />
+          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.role === 'therapist' && account.status === 'verified').length, backgroundColor: '#1173BA' }]} />
+          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.role === 'teacher' && account.status === 'verified').length, backgroundColor: '#49A11B' }]} />
+          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.role === 'parent' && account.status === 'verified').length, backgroundColor: '#C78800' }]} />
+          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.status === 'pending').length, backgroundColor: '#C81015' }]} />
         </View>
         <View style={styles.legendContainer}>
           <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#1173BA' }]} /><Text style={styles.legendText}>Therapist</Text></View>
@@ -200,7 +308,7 @@ export default function AdminDashboardScreen() {
         {/* Therapist Accounts Card */}
         <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#DDF0F9', borderColor: '#B9DFEE', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#1173BA' }]}>2</Text>
+            <Text style={[styles.solidCardNum, { color: '#1173BA' }]}>{accounts.filter((account) => account.role === 'therapist').length}</Text>
             <Image
               source={require('../../../assets/images/admin-therapist.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
@@ -213,7 +321,7 @@ export default function AdminDashboardScreen() {
         {/* Teacher Accounts Card */}
         <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#E2F7CE', borderColor: '#C6ECA7', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#49A11B' }]}>1</Text>
+            <Text style={[styles.solidCardNum, { color: '#49A11B' }]}>{accounts.filter((account) => account.role === 'teacher').length}</Text>
             <Image
               source={require('../../../assets/images/admin-teacher.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
@@ -226,7 +334,7 @@ export default function AdminDashboardScreen() {
         {/* Patient Accounts Card */}
         <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FDE9AD', borderColor: '#F3D47B', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#C78800' }]}>1</Text>
+            <Text style={[styles.solidCardNum, { color: '#C78800' }]}>{accounts.filter((account) => account.role === 'parent').length}</Text>
             <Image
               source={require('../../../assets/images/admin-patient.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
@@ -239,7 +347,7 @@ export default function AdminDashboardScreen() {
         {/* Pending Requests Card */}
         <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FBD7D7', borderColor: '#F2B9B9', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('request')}>
           <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#C81015' }]}>1</Text>
+            <Text style={[styles.solidCardNum, { color: '#C81015' }]}>{accounts.filter((account) => account.status === 'pending').length}</Text>
             <Image
               source={require('../../../assets/images/admin-pending.png')}
               style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
@@ -263,16 +371,17 @@ export default function AdminDashboardScreen() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollableList}>
-            {RECENT_REQUESTS_DASHBOARD.map((request, index) => (
+            {accounts.filter((account) => account.status === 'pending').slice(0, 4).map((request, index, list) => (
               <TouchableOpacity
                 key={request.id}
-                style={[styles.requestItemDashboard, index === RECENT_REQUESTS_DASHBOARD.length - 1 && { borderBottomWidth: 0 }]}
+                style={[styles.requestItemDashboard, index === list.length - 1 && { borderBottomWidth: 0 }]}
                 activeOpacity={0.7}
+                onPress={() => setActiveTab('request')}
               >
-                <Image source={request.avatar} style={styles.requestAvatar} contentFit="cover" />
+                <Image source={require('../../../assets/images/person1.jpg')} style={styles.requestAvatar} contentFit="cover" />
                 <View style={styles.requestDetails}>
                   <Text style={styles.requestName} numberOfLines={1}>{request.name}</Text>
-                  <Text style={styles.requestSubtext} numberOfLines={1}>{request.role}   {request.time}</Text>
+                  <Text style={styles.requestSubtext} numberOfLines={1}>{request.role}   {new Date(request.createdAt).toLocaleDateString()}</Text>
                 </View>
                 <View style={styles.requestRightActions}>
                   <View style={styles.pendingBadgeDashboard}><Text style={styles.pendingBadgeTextDashboard}>{request.status}</Text></View>
@@ -280,6 +389,9 @@ export default function AdminDashboardScreen() {
                 </View>
               </TouchableOpacity>
             ))}
+            {!adminLoading && accounts.filter((account) => account.status === 'pending').length === 0
+              ? <Text style={styles.detailText}>No pending account requests.</Text>
+              : null}
           </ScrollView>
         </View>
 
@@ -293,41 +405,47 @@ export default function AdminDashboardScreen() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollableList}>
-            {RECENT_ACTIVITIES_DASHBOARD.map((activity) => (
+            {notifications.slice(0, 6).map((activity, index) => {
+              const activityColor = ['#49A11B', '#1173BA', '#C78800', '#C81015'][index % 4];
+              return (
               <View
                 key={activity.id}
                 style={[
                   styles.activityItem,
                   {
-                    backgroundColor: activity.bgColor,
-                    borderColor: activity.borderColor,
+                    backgroundColor: `${activityColor}12`,
+                    borderColor: `${activityColor}40`,
                   },
                 ]}
               >
                 <View style={styles.activityTopRow}>
-                  <Text style={[styles.activityTitle, { color: activity.color }]} numberOfLines={1}>
-                    {activity.title}
+                  <Text style={[styles.activityTitle, { color: activityColor }]} numberOfLines={1}>
+                    {activity.action}
                   </Text>
 
                   <View style={styles.activityBadgeRow}>
                     <View style={styles.activityRoleBadge}>
-                      <Text style={[styles.activityRoleText, { color: activity.color }]}>
-                        {activity.role}
+                      <Text style={[styles.activityRoleText, { color: activityColor }]}>
+                        {activity.name}
                       </Text>
                     </View>
                     <View style={styles.activityTimeBadge}>
-                      <Text style={[styles.activityTimeText, { color: activity.color }]}>
-                        {activity.time}
+                      <Text style={[styles.activityTimeText, { color: activityColor }]}>
+                        {new Date(activity.time).toLocaleDateString()}
                       </Text>
                     </View>
                   </View>
                 </View>
 
-                <Text style={[styles.activitySubtitle, { color: activity.color }]} numberOfLines={1}>
-                  {activity.subtitle}
+                <Text style={[styles.activitySubtitle, { color: activityColor }]} numberOfLines={1}>
+                  {activity.detail}
                 </Text>
               </View>
-            ))}
+              );
+            })}
+            {!adminLoading && notifications.length === 0
+              ? <Text style={styles.detailText}>No recent activity is available.</Text>
+              : null}
           </ScrollView>
         </View>
 
@@ -341,7 +459,7 @@ export default function AdminDashboardScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
 
         <View style={styles.subTabsContainer}>
-          {['All', 'Pending (3)', 'Approved (4)', 'Rejected (0)'].map((tab) => (
+          {['All', 'Pending', 'Verified', 'Rejected'].map((tab) => (
             <TouchableOpacity key={tab} onPress={() => setRequestSubTab(tab)} style={styles.subTabBtn}>
               <Text style={[styles.subTabText, requestSubTab === tab && styles.subTabTextActive]}>{tab}</Text>
               {requestSubTab === tab && <View style={styles.subTabIndicator} />}
@@ -349,53 +467,66 @@ export default function AdminDashboardScreen() {
           ))}
         </View>
 
-        {MOCK_REQUESTS.map((req, i) => (
-          <View key={i} style={styles.fullCard}>
+        {adminError ? <Text style={{ color: '#B91C1C', marginBottom: 12 }}>{adminError}</Text> : null}
+        {adminLoading ? <Text style={styles.detailText}>Loading account requests…</Text> : null}
+        {visibleRequests.map((req) => {
+          const roleLabel = req.role === 'parent' ? 'Patient' : req.role[0].toUpperCase() + req.role.slice(1);
+          const roleColor = req.role === 'teacher' ? '#16A34A' : req.role === 'parent' ? '#D97706' : '#0284C7';
+          const pending = req.status === 'pending';
+          return (
+          <View key={req.id} style={styles.fullCard}>
             <View style={styles.cardHeaderRow}>
-              <Image source={req.avatar} style={styles.cardAvatarLarge} contentFit="cover" />
+              <Image source={require('../../../assets/images/person1.jpg')} style={styles.cardAvatarLarge} contentFit="cover" />
               <View style={styles.cardHeaderInfo}>
                 <Text style={styles.cardNameLarge}>{req.name}</Text>
                 <Text style={styles.cardEmailText}>{req.email}</Text>
               </View>
-              <View style={[styles.roleBadge, { backgroundColor: req.roleBg }]}>
-                <Text style={[styles.roleBadgeText, { color: req.roleColor }]}>{req.role}</Text>
+              <View style={[styles.roleBadge, { backgroundColor: `${roleColor}20` }]}>
+                <Text style={[styles.roleBadgeText, { color: roleColor }]}>{roleLabel}</Text>
               </View>
             </View>
 
             <View style={styles.cardDivider} />
 
             <View style={styles.cardBody}>
-              <Text style={styles.detailText}><Text style={styles.detailLabel}>Child:</Text> {req.child}</Text>
-              <Text style={styles.detailText}><Text style={styles.detailLabel}>Level:</Text> {req.level}</Text>
-              <Text style={styles.detailText}><Text style={styles.detailLabel}>Student ID:</Text> {req.studentId}</Text>
-              <Text style={styles.detailText}><Text style={styles.detailLabel}>Contact:</Text> {req.contact}</Text>
+              {req.role === 'parent' ? <Text style={styles.detailText}><Text style={styles.detailLabel}>Child:</Text> {req.childName || '—'}{req.childAge ? `, age ${req.childAge}` : ''}</Text> : null}
+              {req.role === 'parent' ? <Text style={styles.detailText}><Text style={styles.detailLabel}>Student ID:</Text> {req.studentId || '—'}</Text> : null}
+              <Text style={styles.detailText}><Text style={styles.detailLabel}>Contact:</Text> {req.contact || '—'}</Text>
+              <Text style={styles.detailText}><Text style={styles.detailLabel}>Created:</Text> {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '—'}</Text>
 
               <View style={styles.warningBox}>
-                <Ionicons name="warning-outline" size={16} color="#D97706" />
-                <Text style={styles.warningText}>{req.verification}</Text>
+                <Ionicons name={pending ? 'warning-outline' : 'information-circle-outline'} size={16} color={pending ? '#D97706' : '#0284C7'} />
+                <Text style={styles.warningText}>Account status: {req.status}</Text>
               </View>
             </View>
 
-            <View style={styles.cardActionsRow}>
+            {pending ? <View style={styles.cardActionsRow}>
               <TouchableOpacity
                 style={styles.rejectBtn}
+                disabled={updatingAccountId === req.id}
                 onPress={() => triggerAlert(
                   'Reject Request',
-                  `Are you sure you want to reject ${req.name}'s request? This action cannot be undone.`,
+                  `Reject ${req.name}'s account request?`,
                   'Reject',
                   '#EF4444',
                   'close-circle',
-                  () => console.log('Rejected:', req.name)
+                  () => { void handleUpdateAccountStatus(req.id, 'rejected'); }
                 )}
               >
-                <Text style={styles.rejectBtnText}>Reject</Text>
+                <Text style={styles.rejectBtnText}>{updatingAccountId === req.id ? 'Updating…' : 'Reject'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.approveBtn}>
-                <Text style={styles.approveBtnText}>Approve Request</Text>
+              <TouchableOpacity
+                style={styles.approveBtn}
+                disabled={updatingAccountId === req.id}
+                onPress={() => { void handleUpdateAccountStatus(req.id, 'verified'); }}
+              >
+                <Text style={styles.approveBtnText}>{updatingAccountId === req.id ? 'Updating…' : 'Approve Request'}</Text>
               </TouchableOpacity>
-            </View>
+            </View> : null}
           </View>
-        ))}
+          );
+        })}
+        {!adminLoading && visibleRequests.length === 0 ? <Text style={styles.detailText}>No accounts match this status.</Text> : null}
       </ScrollView>
     </View>
   );
@@ -413,16 +544,48 @@ export default function AdminDashboardScreen() {
           ))}
         </View>
 
-        {MOCK_ACCOUNTS.map((acc, i) => (
-          <View key={i} style={styles.fullCard}>
+        <TextInput
+          value={accountSearch}
+          onChangeText={setAccountSearch}
+          placeholder="Search accounts by name, email, or student ID"
+          placeholderTextColor="#94A3B8"
+          style={{ backgroundColor: '#FFFFFF', borderColor: '#CBD5E1', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12, color: '#1E293B' }}
+          autoCapitalize="none"
+        />
+        <TextInput
+          value={patientSearch}
+          onChangeText={setPatientSearch}
+          placeholder="Search patients by name or 9-digit patient ID"
+          placeholderTextColor="#94A3B8"
+          style={{ backgroundColor: '#FFFFFF', borderColor: '#CBD5E1', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12, color: '#1E293B' }}
+          autoCapitalize="none"
+        />
+        {patientSearchLoading ? <Text style={styles.detailText}>Searching patients…</Text> : null}
+        {patientSearchError ? <Text style={{ color: '#B91C1C', marginBottom: 12 }}>{patientSearchError}</Text> : null}
+        {patientResults.map((patient) => (
+          <View key={patient.id} style={[styles.fullCard, { paddingVertical: 12 }]}>
+            <Text style={styles.cardNameLarge}>{[patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ')}</Text>
+            <Text style={styles.cardEmailText}>Patient ID: {patient.patientCode || '—'}</Text>
+          </View>
+        ))}
+        {adminError ? <Text style={{ color: '#B91C1C', marginBottom: 12 }}>{adminError}</Text> : null}
+        {adminLoading ? <Text style={styles.detailText}>Loading accounts…</Text> : null}
+        {visibleAccounts.map((acc) => {
+          const roleLabel = acc.role === 'parent' ? 'Patient' : acc.role[0].toUpperCase() + acc.role.slice(1);
+          const roleColor = acc.role === 'teacher' ? '#16A34A' : acc.role === 'parent' ? '#D97706' : '#0284C7';
+          const statusColor = acc.status === 'verified' ? '#16A34A' : acc.status === 'pending' ? '#D97706' : '#DC2626';
+          const nextStatus = acc.status === 'verified' ? 'rejected' : 'verified';
+          const statusAction = acc.status === 'pending' ? 'Approve' : acc.status === 'verified' ? 'Deactivate' : 'Reactivate';
+          return (
+          <View key={acc.id} style={styles.fullCard}>
              <View style={styles.cardHeaderRow}>
-              <Image source={acc.avatar} style={styles.cardAvatarLarge} contentFit="cover" />
+              <Image source={require('../../../assets/images/person1.jpg')} style={styles.cardAvatarLarge} contentFit="cover" />
               <View style={styles.cardHeaderInfo}>
                 <Text style={styles.cardNameLarge}>{acc.name}</Text>
                 <Text style={styles.cardEmailText}>{acc.email}</Text>
               </View>
-              <View style={[styles.roleBadge, { backgroundColor: acc.roleBg }]}>
-                <Text style={[styles.roleBadgeText, { color: acc.roleColor }]}>{acc.role}</Text>
+              <View style={[styles.roleBadge, { backgroundColor: `${roleColor}20` }]}>
+                <Text style={[styles.roleBadgeText, { color: roleColor }]}>{roleLabel}</Text>
               </View>
             </View>
 
@@ -430,44 +593,34 @@ export default function AdminDashboardScreen() {
 
             <View style={styles.accountStatusRow}>
               <Text style={styles.detailLabel}>Account Status:</Text>
-              <View style={[styles.statusBadge, { backgroundColor: acc.statusBg }]}>
-                <Text style={[styles.statusBadgeText, { color: acc.statusColor }]}>{acc.status}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
+                <Text style={[styles.statusBadgeText, { color: statusColor }]}>{acc.status}</Text>
               </View>
             </View>
 
+            {acc.role === 'parent' ? <Text style={styles.detailText}>Child: {acc.childName || '—'}{acc.childAge ? `, age ${acc.childAge}` : ''} · Student ID: {acc.studentId || '—'}</Text> : null}
+
             <View style={styles.cardActionsRow}>
               <TouchableOpacity
-                style={styles.editBtn}
-                onPress={() => triggerAlert(
-                  'Edit Account',
-                  `Are you sure you want to modify ${acc.name}'s account settings?`,
-                  'Edit Details',
-                  '#0284C7',
-                  'create',
-                  () => console.log('Edit Account:', acc.name)
-                )}
-              >
-                <Ionicons name="create-outline" size={16} color="#0284C7" />
-                <Text style={styles.editBtnText}>Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
                 style={styles.suspendBtn}
+                disabled={updatingAccountId === acc.id}
                 onPress={() => triggerAlert(
-                  'Suspend Account',
-                  `Are you sure you want to suspend ${acc.name}? They will instantly lose access to the system.`,
-                  'Suspend',
-                  '#EF4444',
+                  `${statusAction} Account`,
+                  `${statusAction} ${acc.name}'s account?`,
+                  statusAction,
+                  acc.status === 'verified' ? '#EF4444' : '#0284C7',
                   'alert-circle',
-                  () => console.log('Suspended:', acc.name)
+                  () => { void handleUpdateAccountStatus(acc.id, nextStatus); }
                 )}
               >
-                <Ionicons name="ban-outline" size={16} color="#DC2626" />
-                <Text style={styles.suspendBtnText}>Suspend</Text>
+                <Ionicons name="person-circle-outline" size={16} color="#DC2626" />
+                <Text style={styles.suspendBtnText}>{updatingAccountId === acc.id ? 'Updating…' : statusAction}</Text>
               </TouchableOpacity>
             </View>
           </View>
-        ))}
+          );
+        })}
+        {!adminLoading && visibleAccounts.length === 0 ? <Text style={styles.detailText}>No accounts match this search.</Text> : null}
       </ScrollView>
     </View>
   );
@@ -561,7 +714,7 @@ export default function AdminDashboardScreen() {
                     'Log Out',
                     '#EF4444',
                     'log-out',
-                    () => router.replace('/(admin)/admin-login' as any)
+                    () => { void handleLogout(); }
                   )}
                 >
                   <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
@@ -642,7 +795,7 @@ export default function AdminDashboardScreen() {
               <TouchableOpacity
                 style={styles.settingsLogoutButton}
                 activeOpacity={0.8}
-                onPress={() => triggerAlert('Log Out', 'Are you sure you want to log out?', 'Log Out', '#EF4444', 'log-out', () => router.replace('/(admin)/admin-login' as any))}
+                onPress={() => triggerAlert('Log Out', 'Are you sure you want to log out?', 'Log Out', '#EF4444', 'log-out', () => { void handleLogout(); })}
               >
                 <Text style={styles.settingsLogoutButtonText}>Log Out</Text>
               </TouchableOpacity>

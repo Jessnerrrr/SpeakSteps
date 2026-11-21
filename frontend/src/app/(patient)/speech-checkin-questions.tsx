@@ -57,6 +57,7 @@ export default function SpeechCheckInQuestionsScreen() {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [answers, setAnswers] = useState<Record<string, { question: string; answer: string }>>({});
 
   // FIXED FONT PATHS: Removed the /fonts/ folder segment
   const [fontsLoaded] = useFonts({
@@ -72,12 +73,22 @@ export default function SpeechCheckInQuestionsScreen() {
   const handleSelect = (index: number) => {
     setSelectedOption(index);
     setTimeout(() => {
+      const nextAnswers = {
+        ...answers,
+        [String(currentStep)]: {
+          question: activeData.question,
+          answer: activeData.options[index],
+        },
+      };
+      setAnswers(nextAnswers);
       if (currentStep < 7) {
         setCurrentStep(currentStep + 1);
         setSelectedOption(null);
       } else {
-        // Connected: Navigates to the Sound Check screen after step 7!
-        router.push('/sound-check' as any);
+        router.push({
+          pathname: '/sound-check',
+          params: { responses: JSON.stringify(nextAnswers) },
+        } as any);
       }
     }, 250);
   };

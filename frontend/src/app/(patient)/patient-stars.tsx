@@ -6,6 +6,7 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import {
   ImageBackground,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -16,12 +17,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-// FIXED IMPORTS: 2 levels up to reach src/components and src/data
-import { MOCK_STARS_DATA } from '../../data/stars-mock';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
 import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
 import { NotificationBellButton } from '../../components/notification-popover';
 import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
+import { clearSession } from '@/services/user-api';
 
 export default function PatientStarsScreen() {
   const { width } = useWindowDimensions();
@@ -34,15 +35,29 @@ export default function PatientStarsScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [data] = useState(MOCK_STARS_DATA);
+  const { user, patient, assignments, progress, loading, error, refresh } = usePatientLearning();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   if (!fontsLoaded) return null;
 
+  const categories = [
+    { id: 'sounds', title: 'Sounds', levels: ['Isolation', 'Syllables'], badgeBgColor: '#4DAEEB', iconType: 'sounds' },
+    { id: 'words', title: 'Words', levels: ['Words'], badgeBgColor: '#6BB34C', iconType: 'words' },
+    { id: 'phrases', title: 'Phrases', levels: ['Phrases'], badgeBgColor: '#F6A823', iconType: 'phrases' },
+    { id: 'sentences', title: 'Sentences', levels: ['Sentences', 'Conversation'], badgeBgColor: '#EB4444', iconType: 'sentences' },
+  ].map((category) => ({
+    ...category,
+    completed: category.levels.reduce((sum, level) => sum + (progress?.completedByLevel[level] || 0), 0),
+    total: category.levels.reduce((sum, level) => sum + (progress?.assignedByLevel[level] || 0), 0),
+  }));
+  const totalStars = progress?.stars || 0;
+  const totalCompleted = progress?.completedCount || 0;
+  const totalTarget = assignments.length;
+  const encouragementText = totalStars > 0 ? `Great work, ${patient?.firstName || user?.childName || 'friend'}!` : 'Keep practicing to earn stars.';
   const totalProgressPercentage =
-    (data.totalActivitiesCompleted / data.totalActivitiesTarget) * 100;
+    totalTarget > 0 ? (totalCompleted / totalTarget) * 100 : 0;
 
   return (
     <>
@@ -94,17 +109,23 @@ export default function PatientStarsScreen() {
             )}
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+              {loading ? <Text style={styles.encouragementSubtext}>Loading saved progress…</Text> : null}
+              {error ? (
+                <TouchableOpacity onPress={() => void refresh()}>
+                  <Text style={styles.encouragementSubtext}>{error} Tap to retry.</Text>
+                </TouchableOpacity>
+              ) : null}
               <LinearGradient colors={['#106AB0', '#2A8AC8', '#4DB3E9']} locations={[0, 0.45, 1]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.collectingStarsCard}>
                 <Text style={styles.collectingStarsTitle}>COLLECTING STARS</Text>
                 <View style={styles.starNumberRow}>
-                  <Text style={styles.starNumberText}>{data.totalStarsEarned}</Text>
+                  <Text style={styles.starNumberText}>{totalStars}</Text>
                   {/* FIXED IMAGE PATH */}
                   <Image source={require('../../../assets/images/star-3d.png')} style={styles.starAssetImage} contentFit="contain" />
                 </View>
                 <View style={styles.capsuleProgressTrack}>
                   <View style={[styles.capsuleProgressFill, { width: `${Math.min(totalProgressPercentage, 100)}%` }]} />
                 </View>
-                <Text style={styles.encouragementSubtext}>{data.encouragementText}</Text>
+                <Text style={styles.encouragementSubtext}>{encouragementText}</Text>
               </LinearGradient>
 
               <View style={styles.motivationBannerRow}>
@@ -114,8 +135,8 @@ export default function PatientStarsScreen() {
               </View>
 
               <View style={styles.categoriesList}>
-                {data.categories.map((cat) => {
-                  const catPercentage = (cat.completed / cat.total) * 100;
+                {categories.map((cat) => {
+                  const catPercentage = cat.total > 0 ? (cat.completed / cat.total) * 100 : 0;
                   return (
                     <View key={cat.id} style={styles.categoryCard}>
                       <View style={styles.categoryCardHeader}>
@@ -147,7 +168,19 @@ export default function PatientStarsScreen() {
         </ImageBackground>
 
         <GrownUpCheckModal visible={isGrownUpModalVisible} onClose={() => setIsGrownUpModalVisible(false)} onSuccess={() => { setIsGrownUpModalVisible(false); router.push('/parent-dashboard' as any); }} />
-        <SignOutConfirmModal visible={isSignOutModalVisible} onClose={() => setIsSignOutModalVisible(false)} onConfirm={() => { setIsSignOutModalVisible(false); router.replace('/patient-login' as any); }} />
+        <SignOutConfirmModal
+          visible={isSignOutModalVisible}
+          onClose={() => setIsSignOutModalVisible(false)}
+          onConfirm={async () => {
+            try {
+              await clearSession();
+              setIsSignOutModalVisible(false);
+              router.replace('/patient-login' as any);
+            } catch (error) {
+              Alert.alert('Sign out failed', error instanceof Error ? error.message : 'Could not clear your session.');
+            }
+          }}
+        />
       </SafeAreaView>
     </>
   );

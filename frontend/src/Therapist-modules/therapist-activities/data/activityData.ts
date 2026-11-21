@@ -32,6 +32,7 @@ export type BankWord = {
   sound: TargetSound;
   position: WordPosition;
   language: string;
+  isStandard?: boolean;
 };
 
 export type ActivityWord = {

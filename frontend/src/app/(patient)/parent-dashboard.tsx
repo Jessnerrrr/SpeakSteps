@@ -3,7 +3,6 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -11,15 +10,13 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
   useWindowDimensions,
 } from 'react-native';
 
 import { ParentBottomNav } from '@/components/parent-bottom-nav';
 import { ParentHeader } from '@/components/parent-header';
-import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
-import { AssignedActivity, TaskStore } from '@/data/parent-tasks-mock';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 export default function ParentDashboardScreen() {
   const { width } = useWindowDimensions();
@@ -32,22 +29,19 @@ export default function ParentDashboardScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
-  const activities = TaskStore.getActivities();
-
-  useEffect(() => {
-    const unsubscribe = ChildProfileStore.subscribe((updatedProfile: ChildProfile) => {
-      setChildProfile(updatedProfile);
-    });
-    return unsubscribe;
-  }, []);
+  const { user, patient, assignments, progress, feedback, loading, error, refresh } = usePatientLearning();
+  const childName = patient
+    ? [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ')
+    : user?.childName || 'Child';
+  const activities = assignments;
 
   if (!fontsLoaded) return null;
 
   const totalActivities = activities.length;
-  const completedActivities = activities.filter((t: AssignedActivity) => t.status === 'completed').length;
-  const pendingActivities = activities.filter((t: AssignedActivity) => t.status === 'pending').length;
-  const totalAttempts = activities.reduce((sum: number, t: AssignedActivity) => sum + (t.attempts || 0), 0);
+  const completedActivities = activities.filter((task) => task.status === 'Completed').length;
+  const pendingActivities = activities.filter((task) => task.status !== 'Completed').length;
+  const totalAttempts = progress?.submissionCount || 0;
+  const latestFeedback = feedback[0];
   const progressPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
 
   return (
@@ -65,6 +59,12 @@ export default function ParentDashboardScreen() {
             <ParentHeader title="Parent / Guardian" showBack={false} />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+              {loading ? <Text style={styles.therapistBodyText}>Loading saved progress…</Text> : null}
+              {error ? (
+                <TouchableOpacity onPress={() => void refresh()}>
+                  <Text style={styles.therapistBodyText}>{error} Tap to retry.</Text>
+                </TouchableOpacity>
+              ) : null}
               <LinearGradient
                 colors={['#106AB0', '#2A8AC8', '#4DB3E9']}
                 locations={[0, 0.45, 1]}
@@ -72,9 +72,9 @@ export default function ParentDashboardScreen() {
                 end={{ x: 0, y: 1 }}
                 style={styles.progressHeroCard}
               >
-                <Text style={styles.heroTitle}>{childProfile.displayName}'s Progress</Text>
+                <Text style={styles.heroTitle}>{childName}'s Progress</Text>
                 <View style={styles.starRow}>
-                  <Text style={styles.starCountText}>{completedActivities}</Text>
+                  <Text style={styles.starCountText}>{progress?.stars || 0}</Text>
                   {/* FIXED IMAGE PATH */}
                   <Image source={require('../../../assets/images/star-3d.png')} style={styles.starIcon} contentFit="contain" />
                 </View>
@@ -88,9 +88,9 @@ export default function ParentDashboardScreen() {
 
               <View style={styles.twoColumnGrid}>
                 <TouchableOpacity activeOpacity={0.85} style={styles.childProfileCard} onPress={() => router.push('/child-profile' as any)}>
-                  <Image source={childProfile.avatar} style={styles.childProfileAvatar} contentFit="cover" />
+                  <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.childProfileAvatar} contentFit="cover" />
                   <Text style={styles.cardTitle}>Child Profile</Text>
-                  <Text style={styles.cardSubText}>{childProfile.fullName}</Text>
+                  <Text style={styles.cardSubText}>{childName}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity activeOpacity={0.85} style={styles.assignedCard} onPress={() => router.push('/parent-tasks' as any)}>
@@ -108,7 +108,7 @@ export default function ParentDashboardScreen() {
                 </View>
                 <View style={styles.progressReportTextWrapper}>
                   <Text style={styles.progressReportTitle}>Progress</Text>
-                  <Text style={styles.progressReportSubtitle}>View {childProfile.displayName}'s progress report</Text>
+                  <Text style={styles.progressReportSubtitle}>View {childName}'s progress report</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={22} color="#3EA88A" />
               </TouchableOpacity>
@@ -122,7 +122,7 @@ export default function ParentDashboardScreen() {
                 </View>
                 <View style={styles.therapistBodyBox}>
                   <Text style={styles.therapistBodyText}>
-                    No feedback yet. Your therapist's comments will show up here as soon as they review a recording.
+                    {latestFeedback?.parentFeedback || latestFeedback?.homePractice || 'No feedback yet. Your therapist’s comments will show here after reviewing a recording.'}
                   </Text>
                 </View>
               </View>

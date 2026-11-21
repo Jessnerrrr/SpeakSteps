@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -18,8 +18,7 @@ import {
 // FIXED IMPORTS: 2 levels up to reach src/components and src/data
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
-import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
-import { AssignedActivity, TaskStore } from '../../data/parent-tasks-mock';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 type FilterType = 'all' | 'pending' | 'completed';
 
@@ -34,18 +33,32 @@ export default function ParentTasksScreen() {
       'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
     });
 
-  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
-  const activities = TaskStore.getActivities();
+  const { assignments, loading, error, refresh } = usePatientLearning();
+  const activities = assignments.map((assignment) => {
+    const level = assignment.activity.level;
+    const category = /phrase/i.test(level)
+      ? 'Phrases'
+      : /sentence|conversation/i.test(level)
+        ? 'Sentences'
+        : /word/i.test(level)
+          ? 'Words'
+          : 'Sounds';
+    return {
+      id: assignment.id,
+      title: assignment.activity.title,
+      level,
+      category,
+      assignedBy: 'Therapist',
+      status: assignment.status === 'Completed' ? 'completed' : 'pending',
+      thumbnail: require('../../../assets/images/sheep.png'),
+      attempts: 0,
+      bestScore: '—',
+      stars: '—',
+    } as const;
+  });
 
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = ChildProfileStore.subscribe((updated: ChildProfile) => {
-      setChildProfile(updated);
-    });
-    return unsubscribe;
-  }, []);
 
   if (!fontsLoaded) return null;
 
@@ -57,13 +70,13 @@ export default function ParentTasksScreen() {
     }
   };
 
-  const filteredActivities = activities.filter((task: AssignedActivity) => {
+  const filteredActivities = activities.filter((task) => {
     if (activeFilter === 'all') return true;
     return task.status === activeFilter;
   });
 
-  const pendingCount = activities.filter((t: AssignedActivity) => t.status === 'pending').length;
-  const completedCount = activities.filter((t: AssignedActivity) => t.status === 'completed').length;
+  const pendingCount = activities.filter((t) => t.status === 'pending').length;
+  const completedCount = activities.filter((t) => t.status === 'completed').length;
   const allCount = activities.length;
 
   const getFilterLabel = () => {
@@ -208,6 +221,12 @@ export default function ParentTasksScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
+              {loading ? <Text style={styles.emptySub}>Loading assigned activities…</Text> : null}
+              {error ? (
+                <TouchableOpacity onPress={() => void refresh()}>
+                  <Text style={styles.emptySub}>{error} Tap to retry.</Text>
+                </TouchableOpacity>
+              ) : null}
               {filteredActivities.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="checkbox-outline" size={48} color="#A0BED4" />
@@ -223,7 +242,6 @@ export default function ParentTasksScreen() {
                     activeOpacity={0.8}
                     style={styles.taskCard}
                     onPress={() => {
-                      TaskStore.setActiveTaskId(activity.id);
                       router.push({
                         pathname: '/parent-activity-details',
                         params: { id: activity.id },

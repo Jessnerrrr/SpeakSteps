@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -10,10 +10,18 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio';
 
 // FIXED IMPORTS: 2 levels up to reach src/types and src/components
 import type { Position } from '../../types/sentences';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
+import { createSubmission, getMyPatients, type PatientSearchResult } from '@/services/user-api';
 
 export default function PracticeScreen() {
   const params = useLocalSearchParams<{
@@ -22,13 +30,24 @@ export default function PracticeScreen() {
     syllable: string;
     stars: string;
     position: string;
+    assignmentId?: string;
+    practiceItemId?: string;
+    patientId?: string;
+    patientCode?: string;
   }>();
 
   const position = (params.position ?? 'Initial') as Position;
   const sound = params.sound ?? '/s/';
   const syllable = params.syllable ?? 'sa';
 
-  const [recording, setRecording] = useState(false);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder);
+  const [permissionGranted, setPermissionGranted] = useState(false);
+  const [recordingUri, setRecordingUri] = useState<string | null>(null);
+  const [patient, setPatient] = useState<PatientSearchResult | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const recording = recorderState.isRecording;
 
   // Responsive Hooks
   const { width } = useWindowDimensions();
@@ -39,6 +58,38 @@ export default function PracticeScreen() {
     SourGummy: require('../../../assets/SourGummy.ttf'),
   });
   
+  useEffect(() => {
+    let active = true;
+    AudioModule.requestRecordingPermissionsAsync()
+      .then(({ granted }) => {
+        if (active) {
+          setPermissionGranted(granted);
+          if (!granted) setError('Microphone access is required to record practice.');
+        }
+      })
+      .catch((permissionError: unknown) => {
+        if (active) setError(permissionError instanceof Error ? permissionError.message : 'Could not request microphone access.');
+      });
+    setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true })
+      .catch((modeError: unknown) => {
+        if (active) setError(modeError instanceof Error ? modeError.message : 'Could not prepare audio recording.');
+      });
+    getMyPatients()
+      .then((patients) => {
+        if (!active) return;
+        const selected = params.patientId
+          ? patients.find((item) => item.id === params.patientId)
+          : patients.find((item) => item.patientCode === params.patientCode) || patients[0];
+        setPatient(selected || null);
+      })
+      .catch((loadError: unknown) => {
+        if (active) setError(loadError instanceof Error ? loadError.message : 'Could not load the child profile.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [params.patientCode, params.patientId]);
+
   if (!fontsLoaded) return null;
 
   const handleBack = () => {
@@ -46,6 +97,62 @@ export default function PracticeScreen() {
       router.back();
     } else {
       router.replace('/sentences' as any);
+    }
+  };
+
+  const toggleRecording = async () => {
+    setError('');
+    try {
+      if (recording) {
+        await recorder.stop();
+        setRecordingUri(recorder.uri || null);
+        return;
+      }
+      if (!permissionGranted) {
+        const permission = await AudioModule.requestRecordingPermissionsAsync();
+        setPermissionGranted(permission.granted);
+        if (!permission.granted) {
+          setError('Microphone access is required to record practice.');
+          return;
+        }
+      }
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setRecordingUri(null);
+    } catch (recordError) {
+      setError(recordError instanceof Error ? recordError.message : 'Could not record this practice attempt.');
+    }
+  };
+
+  const submitPractice = async () => {
+    if (recording) {
+      setError('Stop recording before submitting.');
+      return;
+    }
+    if (!recordingUri) {
+      setError('Record a practice attempt before submitting.');
+      return;
+    }
+    if (!patient) {
+      setError('No patient profile is available for this account.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await createSubmission({
+        patientId: patient.id,
+        patientCode: patient.patientCode,
+        assignmentId: params.assignmentId,
+        practiceItemId: params.practiceItemId,
+        audioRecordingUrl: recordingUri,
+        durationSeconds: Math.round(recorderState.durationMillis / 1000),
+      });
+      router.back();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Could not submit this practice attempt.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -101,8 +208,7 @@ export default function PracticeScreen() {
             <View style={styles.micSection}>
               <TouchableOpacity
                 style={[styles.micBtn, recording && styles.micBtnActive]}
-                onPressIn={() => setRecording(true)}
-                onPressOut={() => setRecording(false)}
+                onPress={() => void toggleRecording()}
                 activeOpacity={0.85}
               >
                 {/* FIXED IMAGE PATH (3 levels up) */}
@@ -113,12 +219,14 @@ export default function PracticeScreen() {
                 />
               </TouchableOpacity>
               <Text style={styles.micLabel}>Ask your child to say it</Text>
-              <Text style={styles.micHint}>Long press the mic to record your voice</Text>
+              <Text style={styles.micHint}>{recording ? 'Tap to stop recording' : 'Tap the mic to record your voice'}</Text>
+              {recordingUri ? <Text style={styles.micHint}>Recording ready · {Math.round(recorderState.durationMillis / 1000)} sec</Text> : null}
             </View>
 
             {/* Submit Button */}
-            <TouchableOpacity style={styles.submitBtn} activeOpacity={0.8} onPress={() => router.back()}>
-              <Text style={styles.submitText}>Submit</Text>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <TouchableOpacity disabled={saving} style={styles.submitBtn} activeOpacity={0.8} onPress={() => void submitPractice()}>
+              <Text style={styles.submitText}>{saving ? 'Submitting…' : 'Submit'}</Text>
             </TouchableOpacity>
 
           </View>
@@ -268,6 +376,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 4,
+  },
+  error: {
+    color: '#B42318',
+    textAlign: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
 
   submitBtn: {

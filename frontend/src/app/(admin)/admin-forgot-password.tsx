@@ -40,8 +40,10 @@ export default function AdminForgotPasswordScreen() {
   if (!fontsLoaded) return null;
 
   const handleResetPassword = () => {
-    // Handle the reset logic here, then route back to login
-    router.replace('/(admin)/admin-login' as any);
+    setRecoveryKey('');
+    setNewPassword('');
+    setConfirmPassword('');
+    Alert.alert('Recovery unavailable', 'Admin password recovery is not connected to the backend. No password was changed.');
   };
 
   return (
@@ -79,7 +81,7 @@ export default function AdminForgotPasswordScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.securityTitle}>Reset Admin Password</Text>
-                    <Text style={styles.securitySubtitle}>Enter your Center recovery key to set a new password.</Text>
+                    <Text style={styles.securitySubtitle}>Password recovery is not connected. No recovery key will be accepted.</Text>
                   </View>
                 </View>
 
@@ -181,7 +183,7 @@ export default function AdminForgotPasswordScreen() {
 
                 {/* Reset Password Button */}
                 <TouchableOpacity style={styles.resetBtn} activeOpacity={0.8} onPress={handleResetPassword}>
-                  <Text style={styles.resetBtnText}>Reset Password</Text>
+                  <Text style={styles.resetBtnText}>Recovery unavailable</Text>
                 </TouchableOpacity>
 
               </View>

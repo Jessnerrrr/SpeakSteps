@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, FlatList, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, FlatList, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 
 const SECURITY_QUESTIONS = [
   "What is the name of your first-grade teacher?",
@@ -94,7 +94,10 @@ export default function SecurityQuestionsScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.submitBtn} onPress={() => router.push('/new-password' as any)}>
+              <TouchableOpacity
+                style={styles.submitBtn}
+                onPress={() => Alert.alert('Recovery unavailable', 'Security questions are not verified by the backend. No password was changed.')}
+              >
                 <Text style={styles.submitBtnText}>Submit</Text>
               </TouchableOpacity>
 

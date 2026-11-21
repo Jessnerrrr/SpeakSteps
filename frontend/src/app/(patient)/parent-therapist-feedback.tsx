@@ -20,9 +20,9 @@ import { useFonts } from 'expo-font';
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import {
-  MOCK_FEEDBACK_ITEMS,
   TherapistFeedbackItem,
 } from '../../data/parent-progress-mock';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 type FilterCategory = 'All' | 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
 
@@ -89,13 +89,26 @@ export default function ParentTherapistFeedbackScreen() {
 
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('All');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const { feedback, loading, error, refresh } = usePatientLearning();
 
   const [selectedFeedback, setSelectedFeedback] = useState<TherapistFeedbackItem | null>(null);
 
+  const feedbackItems: TherapistFeedbackItem[] = feedback.map((item) => ({
+    id: item.id,
+    therapistName: item.therapistName,
+    specialty: item.specialty,
+    date: new Date(item.date).toLocaleDateString(),
+    displayDate: new Date(item.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    title: item.title,
+    comments: item.parentFeedback || item.observations || 'No written observations were included.',
+    category: item.category as TherapistFeedbackItem['category'],
+    recommendations: item.homePractice || undefined,
+  }));
+
   const filteredFeedback = useMemo(() => {
-    if (activeFilter === 'All') return MOCK_FEEDBACK_ITEMS;
-    return MOCK_FEEDBACK_ITEMS.filter((item) => item.category === activeFilter);
-  }, [activeFilter]);
+    if (activeFilter === 'All') return feedbackItems;
+    return feedbackItems.filter((item) => item.category === activeFilter);
+  }, [activeFilter, feedbackItems]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -182,6 +195,12 @@ export default function ParentTherapistFeedbackScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+              {loading ? <Text style={styles.emptyStateSubtitle}>Loading therapist feedback…</Text> : null}
+              {error ? (
+                <TouchableOpacity onPress={() => void refresh()}>
+                  <Text style={styles.emptyStateSubtitle}>{error} Tap to retry.</Text>
+                </TouchableOpacity>
+              ) : null}
               {filteredFeedback.length === 0 ? (
                 <View style={styles.emptyStateContainer}>
                   <Ionicons name="chatbubbles-outline" size={48} color="#98BDDA" />

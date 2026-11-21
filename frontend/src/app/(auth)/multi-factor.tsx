@@ -27,11 +27,7 @@ export default function MultiFactorScreen() {
       return; 
     }
     
-    // Added 'as any' here to resolve the TypeScript path error
-    router.push({ 
-      pathname: '/otp-verification', 
-      params: { email: email } 
-    } as any);
+    Alert.alert('Recovery unavailable', 'No recovery API is configured. No OTP was sent.');
   };
 
   return (
@@ -62,7 +58,7 @@ export default function MultiFactorScreen() {
             <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               
               <Text style={styles.welcomeText}>Multi-factor Authentication</Text>
-              <Text style={styles.subText}>Enter your email to start recovery.</Text>
+              <Text style={styles.subText}>Password recovery is not configured. No OTP will be sent.</Text>
 
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Email</Text>
@@ -85,7 +81,7 @@ export default function MultiFactorScreen() {
               </View>
 
               <TouchableOpacity style={styles.submitBtn} onPress={handleSendOTP}>
-                <Text style={styles.submitBtnText}>Send OTP</Text>
+                <Text style={styles.submitBtnText}>Recovery unavailable</Text>
               </TouchableOpacity>
 
             </View>

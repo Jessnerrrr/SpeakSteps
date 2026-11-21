@@ -6,6 +6,7 @@ import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ImageBackground,
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -16,14 +17,13 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
-// MOCK DATA IMPORT:
-import { MOCK_PATIENT_DASHBOARD } from '@/data/patient-dashboard-mock';
 import { BuddyStore, Buddy } from '@/data/buddy-store';
-import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
 import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { clearSession } from '@/services/user-api';
 
 export default function PatientDashboardScreen() {
   const { width } = useWindowDimensions();
@@ -36,9 +36,8 @@ export default function PatientDashboardScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [data] = useState(MOCK_PATIENT_DASHBOARD);
+  const { user, patient, assignments, progress, loading, error, refresh } = usePatientLearning();
   const [activeBuddy, setActiveBuddy] = useState<Buddy>(BuddyStore.getActiveBuddy());
-  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
@@ -51,18 +50,38 @@ export default function PatientDashboardScreen() {
     return unsubscribe;
   }, []);
 
-  // Listen to child profile changes from Parent Mode
-  useEffect(() => {
-    const unsubscribe = ChildProfileStore.subscribe((updatedProfile: ChildProfile) => {
-      setChildProfile(updatedProfile);
-    });
-    return unsubscribe;
-  }, []);
-
   if (!fontsLoaded) return null;
 
-  const progressPercentage =
-    (data.stepsProgress.completedActivities / data.stepsProgress.totalActivities) * 100;
+  const childName = patient?.firstName || user?.childName || 'friend';
+  const completedActivities = progress?.completedCount || 0;
+  const totalActivities = assignments.length;
+  const progressPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
+  const adventureDefinitions = [
+    { id: 'sounds', name: 'Sounds', iconType: 'sounds', bgColor: '#4DAEEB', levels: ['Isolation', 'Syllables'] },
+    { id: 'words', name: 'Words', iconType: 'words', bgColor: '#6BB34C', levels: ['Words'] },
+    { id: 'phrases', name: 'Phrases', iconType: 'phrases', bgColor: '#F6A823', levels: ['Phrases'] },
+    { id: 'sentences', name: 'Sentences', iconType: 'sentences', bgColor: '#EB4444', levels: ['Sentences', 'Conversation'] },
+  ];
+  const adventures = adventureDefinitions.filter((category) =>
+    assignments.some((assignment) => category.levels.includes(assignment.activity.level)),
+  );
+  const nextAssignment = assignments.find((assignment) => assignment.status !== 'Completed');
+  const openAssignment = (assignmentId?: string) => {
+    const assignment = assignments.find((item) => item.id === assignmentId) || nextAssignment;
+    if (!assignment) {
+      router.push('/parent-tasks' as any);
+      return;
+    }
+    router.push({
+      pathname: '/sentences',
+      params: {
+        assignmentId: assignment.id,
+        activityId: assignment.activityId,
+        patientId: patient?.id,
+        patientCode: patient?.patientCode,
+      },
+    } as any);
+  };
 
   return (
     <>
@@ -80,8 +99,8 @@ export default function PatientDashboardScreen() {
             {/* TOP HEADER */}
             <View style={styles.topHeader}>
               <View style={styles.greetingRow}>
-                <Text style={styles.greetingText}>Hi, {childProfile.displayName}!</Text>
-                <Text style={styles.waveEmoji}>{data.greetingEmoji}</Text>
+                <Text style={styles.greetingText}>Hi, {childName}!</Text>
+                <Text style={styles.waveEmoji}>👋</Text>
               </View>
 
               <View style={styles.headerRightActions}>
@@ -160,6 +179,12 @@ export default function PatientDashboardScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
+              {loading ? <Text style={styles.myStepsSubtext}>Loading saved activities…</Text> : null}
+              {error ? (
+                <TouchableOpacity onPress={() => void refresh()}>
+                  <Text style={styles.myStepsSubtext}>{error} Tap to retry.</Text>
+                </TouchableOpacity>
+              ) : null}
               {/* MASCOT & SPEECH BUBBLE ROW */}
               <View style={styles.mascotSpeechRow}>
                 <TouchableOpacity
@@ -199,7 +224,7 @@ export default function PatientDashboardScreen() {
                 <Text style={styles.myStepsTitle}>My Steps</Text>
 
                 <View style={styles.starNumberRow}>
-                  <Text style={styles.starNumberText}>{data.stepsProgress.earnedStars}</Text>
+                  <Text style={styles.starNumberText}>{progress?.stars || 0}</Text>
                   {/* FIXED IMAGE PATH (3 levels up) */}
                   <Image
                     source={require('../../../assets/images/star-3d.png')}
@@ -218,7 +243,7 @@ export default function PatientDashboardScreen() {
                 </View>
 
                 <Text style={styles.myStepsSubtext}>
-                  {data.stepsProgress.completedActivities} of {data.stepsProgress.totalActivities} activities done
+                  {completedActivities} of {totalActivities} activities done
                 </Text>
               </LinearGradient>
 
@@ -228,19 +253,15 @@ export default function PatientDashboardScreen() {
 
                 <View style={styles.stepperRow}>
                   {/* FIXED TS ERROR: Added explicit : any and : number types */}
-                  {data.adventures.map((adv: any, index: number) => {
-                    const isLast = index === data.adventures.length - 1;
+                  {adventures.map((adv, index) => {
+                    const isLast = index === adventures.length - 1;
                     return (
                       <View key={adv.id} style={styles.stepperItemWrapper}>
                         <View style={styles.stepperNodeRow}>
                           <TouchableOpacity
                             style={[styles.stepCircle, { backgroundColor: adv.bgColor }]}
                             activeOpacity={0.8}
-                            onPress={() =>
-                              router.push(
-                                (adv.id === 'sentences' ? '/sentences' : '/practice') as any,
-                              )
-                            }
+                            onPress={() => openAssignment(assignments.find((item) => adv.levels.includes(item.activity.level))?.id)}
                           >
                             {adv.iconType === 'sounds' ? (
                               <Ionicons name="musical-notes" size={26} color="#FFFFFF" />
@@ -266,7 +287,7 @@ export default function PatientDashboardScreen() {
               <TouchableOpacity
                 style={styles.continuePracticeBtn}
                 activeOpacity={0.85}
-                onPress={() => router.push('/sentences' as any)}
+                onPress={() => openAssignment(nextAssignment?.id)}
               >
                 <Text style={styles.continuePracticeText}>Continue Practice</Text>
                 <View style={styles.playArrowIcon}>
@@ -292,7 +313,7 @@ export default function PatientDashboardScreen() {
                   </View>
                   <Text style={styles.cardHeading}>My Activities</Text>
                   <Text style={styles.cardSubtext}>
-                    {data.quickActions.activitiesCount} assigned
+                    {assignments.length} assigned
                   </Text>
                 </TouchableOpacity>
 
@@ -312,7 +333,7 @@ export default function PatientDashboardScreen() {
                   </View>
                   <Text style={styles.cardHeading}>My Progress</Text>
                   <Text style={styles.cardSubtext}>
-                    {data.quickActions.starsSummaryText}
+                    {progress?.stars || 0} stars earned
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -341,9 +362,14 @@ export default function PatientDashboardScreen() {
         <SignOutConfirmModal
           visible={isSignOutModalVisible}
           onClose={() => setIsSignOutModalVisible(false)}
-          onConfirm={() => {
-            setIsSignOutModalVisible(false);
-            router.replace('/patient-login' as any);
+          onConfirm={async () => {
+            try {
+              await clearSession();
+              setIsSignOutModalVisible(false);
+              router.replace('/patient-login' as any);
+            } catch (error) {
+              Alert.alert('Sign out failed', error instanceof Error ? error.message : 'Could not clear your session.');
+            }
           }}
         />
       </SafeAreaView >

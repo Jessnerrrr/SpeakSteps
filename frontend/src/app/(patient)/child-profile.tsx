@@ -23,8 +23,11 @@ import {
 import { ParentBottomNav } from '@/components/parent-bottom-nav';
 import { ParentHeader } from '@/components/parent-header';
 import { ChildProfile, ChildProfileStore, PRESET_CHILD_AVATARS } from '@/data/child-profile-store';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { updateMyChildProfile } from '@/services/user-api';
 
 export default function ChildProfileScreen() {
+  const { patient, refresh } = usePatientLearning();
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
@@ -42,6 +45,8 @@ export default function ChildProfileScreen() {
   const [tempAge, setTempAge] = useState(profile.age);
 
   const [isAvatarPickerVisible, setIsAvatarPickerVisible] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   // Synchronize with shared ChildProfileStore
   useEffect(() => {
@@ -50,6 +55,18 @@ export default function ChildProfileScreen() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!patient) return;
+    const fullName = [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ');
+    const age = Number(patient.age);
+    ChildProfileStore.updateProfile({
+      id: patient.id,
+      fullName,
+      displayName: fullName.split(/\s+/)[0] || profile.displayName,
+      ...(Number.isInteger(age) && age > 0 ? { age } : {}),
+    });
+  }, [patient?.id, patient?.firstName, patient?.middleName, patient?.lastName, patient?.age]);
 
   if (!fontsLoaded) return null;
 
@@ -67,14 +84,25 @@ export default function ChildProfileScreen() {
     setIsEditingName(true);
   };
 
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     const trimmed = tempName.trim();
     if (!trimmed) {
       setNameError('Please enter a valid name');
       return;
     }
-    ChildProfileStore.updateProfile({ fullName: trimmed });
-    setIsEditingName(false);
+    setSavingProfile(true);
+    setProfileError('');
+    try {
+      const saved = await updateMyChildProfile({ childName: trimmed, childAge: profile.age });
+      await refresh();
+      const fullName = [saved.firstName, saved.middleName, saved.lastName].filter(Boolean).join(' ');
+      ChildProfileStore.updateProfile({ id: saved.id, fullName });
+      setIsEditingName(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Could not save your child’s name.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleOpenAgeEdit = () => {
@@ -82,11 +110,23 @@ export default function ChildProfileScreen() {
     setIsEditingAge(true);
   };
 
-  const handleSaveAge = () => {
-    if (tempAge >= 1 && tempAge <= 18) {
-      ChildProfileStore.updateProfile({ age: tempAge });
+  const handleSaveAge = async () => {
+    if (tempAge < 1 || tempAge > 18) {
+      setProfileError('Age must be between 1 and 18.');
+      return;
     }
-    setIsEditingAge(false);
+    setSavingProfile(true);
+    setProfileError('');
+    try {
+      await updateMyChildProfile({ childName: profile.fullName, childAge: tempAge });
+      await refresh();
+      ChildProfileStore.updateProfile({ age: tempAge });
+      setIsEditingAge(false);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Could not save your child’s age.');
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handlePickFromLibrary = async () => {
@@ -103,7 +143,7 @@ export default function ChildProfileScreen() {
         setIsAvatarPickerVisible(false);
       }
     } catch (error) {
-      console.log('Error selecting image from library:', error);
+      setProfileError(error instanceof Error ? error.message : 'Could not select an image.');
     }
   };
 
@@ -265,6 +305,7 @@ export default function ChildProfileScreen() {
             </View>
 
             {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+            {profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
 
             <View style={styles.dialogActionRow}>
               <TouchableOpacity
@@ -278,9 +319,10 @@ export default function ChildProfileScreen() {
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
+                disabled={savingProfile}
                 onPress={handleSaveName}
               >
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+                <Text style={styles.saveButtonText}>{savingProfile ? 'Saving…' : 'Save Changes'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -348,6 +390,7 @@ export default function ChildProfileScreen() {
             </View>
 
             <View style={styles.dialogActionRow}>
+              {profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
               <TouchableOpacity
                 style={styles.cancelButton}
                 activeOpacity={0.7}
@@ -359,9 +402,10 @@ export default function ChildProfileScreen() {
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
+                disabled={savingProfile}
                 onPress={handleSaveAge}
               >
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+                <Text style={styles.saveButtonText}>{savingProfile ? 'Saving…' : 'Save Changes'}</Text>
               </TouchableOpacity>
             </View>
           </View>
