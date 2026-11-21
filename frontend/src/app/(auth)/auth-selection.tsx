@@ -20,8 +20,10 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 
 export default function AuthSelectionScreen() {
-  // Added 'email' to the params so you can pass it from the Login screen!
   const { role, status, email } = useLocalSearchParams(); 
+
+  const currentRole = Array.isArray(role) ? role[0] : role;
+  const currentStatus = Array.isArray(status) ? status[0] : status;
 
   const [showPinModal, setShowPinModal] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('');
@@ -56,12 +58,13 @@ export default function AuthSelectionScreen() {
 
   if (!fontsLoaded) return null;
 
-  const isNewAccount = status === 'new';
+  const isNewAccount = currentStatus === 'new';
 
   // Helper function to dynamically mask the email address for security
   const getMaskedEmail = (rawEmail: string | string[] | undefined) => {
-    if (!rawEmail || typeof rawEmail !== 'string') return 'n***@speaksteps.com';
-    const parts = rawEmail.split('@');
+    const emailStr = Array.isArray(rawEmail) ? rawEmail[0] : rawEmail;
+    if (!emailStr) return 'n***@speaksteps.com';
+    const parts = emailStr.split('@');
     if (parts.length !== 2) return 'n***@speaksteps.com';
     const [name, domain] = parts;
     return `${name[0]}***@${domain}`;
@@ -85,17 +88,24 @@ export default function AuthSelectionScreen() {
     if (pinCode.length >= 4 && timeLeft > 0) {
       setShowPinModal(false);
       setSelectedMethod('');
-      
-      if (role === 'therapist') {
+
+      // If a new account lands here, send them into Account Setup (TOTP -> Change Password)
+      if (isNewAccount) {
+        router.replace({ pathname: '/totp-setup', params: { role: currentRole || 'patient' } } as any);
+        return;
+      }
+
+      // Returning accounts: clear stack and go straight to Dashboard
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
+
+      if (currentRole === 'therapist') {
         router.replace('/therapist' as any);
-      } else if (role === 'teacher') {
+      } else if (currentRole === 'teacher') {
         router.replace('/teacher/teacher-dashboard' as any);
-      } else if (role === 'patient') {
-        if (status === 'new') {
-          router.replace('/speech-checkin' as any);
-        } else {
-          router.replace('/patient-dashboard' as any);
-        }
+      } else if (currentRole === 'patient') {
+        router.replace('/patient-dashboard' as any);
       } else {
         router.replace('/' as any);
       }

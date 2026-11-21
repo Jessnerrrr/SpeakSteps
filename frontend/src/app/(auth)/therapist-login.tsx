@@ -82,7 +82,7 @@ export default function TherapistLoginScreen() {
               >
                 
                 <View style={styles.cardHeader}>
-                  <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                  <TouchableOpacity onPress={() => router.replace('/login' as any)} style={styles.backButton}>
                     <Text style={styles.backIcon}>‹</Text>
                   </TouchableOpacity>
                   <Text style={styles.headerText}>Therapist login</Text>

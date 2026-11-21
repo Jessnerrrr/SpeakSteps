@@ -343,6 +343,9 @@ export default function PatientDashboardScreen() {
           onClose={() => setIsSignOutModalVisible(false)}
           onConfirm={() => {
             setIsSignOutModalVisible(false);
+            if (router.canDismiss()) {
+              router.dismissAll();
+            }
             router.replace('/patient-login' as any);
           }}
         />

@@ -1,6 +1,6 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
 
@@ -8,6 +8,10 @@ export default function NewPasswordScreen() {
   // Responsive Hooks
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
+
+  const { role, flow } = useLocalSearchParams();
+  const currentRole = Array.isArray(role) ? role[0] : role;
+  const isSetupFlow = (Array.isArray(flow) ? flow[0] : flow) === 'setup';
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -17,7 +21,7 @@ export default function NewPasswordScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // NEW STATE: Tracks if the new password input is clicked/focused
+  // Tracks if the new password input is clicked/focused
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   // Custom Alert States
@@ -69,7 +73,11 @@ export default function NewPasswordScreen() {
     }
 
     setAlertTitle("Success!");
-    setAlertMessage("Your password has been changed. You will now be redirected to sign in.");
+    setAlertMessage(
+      isSetupFlow
+        ? "Your password has been updated! Let's finish setting up your account."
+        : "Your password has been changed. You will now be redirected to sign in."
+    );
     setAlertType('success');
     setAlertVisible(true);
   };
@@ -77,7 +85,22 @@ export default function NewPasswordScreen() {
   const handleAlertClose = () => {
     setAlertVisible(false);
     if (alertType === 'success') {
-      router.push('/login' as any);
+      if (isSetupFlow) {
+        if (currentRole === 'therapist') {
+          if (router.canDismiss()) router.dismissAll();
+          router.replace('/therapist' as any);
+        } else if (currentRole === 'teacher') {
+          if (router.canDismiss()) router.dismissAll();
+          router.replace('/teacher/teacher-dashboard' as any);
+        } else {
+          // Patient setup continues to Check-in
+          // Update '/check-in' below if your check-in file has a different route name
+          router.replace({ pathname: '/speech-checkin', params: { role: 'patient' } } as any);
+        }
+      } else {
+        if (router.canDismiss()) router.dismissAll();
+        router.replace('/login' as any);
+      }
     }
   };
 
@@ -107,7 +130,9 @@ export default function NewPasswordScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
               <Text style={styles.backIconBlue}>‹</Text>
             </TouchableOpacity>
-            <Text style={styles.topHeaderText}>Forgot Password</Text>
+            <Text style={styles.topHeaderText}>
+              {isSetupFlow ? 'Account Setup' : 'Forgot Password'}
+            </Text>
           </View>
 
           <View style={styles.container}>
@@ -124,12 +149,16 @@ export default function NewPasswordScreen() {
                 
                 <View style={styles.textContainer}>
                   <Text style={styles.welcomeText}>Create new password</Text>
-                  <Text style={styles.subText}>Provide your new password</Text>
+                  <Text style={styles.subText}>
+                    {isSetupFlow ? 'Replace your temporary password' : 'Provide your new password'}
+                  </Text>
                 </View>
 
                 <View style={styles.formContainer}>
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Old Password</Text>
+                    <Text style={styles.inputLabel}>
+                      {isSetupFlow ? 'Temporary Password' : 'Old Password'}
+                    </Text>
                     <View style={styles.passwordWrapper}>
                       <TextInput 
                         style={[styles.input, { paddingRight: 50 }]} 
@@ -155,8 +184,8 @@ export default function NewPasswordScreen() {
                         secureTextEntry={!showNewPassword}
                         value={newPassword}
                         onChangeText={setNewPassword}
-                        onFocus={() => setIsPasswordFocused(true)}   // <-- Shows checklist when clicked
-                        onBlur={() => setIsPasswordFocused(false)}   // <-- Hides checklist when clicking away
+                        onFocus={() => setIsPasswordFocused(true)}
+                        onBlur={() => setIsPasswordFocused(false)}
                       />
                       <TouchableOpacity style={styles.eyeButton} onPress={() => setShowNewPassword(!showNewPassword)}>
                         <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>

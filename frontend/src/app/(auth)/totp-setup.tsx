@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import {
   ImageBackground,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -21,7 +22,11 @@ export default function TotpSetupScreen() {
   const [step, setStep] = useState(1);
   const [emailAccount, setEmailAccount] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [otpPin, setOtpPin] = useState('');
+
+  // Change Password Alert Modal State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'Inter-Regular': require('../../../assets/Inter-Regular.ttf'),
@@ -35,20 +40,20 @@ export default function TotpSetupScreen() {
     if (step < 4) {
       setStep(step + 1);
     } else {
-      // 1. Safely extract the role in case Expo Router passed it as an array
-      const currentRole = Array.isArray(role) ? role[0] : role;
-
-      // 2. Route based on the extracted role
-      if (currentRole === 'therapist') {
-        router.replace('/therapist' as any);
-      } else if (currentRole === 'teacher') {
-        router.replace('/teacher/teacher-dashboard' as any);
-      } else {
-        // BULLETPROOF FALLBACK: Default to patient dashboard instead of landing page '/'
-        // Since patients are the ones doing the speech check-in flow, this is the safest default!
-        router.replace('/patient-dashboard' as any);
-      }
+      // Show Change Password alert modal before navigating
+      setShowPasswordModal(true);
     }
+  };
+
+  const handleProceedToPassword = () => {
+    setShowPasswordModal(false);
+    const currentRole = Array.isArray(role) ? role[0] : role;
+
+    // Continue Account Setup -> Change Temporary Password
+    router.replace({
+      pathname: '/new-password',
+      params: { role: currentRole || 'patient', flow: 'setup' },
+    } as any);
   };
 
   const handleBack = () => {
@@ -105,12 +110,25 @@ export default function TotpSetupScreen() {
           </View>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={styles.passwordInput}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword((prev) => !prev)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -219,12 +237,11 @@ export default function TotpSetupScreen() {
 
               <View style={styles.footerAction}>
                 <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.8}>
-                  {/* Text changes based on whether it is the final step or not */}
                   <Text style={styles.nextButtonText}>
-                    {step === 4 ? 'Go to Dashboard' : 'Next'}
+                    {step === 4 ? 'Continue' : 'Next'}
                   </Text>
                   <Ionicons 
-                    name={step === 4 ? "home" : "chevron-forward-circle"} 
+                    name="chevron-forward-circle" 
                     size={20} 
                     color="#FFFFFF" 
                   />
@@ -234,6 +251,34 @@ export default function TotpSetupScreen() {
 
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {/* CHANGE PASSWORD ALERT MODAL */}
+        <Modal
+          visible={showPasswordModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowPasswordModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.alertModalBox}>
+              <View style={styles.alertIconContainer}>
+                <Ionicons name="key" size={30} color="#0066A4" />
+              </View>
+              <Text style={styles.alertTitle}>Update Your Password</Text>
+              <Text style={styles.alertMessage}>
+                Your authenticator app is all set! Next, please replace your temporary password with a new permanent password to finish securing your account.
+              </Text>
+              <TouchableOpacity
+                style={styles.alertButton}
+                onPress={handleProceedToPassword}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.alertButtonText}>Change Password</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     </ImageBackground>
   );
@@ -268,6 +313,9 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 16 },
   inputLabel: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#0F172A', marginBottom: 6 },
   input: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, height: 44, paddingHorizontal: 12, fontFamily: 'Inter-Medium', fontSize: 14, color: '#0F172A' },
+  passwordWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, height: 44 },
+  passwordInput: { flex: 1, height: '100%', paddingHorizontal: 12, fontFamily: 'Inter-Medium', fontSize: 14, color: '#0F172A' },
+  eyeButton: { paddingHorizontal: 10, justifyContent: 'center', alignItems: 'center' },
   pinInput: { fontSize: 24, fontFamily: 'Inter-Bold', letterSpacing: 8, height: 56 },
   instructionsBox: { marginBottom: 20 },
   instructionsTitle: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#0F172A', marginBottom: 6 },
@@ -286,4 +334,64 @@ const styles = StyleSheet.create({
   footerAction: { alignItems: 'flex-end', marginTop: 32 },
   nextButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5A623', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 24, shadowColor: '#F5A623', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   nextButtonText: { fontFamily: 'Inter-Bold', fontSize: 15, color: '#FFFFFF', marginRight: 8 },
+
+  // Change Password Alert Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  alertModalBox: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#BAE6FD',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  alertIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F0F7FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alertTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 20,
+    color: '#0066A4',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  alertMessage: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 13.5,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  alertButton: {
+    width: '100%',
+    backgroundColor: '#0066A4',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  alertButtonText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
 });

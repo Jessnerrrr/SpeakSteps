@@ -77,6 +77,9 @@ export function ParentHeader({
 
   const handleConfirmSignOut = () => {
     setIsSignOutModalVisible(false);
+    if (router.canDismiss()) {
+      router.dismissAll();
+    }
     router.replace('/patient-login' as any);
   };
 
