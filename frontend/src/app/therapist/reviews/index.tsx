@@ -1,1 +1,1 @@
-export { default } from '@/Therapist-modules/therapist-reviews';
+export { default } from '@/Therapist/TherapistReviews';

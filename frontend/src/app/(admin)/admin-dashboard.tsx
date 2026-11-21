@@ -1,24 +1,25 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useFonts } from 'expo-font';
+import { Ionicons, Octicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router, Stack } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useFonts } from 'expo-font';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
-  ImageBackground,
+  Animated,
+  Easing,
+  LayoutChangeEvent,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
-  SafeAreaView,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
-  Modal,
-  Switch,
-  Pressable,
   useWindowDimensions,
-  TextInput,
-  Alert,
 } from 'react-native';
 import {
   clearSession,
@@ -29,119 +30,376 @@ import {
   type AdminUser,
   type PatientSearchResult,
 } from '@/services/user-api';
+import {
+  centerProfile,
+  initialActivity,
+  initialNotifications,
+  initialPatients,
+  initialProfessionals,
+  initialReleaseRequests,
+  initialRequests,
+  type ActivityEntry,
+  type AssignmentHistory,
+  type CareEpisode,
+  type CareEpisodeClosureCategory,
+  type Patient,
+  type PatientAccess,
+  type Professional,
+  type ProfessionalRole,
+  type ProfessionalStatus,
+  type ReleaseRequest,
+  type RequestStatus,
+  type SuspensionRequest,
+} from '../../data/center-admin';
+import CreatePatientDialog from '../../components/admin/CreatePatientDialog';
+import CreateProfessionalDialog, { type ProfessionalDraft } from '../../components/admin/CreateProfessionalDialog';
+import AccountDetailsActionRow from '../../components/admin/AccountDetailsActionRow';
+import AccountDetailsHeader from '../../components/admin/AccountDetailsHeader';
+import ProfessionalDetails from '../../components/admin/ProfessionalDetails';
 
-const RECENT_REQUESTS_DASHBOARD = [
-  { id: '1', name: 'Khyl Shervin Sude', role: 'Therapist', time: 'Today AT 11:12 AM', status: 'Pending', avatar: require('../../../assets/images/person1.jpg') },
-  { id: '2', name: 'Angelica Vega', role: 'Teacher', time: 'Today AT 11:12 AM', status: 'Pending', avatar: require('../../../assets/images/person2.jpg') },
-  { id: '3', name: 'Jhonas Elsisura', role: 'Therapist', time: 'Today AT 11:12 AM', status: 'Pending', avatar: require('../../../assets/images/person3.jpg') },
-  { id: '4', name: 'Lian Cruz', role: 'Patient', time: 'Yesterday AT 2:30 PM', status: 'Pending', avatar: require('../../../assets/images/person4.png') },
+type Page = 'Dashboard' | 'Accounts' | 'Activity Logs' | 'Settings';
+type AccountView = 'Directory' | 'Student Requests' | 'Archive Center';
+type AccountRow = { kind: 'professional'; person: Professional } | { kind: 'student'; patient: Patient } | { kind: 'archiveEpisode'; episode: CareEpisode; patient: Patient };
+type AccountSort = { key: 'Account' | 'ID' | 'Access' | 'Setup' | 'Assignments' | 'Date'; direction: 'ascending' | 'descending' };
+const ACCOUNT_SORT_OPTIONS: { label: string; key: AccountSort['key']; direction: AccountSort['direction'] }[] = [
+  { label: 'Alphabetical (A–Z)', key: 'Account', direction: 'ascending' },
+  { label: 'Alphabetical (Z–A)', key: 'Account', direction: 'descending' },
+  { label: 'Latest added', key: 'Date', direction: 'descending' },
+  { label: 'Oldest added', key: 'Date', direction: 'ascending' },
+];
+type Selection = { kind: 'professional'; id: string } | { kind: 'patient'; id: string } | { kind: 'archiveEpisode'; id: string } | { kind: 'request'; id: string } | { kind: 'release'; id: string } | null;
+const accountViewIcon = (view: AccountView, active: boolean): React.ComponentProps<typeof Ionicons>['name'] => {
+  if (view === 'Directory') return active ? 'list' : 'list-outline';
+  if (view === 'Student Requests') return active ? 'document-text' : 'document-text-outline';
+  return active ? 'archive' : 'archive-outline';
+};
+type Confirmation = { title: string; message: string; actionLabel: string; danger?: boolean; requiresReason?: boolean; requiresEvidence?: boolean; run: () => void };
+
+type AdminSharedRecords = {
+  professionals: Professional[];
+  patients: Patient[];
+  requests: SuspensionRequest[];
+  releaseRequests: ReleaseRequest[];
+  careEpisodes: CareEpisode[];
+  assignmentHistory: AssignmentHistory[];
+  activity: ActivityEntry[];
+  notifications: typeof initialNotifications;
+};
+
+let sharedAdminRecords: AdminSharedRecords = {
+  professionals: initialProfessionals,
+  patients: initialPatients,
+  requests: initialRequests,
+  releaseRequests: initialReleaseRequests,
+  careEpisodes: [],
+  assignmentHistory: [],
+  activity: initialActivity,
+  notifications: initialNotifications,
+};
+const adminRecordListeners = new Set<() => void>();
+const subscribeAdminRecords = (listener: () => void) => { adminRecordListeners.add(listener); return () => adminRecordListeners.delete(listener); };
+const getAdminRecords = () => sharedAdminRecords;
+const updateAdminRecords = <K extends keyof AdminSharedRecords>(key: K, update: React.SetStateAction<AdminSharedRecords[K]>) => {
+  const current = sharedAdminRecords[key];
+  sharedAdminRecords = { ...sharedAdminRecords, [key]: typeof update === 'function' ? (update as (value: AdminSharedRecords[K]) => AdminSharedRecords[K])(current) : update };
+  adminRecordListeners.forEach((listener) => listener());
+};
+
+const C = {
+  blue: '#0865AD', blueDeep: '#12456C', blueSoft: '#EAF7FF', blueLine: '#C8E5F5',
+  ink: '#17364D', muted: '#48657A', subtle: '#60788D', page: '#FFFFFF', white: '#FFFFFF',
+  line: '#D9E5EE', green: '#287A4B', greenSoft: '#E8F5EC', yellow: '#8A5B00', yellowSoft: '#FFF4D8',
+  orange: '#A94D2D', orangeSoft: '#FFF0E8', red: '#AD3B42', redSoft: '#FDEBED', brown: '#17364D',
+};
+
+const NAV: { label: Page; icon: React.ComponentProps<typeof Ionicons>['name']; activeIcon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+  { label: 'Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
+  { label: 'Accounts', icon: 'people-outline', activeIcon: 'people' },
+  { label: 'Activity Logs', icon: 'time-outline', activeIcon: 'time' },
 ];
 
-// EXACT COLORS EXTRACTED FROM YOUR UPLOADED PNGs
-const RECENT_ACTIVITIES_DASHBOARD = [
-  {
-    id: '1',
-    role: 'Teacher',
-    title: 'ANA REYES - ACCOUNT APPROVED',
-    subtitle: 'Status updated from PENDING to ACTIVE • Edited by Admin',
-    time: '2M AGO',
-    color: '#49A11B', // Exact Green Logo
-    bgColor: '#E2F7CE', // Exact Green Bg
-    borderColor: '#C6ECA7',
-  },
-  {
-    id: '2',
-    role: 'Therapist',
-    title: 'MARK DIZON - ROLE UPDATED',
-    subtitle: 'Assigned to Teacher • Edited by Super Admin',
-    time: '1H AGO',
-    color: '#1173BA', // Exact Blue Logo
-    bgColor: '#DDF0F9', // Exact Blue Bg
-    borderColor: '#B9DFEE',
-  },
-  {
-    id: '3',
-    role: 'Patient',
-    title: 'S-2026-003 - PROFILE EDITED',
-    subtitle: 'Updated contact information • Edited by Admin',
-    time: '2H AGO',
-    color: '#C78800', // Exact Yellow Logo
-    bgColor: '#FDE9AD', // Exact Yellow Bg
-    borderColor: '#F3D47B',
-  },
-  {
-    id: '4',
-    role: 'Pending',
-    title: 'JOHN DOE - ACCOUNT SUSPENDED',
-    subtitle: 'Status updated to SUSPENDED • Edited by Admin',
-    time: '1D AGO',
-    color: '#C81015', // Exact Red Logo
-    bgColor: '#FBD7D7', // Exact Red Bg
-    borderColor: '#F2B9B9',
-  },
-];
+type AdminNavigationState = { sidebarExpanded: boolean; accountsExpanded: boolean };
+let adminNavigationState: AdminNavigationState = { sidebarExpanded: false, accountsExpanded: false };
+const adminNavigationListeners = new Set<() => void>();
+const subscribeAdminNavigation = (listener: () => void) => { adminNavigationListeners.add(listener); return () => adminNavigationListeners.delete(listener); };
+const getAdminNavigation = () => adminNavigationState;
+const subscribeViewportReady = () => () => {};
+const getViewportReadySnapshot = () => true;
+const getViewportReadyServerSnapshot = () => false;
+const updateAdminNavigation = (update: Partial<AdminNavigationState>) => {
+  adminNavigationState = { ...adminNavigationState, ...update };
+  adminNavigationListeners.forEach((listener) => listener());
+};
+const setAdminAccountsExpanded = (update: React.SetStateAction<boolean>) => {
+  updateAdminNavigation({ accountsExpanded: typeof update === 'function' ? update(adminNavigationState.accountsExpanded) : update });
+};
 
-const MOCK_REQUESTS = [
-  { id: '1', name: 'Ana Reyes', email: 'ana.reyes@example.com', role: 'Patient', child: 'Lian Reyes, age 5', level: '1 - Sounds', studentId: 'S-2026-003', verification: 'Name differs - record: Lian Cruz', contact: '0917 555 0142', roleColor: '#D97706', roleBg: '#FEF3C7', avatar: require('../../../assets/images/person4.png') },
-  { id: '2', name: 'Mark Dizon', email: 'mark.dizon@example.com', role: 'Teacher', child: 'Lian Reyes, age 5', level: '1 - Sounds', studentId: 'S-2026-003', verification: 'Name differs - record: Lian Cruz', contact: '0917 555 0142', roleColor: '#16A34A', roleBg: '#DCFCE7', avatar: require('../../../assets/images/person1.jpg') },
-];
-
-const MOCK_ACCOUNTS = [
-  { id: '1', name: 'Ana Reyes', email: 'ana.reyes@example.com', role: 'Patient', status: 'Active', roleColor: '#D97706', roleBg: '#FEF3C7', statusColor: '#16A34A', statusBg: '#DCFCE7', avatar: require('../../../assets/images/person3.jpg') },
-  { id: '2', name: 'John Doe', email: 'john.doe@example.com', role: 'Teacher', status: 'Active', roleColor: '#16A34A', roleBg: '#DCFCE7', statusColor: '#16A34A', statusBg: '#DCFCE7', avatar: require('../../../assets/images/person4.png') },
-];
-
-const INITIAL_NOTIFICATIONS = [
-  { id: 'notif-1', name: 'System', action: 'New Therapist Registration', detail: 'Khyl Shervin Sude requested access.', time: '5m ago', unread: true },
-  { id: 'notif-2', name: 'Security', action: 'Account Suspended', detail: 'Patient account linked to Ana Reyes suspended due to inactivity.', time: '1h ago', unread: true },
-  { id: 'notif-3', name: 'System', action: 'Database Backup', detail: 'Weekly cloud backup completed successfully.', time: '3h ago', unread: false },
-];
-
-export default function AdminDashboardScreen() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'request' | 'accounts'>('dashboard');
-  const [requestSubTab, setRequestSubTab] = useState('All');
-  const [accountSubTab, setAccountSubTab] = useState('All');
-
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertConfig, setAlertConfig] = useState({
-    title: '', message: '', confirmText: '', confirmColor: '#0284C7', iconName: 'warning', onConfirm: () => {},
+const formatDate = (date: string) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${date.slice(0, 10)}T12:00:00`));
+const isValidIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T12:00:00`).getTime()) && new Date(`${value}T12:00:00`).toISOString().slice(0, 10) === value;
+const archiveEpisodeStatus = (episode: CareEpisode) => episode.closureCategory === 'Clinical discharge' ? 'Completed / Discharged' : episode.closureCategory === 'Authorized withdrawal' ? 'Withdrawn' : episode.closureCategory === 'External transfer' ? 'Transferred' : episode.closureCategory === 'Other authorized administrative closure' ? 'Closed' : 'Closure details not recorded';
+const formatTimestamp = (date: string) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(date));
+const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+const professionalAccess = (person: Professional) => person.access ?? (person.status === 'Suspended' ? 'Suspended' : 'Active');
+const professionalMembership = (person: Professional) => person.membership ?? (person.status === 'Deactivated' ? 'Deactivated' : 'Active');
+const professionalSetup = (person: Professional) => person.invitation === 'Completed' ? 'Completed' : 'Pending';
+const studentAccess = (student: Patient) => student.access === 'Setup pending' ? 'Active' : student.access;
+const studentMembership = (student: Patient) => student.membership ?? 'Active';
+const studentSetup = (student: Patient) => student.setup ?? (student.access === 'Setup pending' ? 'Pending' : 'Completed');
+const studentAssignmentStatus = (student: Patient) => student.teacherId || student.therapistId ? 'Assigned' : 'Unassigned';
+const mapAdminUsers = (users: AdminUser[]) => {
+  const professionals: Professional[] = [];
+  const patients: Patient[] = [];
+  users.forEach((user) => {
+    const joined = new Date(user.createdAt);
+    if (Number.isNaN(joined.getTime())) {
+      throw new Error(`Account ${user.id} has an invalid creation date.`);
+    }
+    const joinedDate = joined.toISOString().slice(0, 10);
+    if (user.role === 'therapist' || user.role === 'teacher') {
+      professionals.push({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role === 'therapist' ? 'Therapist' : 'Teacher',
+        status: user.status === 'rejected' ? 'Deactivated' : 'Active',
+        access: 'Active',
+        membership: user.status === 'rejected' ? 'Deactivated' : 'Active',
+        invitation: user.status === 'verified' ? 'Completed' : user.status === 'rejected' ? 'Failed' : 'Pending',
+        joined: joinedDate,
+        invitationUpdated: joinedDate,
+      });
+    } else if (user.role === 'parent') {
+      patients.push({
+        id: user.id,
+        name: user.childName || user.name,
+        studentNumber: user.studentId || user.id,
+        therapistId: null,
+        access: user.status === 'verified' ? 'Active' : 'Setup pending',
+        setup: user.status === 'verified' ? 'Completed' : 'Pending',
+        membership: user.status === 'rejected' ? 'Deactivated' : 'Active',
+        enrollment: 'Enrolled',
+        therapyStatus: 'In progress',
+        registered: joinedDate,
+        guardian: user.name,
+        guardianContact: user.email,
+        school: '',
+      });
+    }
   });
+  return { professionals, patients };
+};
+const releaseFollowup = (request: ReleaseRequest, now: number) => {
+  const days = Math.max(0, Math.floor((now - new Date(`${request.submitted}T12:00:00`).getTime()) / 86400000));
+  const count = request.reminderCount ?? 0;
+  const day14Recorded = (request.events ?? []).some((event) => event.title.toLowerCase().includes('day 14') && (event.title.toLowerCase().includes('escalat') || event.title.toLowerCase().includes('follow-up flagged')));
+  const nextDay = [3, 7, 14][count];
+  const open = request.status === 'Pending' || request.status === 'More information requested';
+  const waiting = request.origin !== 'Therapist';
+  return { days, nextDay: day14Recorded ? undefined : nextDay, due: open && waiting && !day14Recorded && nextDay !== undefined && days >= nextDay, overdue: open && waiting && days >= 14, day14Recorded };
+};
+const releaseStage = (request: ReleaseRequest) => {
+  if (request.status === 'More information requested') return 'Awaiting Supporting Evidence';
+  const isSchoolExit = ['Transfer', 'Withdrawal', 'Enrollment release'].includes(request.requestType ?? 'Enrollment release') && request.reason !== 'No longer receiving services';
+  if (isSchoolExit && request.guardianConfirmation === 'Disputed') return 'Awaiting Supporting Evidence';
+  if (isSchoolExit && request.origin === 'Teacher' && request.guardianConfirmation !== 'Confirmed' && request.guardianConfirmation !== 'Not required') return 'Awaiting Guardian Confirmation';
+  if (isSchoolExit && (request.teacherVerification === 'More Information Needed' || request.teacherVerification === 'Unable to Verify')) return 'Awaiting Supporting Evidence';
+  if (isSchoolExit && (request.teacherVerification === undefined || request.teacherVerification === 'Pending')) return 'Awaiting Teacher Verification';
+  if (isSchoolExit && request.origin === 'Guardian' && request.guardianConfirmation !== 'Confirmed' && request.guardianConfirmation !== 'Not required') return 'Awaiting Guardian Confirmation';
+  return request.workflowStage ?? 'Ready for Admin Review';
+};
 
-  const [showMenu, setShowMenu] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
-  const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
-  const [accounts, setAccounts] = useState<AdminUser[]>([]);
+function IconButton({ icon, label, onPress, badge }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; badge?: string }) {
+  return <TouchableOpacity onPress={onPress} style={styles.iconButton} accessibilityRole="button" accessibilityLabel={label}><Ionicons name={icon} size={19} color={C.ink} />{badge ? <View style={styles.iconBadge}><Text style={styles.iconBadgeText}>{badge}</Text></View> : null}</TouchableOpacity>;
+}
+
+function TooltipIconButton({ icon, label, hint, onPress, buttonStyle, disabled = false }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; hint: string; onPress: () => void; buttonStyle?: any; disabled?: boolean }) {
+  const [hovered, setHovered] = useState(false);
+  return <View style={{ position: 'relative', zIndex: 2 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={hint} accessibilityState={{ disabled }} disabled={disabled} onHoverIn={() => setHovered(!disabled)} onHoverOut={() => setHovered(false)} onPress={onPress} style={[buttonStyle, disabled && { opacity: 0.45 }]}>
+      <Ionicons name={icon} size={icon === 'pencil' ? 16 : 19} color={C.muted} />
+    </Pressable>
+    {Platform.OS === 'web' && hovered ? <View pointerEvents="none" style={{ position: 'absolute', zIndex: 5, right: 0, bottom: 40, width: 190, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 5, backgroundColor: C.ink }}><Text style={{ color: C.white, fontSize: 11, lineHeight: 15 }}>{label}</Text></View> : null}
+  </View>;
+}
+
+function Button({ label, onPress, kind = 'secondary', disabled = false, icon }: { label: string; onPress: () => void; kind?: 'primary' | 'secondary' | 'text' | 'danger'; disabled?: boolean; icon?: React.ComponentProps<typeof Ionicons>['name'] }) {
+  return <TouchableOpacity onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{ disabled }} style={[styles.button, kind === 'primary' ? styles.button_primary : kind === 'danger' ? styles.button_danger : kind === 'text' ? styles.button_text : styles.button_secondary, disabled && styles.buttonDisabled]}>{icon ? <Ionicons name={icon} size={16} color={kind === 'primary' ? C.white : C.blue} /> : null}<Text style={[styles.buttonText, kind === 'primary' && styles.buttonTextPrimary, kind === 'danger' && styles.buttonTextDanger, disabled && styles.mutedText]}>{label}</Text></TouchableOpacity>;
+}
+
+function Status({ label, tone }: { label: string; tone?: 'green' | 'yellow' | 'red' | 'blue' | 'neutral' }) {
+  const color = tone === 'green' ? C.green : tone === 'yellow' ? C.yellow : tone === 'red' ? C.red : tone === 'blue' ? C.blue : C.muted;
+  const background = tone === 'green' ? C.greenSoft : tone === 'yellow' ? C.yellowSoft : tone === 'red' ? C.redSoft : tone === 'blue' ? C.blueSoft : '#EDF3F6';
+  return <View style={[styles.status, { backgroundColor: background }]}><View style={[styles.statusDot, { backgroundColor: color }]} /><Text style={[styles.statusText, { color }]}>{label}</Text></View>;
+}
+
+function SetupStatus({ label, compact = false }: { label: 'Pending' | 'Completed' | 'Failed'; compact?: boolean }) {
+  return <Status label={compact ? `Setup ${label.toLowerCase()}` : label} tone={label === 'Completed' ? 'green' : label === 'Failed' ? 'red' : 'yellow'} />;
+}
+
+function Filter({ value, options, onChange, label, getLabel = (option) => option }: { value: string; options: string[]; onChange: (value: string) => void; label: string; getLabel?: (value: string) => string }) {
+  return <View style={styles.filterWrap}><Text style={styles.filterLabel}>{label}</Text><SelectControl label={label} value={value} options={options} getLabel={getLabel} onChange={onChange} /></View>;
+}
+
+function ColumnFilter({ label, active, options, onSort, sortDirection }: { label: string; active?: boolean; options: { label: string; selected: boolean; onSelect: () => void }[]; onSort?: () => void; sortDirection?: 'ascending' | 'descending' | null }) {
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepOpen = () => { if (closeTimer.current) clearTimeout(closeTimer.current); };
+  const closeSoon = () => { if (closeTimer.current) clearTimeout(closeTimer.current); closeTimer.current = setTimeout(() => setOpen(false), 120); };
+  const menu = <Pressable onHoverIn={keepOpen} onHoverOut={closeSoon} style={styles.columnFilterMenu}>{options.map((option, index) => <TouchableOpacity key={`${option.label}-${index}`} accessibilityRole="button" accessibilityState={{ selected: option.selected }} onPress={() => { keepOpen(); option.onSelect(); setOpen(false); }} style={styles.columnFilterOption}><Text style={[styles.columnFilterOptionText, option.selected && styles.columnFilterOptionSelected]}>{option.label}</Text>{option.selected ? <Ionicons name="checkmark" size={15} color={C.blue} /> : null}</TouchableOpacity>)}</Pressable>;
+  return <View style={[styles.columnFilterWrap, open && styles.columnFilterWrapOpen]}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}><Pressable onHoverIn={() => { keepOpen(); setOpen(true); }} onHoverOut={closeSoon} accessibilityRole="button" accessibilityLabel={`Sort by ${label}${sortDirection ? `, ${sortDirection}` : ''}`} onPress={onSort} style={styles.columnFilterTrigger}><Text style={styles.columnFilterLabel}>{label}</Text>{onSort && sortDirection === 'descending' ? <Ionicons name="arrow-down" size={12} color={C.blue} /> : null}</Pressable><Pressable onHoverIn={() => { keepOpen(); setOpen(true); }} onHoverOut={closeSoon} accessibilityRole="button" accessibilityLabel={`Filter ${label}`} accessibilityState={{ expanded: open }} onPress={() => Platform.OS === 'web' ? setOpen(true) : setOpen((value) => !value)} style={{ minWidth: 25, minHeight: 34, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={12} color={active ? C.blue : C.muted} /></Pressable></View>
+    {open && Platform.OS === 'web' ? menu : null}
+    {open && Platform.OS !== 'web' ? <Modal transparent animationType="fade" visible onRequestClose={() => setOpen(false)}><Pressable style={[styles.overlay, { backgroundColor: 'transparent' }]} onPress={() => setOpen(false)}>{menu}</Pressable></Modal> : null}
+  </View>;
+}
+
+function SortHeader({ label, onPress, active, direction, showDirection = true }: { label: string; onPress: () => void; active: boolean; direction: 'ascending' | 'descending'; showDirection?: boolean }) {
+  return <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Sort by ${label}${active ? `, ${direction}` : ''}`} onPress={onPress} style={[styles.columnFilterTrigger, { flexDirection: 'row', alignItems: 'center', gap: 5 }]}><Text style={styles.columnFilterLabel}>{label}</Text>{showDirection && active && direction === 'descending' ? <Ionicons name="arrow-down" size={12} color={C.blue} /> : null}</TouchableOpacity>;
+}
+
+function SearchBox({ value, onChange, placeholder, fullWidth = false }: { value: string; onChange: (value: string) => void; placeholder: string; fullWidth?: boolean }) {
+  return <View style={[styles.searchBox, fullWidth && styles.searchBoxFullWidth]}><Ionicons name="search-outline" size={18} color={C.muted} /><TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={C.subtle} style={styles.searchInput} accessibilityLabel={placeholder} returnKeyType="search" /></View>;
+}
+
+function Header({ title, subtitle, action }: { title: string; subtitle: string; action?: React.ReactNode }) {
+  return <View style={styles.pageHeader}><View style={styles.pageHeaderText}><Text style={styles.pageTitle}>{title}</Text><Text style={styles.pageSubtitle}>{subtitle}</Text></View>{action}</View>;
+}
+
+export default function AdminDashboardScreen({ initialAccountView }: { initialAccountView?: AccountView } = {}) {
+  const { account: accountRouteParam, page: pageRouteParam, role: accountRoleParam, search: accountSearchParam, access: accountAccessParam, setup: accountSetupParam, enrollment: accountEnrollmentParam, teacher: teacherParam, therapist: therapistParam, recordKind, recordId } = useLocalSearchParams<{ account?: string; page?: string; role?: string; search?: string; access?: string; setup?: string; membership?: string; enrollment?: string; teacher?: string; therapist?: string; recordKind?: string; recordId?: string }>();
+  const routeAccountView: AccountView | null = initialAccountView ?? (accountRouteParam === 'student-requests' ? 'Student Requests' : accountRouteParam === 'archive-center' ? 'Archive Center' : accountRouteParam === 'directory' ? 'Directory' : null);
+  const routePage: Page = pageRouteParam === 'activity-logs' ? 'Activity Logs' : pageRouteParam === 'settings' ? 'Settings' : 'Dashboard';
+  const { width } = useWindowDimensions();
+  const viewportReady = useSyncExternalStore(subscribeViewportReady, getViewportReadySnapshot, getViewportReadyServerSnapshot);
+  const desktop = viewportReady && width >= 1050;
+  const compact = !viewportReady || width < 680;
+  const page: Page = routeAccountView ? 'Accounts' : routePage;
+  const accountView: AccountView = routeAccountView ?? 'Directory';
+  const { sidebarExpanded, accountsExpanded } = useSyncExternalStore(subscribeAdminNavigation, getAdminNavigation, getAdminNavigation);
+  const setAccountsExpanded = setAdminAccountsExpanded;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const setSidebarExpanded = (next: boolean) => updateAdminNavigation({ sidebarExpanded: next });
+  const { professionals, patients, requests, releaseRequests, careEpisodes, assignmentHistory, activity, notifications } = useSyncExternalStore(subscribeAdminRecords, getAdminRecords, getAdminRecords);
+  const setProfessionals: React.Dispatch<React.SetStateAction<Professional[]>> = (update) => updateAdminRecords('professionals', update);
+  const setPatients: React.Dispatch<React.SetStateAction<Patient[]>> = (update) => updateAdminRecords('patients', update);
+  const setRequests: React.Dispatch<React.SetStateAction<SuspensionRequest[]>> = (update) => updateAdminRecords('requests', update);
+  const setReleaseRequests: React.Dispatch<React.SetStateAction<ReleaseRequest[]>> = (update) => updateAdminRecords('releaseRequests', update);
+  const setCareEpisodes: React.Dispatch<React.SetStateAction<CareEpisode[]>> = (update) => updateAdminRecords('careEpisodes', update);
+  const setAssignmentHistory: React.Dispatch<React.SetStateAction<AssignmentHistory[]>> = (update) => updateAdminRecords('assignmentHistory', update);
+  const setActivity: React.Dispatch<React.SetStateAction<ActivityEntry[]>> = (update) => updateAdminRecords('activity', update);
+  const recentActivityViewport = useRef({ scrollTop: 0, height: 0, panelTop: 0 });
+  const recentActivityRows = useRef(new Map<string, { top: number; height: number }>());
+  const [viewedAlertIds, setViewedAlertIds] = useState<Set<string>>(() => new Set());
+  const setNotifications: React.Dispatch<React.SetStateAction<typeof initialNotifications>> = (update) => updateAdminRecords('notifications', update);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [adminLoading, setAdminLoading] = useState(true);
   const [adminError, setAdminError] = useState('');
   const [updatingAccountId, setUpdatingAccountId] = useState<string | null>(null);
-  const [accountSearch, setAccountSearch] = useState('');
   const [patientSearch, setPatientSearch] = useState('');
   const [patientResults, setPatientResults] = useState<PatientSearchResult[]>([]);
   const [patientSearchLoading, setPatientSearchLoading] = useState(false);
   const [patientSearchError, setPatientSearchError] = useState('');
+  const initialRecordSelection: Selection = recordKind && recordId && ['professional', 'patient', 'request', 'release'].includes(recordKind) ? { kind: recordKind as Exclude<NonNullable<Selection>['kind'], never>, id: recordId } : null;
+  const [selection, setSelection] = useState<Selection>(initialRecordSelection);
+  const accountDetailPaneRef = useRef<any>(null);
+  const [accountDetailPaneWidth] = useState(() => new Animated.Value(0));
+  const [accountDetailPaneOpacity] = useState(() => new Animated.Value(0));
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [confirmationReason, setConfirmationReason] = useState('');
+  const [confirmationEvidence, setConfirmationEvidence] = useState('');
+  const confirmationReasonRef = useRef('');
+  const confirmationEvidenceRef = useRef('');
+  const [prototypeNow] = useState(() => Date.now());
+  const [toast, setToast] = useState('');
+  const [accountRole, setAccountRole] = useState(accountRoleParam ?? 'All roles');
+  const [accountAccess, setAccountAccess] = useState(accountAccessParam ?? 'All access');
+  const [accountSetup, setAccountSetup] = useState(accountSetupParam ?? 'All setup');
+  const [accountMembership, setAccountMembership] = useState('All memberships');
+  const [closurePatient, setClosurePatient] = useState<Patient | null>(null);
+  const [closureCategory, setClosureCategory] = useState<Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>>('Authorized withdrawal');
+  const [closureReason, setClosureReason] = useState('');
+  const [closureEffectiveDate, setClosureEffectiveDate] = useState(new Date().toISOString().slice(0, 10));
+  const [closureAuthorizationReference, setClosureAuthorizationReference] = useState('');
+  const [reenrollmentPatient, setReenrollmentPatient] = useState<Patient | null>(null);
+  const [reenrollmentTherapistId, setReenrollmentTherapistId] = useState('');
+  const [reenrollmentTeacherId, setReenrollmentTeacherId] = useState('');
+  const [accountEnrollment, setAccountEnrollment] = useState(accountEnrollmentParam ?? 'All enrollment');
+  const [accountAssignments, setAccountAssignments] = useState('All assignments');
+  const [patientTherapist, setPatientTherapist] = useState(therapistParam ?? 'All therapists');
+  const [accountSearch, setAccountSearch] = useState(accountSearchParam ?? '');
+  const [accountFiltersOpen, setAccountFiltersOpen] = useState(false);
+  const [accountPageState, setAccountPageState] = useState({ page: 0, filterKey: '' });
+  const [accountSort, setAccountSort] = useState<AccountSort>({ key: 'Account', direction: 'ascending' });
+  const [patientTeacher, setPatientTeacher] = useState(teacherParam ?? 'All teachers');
+  const [requestTypeFilter, setRequestTypeFilter] = useState('All types');
+  const [requestStatusFilter, setRequestStatusFilter] = useState('Open');
+  const [requestStageFilter, setRequestStageFilter] = useState('All stages');
+  const [requestFollowupFilter, setRequestFollowupFilter] = useState('All follow-ups');
+  const [requestSearch, setRequestSearch] = useState('');
+  const [requestAction, setRequestAction] = useState('');
+  const [requestHistoryExpanded, setRequestHistoryExpanded] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationAnchorRef = useRef<React.ElementRef<typeof View>>(null);
+  const [notificationPosition, setNotificationPosition] = useState({ top: 72, left: 12 });
+  const [showProfile, setShowProfile] = useState(false);
+  const profileCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showProfileDetails, setShowProfileDetails] = useState(false);
+  const [attentionPage, setAttentionPage] = useState(0);
+  const [notificationFilter, setNotificationFilter] = useState<'All' | 'Unread'>('All');
+  const [logCategory, setLogCategory] = useState('All activity');
+  const [logSearch, setLogSearch] = useState('');
+  const [accountNewRole, setAccountNewRole] = useState<ProfessionalRole>('Therapist');
+  const [newAccountOpen, setNewAccountOpen] = useState(false);
+  const [createPatientOpen, setCreatePatientOpen] = useState(false);
+  const [offboardingId, setOffboardingId] = useState<string | null>(null);
+  const [offboardingChoices, setOffboardingChoices] = useState<Record<string, string>>({});
+  const [offboardingReason, setOffboardingReason] = useState('');
+  const [assignmentChoicesOpen, setAssignmentChoicesOpen] = useState<string | null>(null);
+  const [teacherChoicesOpen, setTeacherChoicesOpen] = useState<string | null>(null);
+  const [releaseReplacement, setReleaseReplacement] = useState('');
+  const [releaseNote, setReleaseNote] = useState('');
+  const [releaseEffectiveDate, setReleaseEffectiveDate] = useState(new Date().toISOString().slice(0, 10));
+  const [releaseAuthorizationReference, setReleaseAuthorizationReference] = useState('');
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [centerSettings, setCenterSettings] = useState(centerProfile);
 
-  const [newRequestToggle, setNewRequestToggle] = useState(true);
-  const [securityAlertsToggle, setSecurityAlertsToggle] = useState(true);
-
-  const { width } = useWindowDimensions();
-  const isDesktop = width > 768;
-
+  const openProfileMenu = () => {
+    if (profileCloseTimer.current) clearTimeout(profileCloseTimer.current);
+    setShowProfile(true);
+  };
+  const scheduleProfileMenuClose = () => {
+    if (profileCloseTimer.current) clearTimeout(profileCloseTimer.current);
+    profileCloseTimer.current = setTimeout(() => setShowProfile(false), 120);
+  };
   const [fontsLoaded] = useFonts({
-    'Inter-Regular': require('../../../assets/Inter-Regular.ttf'),
-    'Inter-Medium': require('../../../assets/Inter-Medium.ttf'),
-    'Inter-Bold': require('../../../assets/Inter-Bold.ttf'),
+    'Geist-Regular': require('../../../assets/fonts/Geist-Regular.ttf'),
+    'Geist-Medium': require('../../../assets/fonts/Geist-Medium.ttf'),
+    'Geist-SemiBold': require('../../../assets/fonts/Geist-SemiBold.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   useEffect(() => {
     let active = true;
     Promise.all([getAdminUsers(), getNotifications()])
-      .then(([loadedAccounts, loadedNotifications]) => {
+      .then(([loadedUsers, loadedNotifications]) => {
         if (!active) return;
-        setAccounts(loadedAccounts);
-        setNotifications(loadedNotifications);
+        const mappedRecords = mapAdminUsers(loadedUsers);
+        const mappedNotifications = loadedNotifications.map((item) => ({
+          id: item.id,
+          title: `${item.name} ${item.action}`,
+          detail: item.detail,
+          date: item.time,
+          read: !item.unread,
+        }));
+        setAdminUsers(loadedUsers);
+        setProfessionals(mappedRecords.professionals);
+        setPatients(mappedRecords.patients);
+        setNotifications(mappedNotifications);
+        setActivity(mappedNotifications.map((item) => ({
+          ...item,
+          actor: 'SpeakSteps',
+          category: 'Account' as const,
+        })));
       })
       .catch((error: unknown) => {
         if (active) setAdminError(error instanceof Error ? error.message : 'Could not load admin data.');
@@ -162,6 +420,7 @@ export default function AdminDashboardScreen() {
       setPatientSearchLoading(false);
       return;
     }
+
     let active = true;
     setPatientSearchLoading(true);
     setPatientSearchError('');
@@ -183,27 +442,18 @@ export default function AdminDashboardScreen() {
     };
   }, [patientSearch]);
 
-  const visibleAccounts = useMemo(() => {
-    const roleFilter = accountSubTab === 'Patient' ? 'parent' : accountSubTab.toLowerCase();
-    const query = accountSearch.trim().toLowerCase();
-    return accounts.filter((account) => (
-      (accountSubTab === 'All' || account.role === roleFilter) &&
-      (!query || `${account.name} ${account.email} ${account.childName} ${account.studentId}`.toLowerCase().includes(query))
-    ));
-  }, [accounts, accountSubTab, accountSearch]);
-  const visibleRequests = useMemo(() => {
-    if (requestSubTab === 'All') return accounts;
-    return accounts.filter((account) => account.status === requestSubTab.toLowerCase());
-  }, [accounts, requestSubTab]);
-
-  const handleUpdateAccountStatus = async (userId: string, status: 'verified' | 'rejected') => {
-    setUpdatingAccountId(userId);
+  const handleUpdateAccountStatus = async (user: AdminUser, status: 'verified' | 'rejected') => {
+    setUpdatingAccountId(user.id);
     setAdminError('');
     try {
-      const updated = await updateAdminUserStatus(userId, status);
-      setAccounts((current) => current.map((account) => account.id === updated.id
-        ? { ...account, status: updated.status as AdminUser['status'] }
-        : account));
+      const updated = await updateAdminUserStatus(user.id, status);
+      const nextUsers = adminUsers.map((account) => account.id === updated.id
+        ? { ...account, status }
+        : account);
+      const mappedRecords = mapAdminUsers(nextUsers);
+      setAdminUsers(nextUsers);
+      setProfessionals(mappedRecords.professionals);
+      setPatients(mappedRecords.patients);
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : 'Could not update the account status.');
     } finally {
@@ -211,1041 +461,1241 @@ export default function AdminDashboardScreen() {
     }
   };
 
-  if (!fontsLoaded) return null;
-
-  const triggerAlert = (title: string, message: string, confirmText: string, confirmColor: string, iconName: any, onConfirm: () => void) => {
-    setShowMenu(false);
-    setShowSettingsModal(false);
-    setAlertConfig({ title, message, confirmText, confirmColor, iconName, onConfirm });
-    setAlertVisible(true);
-  };
-
   const handleLogout = async () => {
     try {
       await clearSession();
       router.replace('/(admin)/admin-login' as any);
     } catch (error) {
-      Alert.alert(
-        'Sign out failed',
-        error instanceof Error ? error.message : 'Could not clear the session. Please try again.',
-      );
+      flash(error instanceof Error ? error.message : 'Could not clear the session. Please try again.');
     }
   };
 
-  const renderTopHeader = (title: string, showBackButton = false) => (
-    <View style={[styles.topHeader, isDesktop && { paddingHorizontal: 40 }]}>
-      <View style={styles.headerLeft}>
-        {showBackButton ? (
-          <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={styles.backButtonBlue}>
-            <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.hamburgerBtn}
-            onPress={() => {
-              setShowNotificationsDropdown(false);
-              setShowMenu(!showMenu);
-            }}
-          >
-            <Ionicons name="menu" size={28} color="#0284C7" />
-          </TouchableOpacity>
-        )}
-        {!showBackButton && <Image source={require('../../../assets/images/landing-logo.gif')} style={styles.logoImage} contentFit="contain" />}
-        <Text style={styles.headerTitle}>{title}</Text>
-      </View>
+  const flash = (message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(''), 3200);
+  };
+  const addLog = (title: string, detail: string, category: ActivityEntry['category'], actor = 'Center admin') => {
+    setActivity((current) => [{ id: `evt-${Date.now()}`, title, detail, actor, date: new Date().toISOString(), category, read: false }, ...current]);
+  };
+  const addNotification = (title: string, detail: string) => {
+    setNotifications((current) => [{ id: `note-${Date.now()}`, title, detail, date: new Date().toISOString(), read: false }, ...current]);
+  };
+  const markVisibleActivityRead = () => {
+    const { scrollTop, height, panelTop } = recentActivityViewport.current;
+    if (height <= 0) return;
+    const recentIds = new Set(orderedActivity.slice(0, 5).map((entry) => entry.id));
+    const visibleIds = new Set<string>();
+    recentActivityRows.current.forEach(({ top, height: rowHeight }, id) => {
+      if (!recentIds.has(id)) return;
+      const rowTop = panelTop + top;
+      const visibleHeight = Math.max(0, Math.min(rowTop + rowHeight, scrollTop + height) - Math.max(rowTop, scrollTop));
+      if (visibleHeight >= Math.min(rowHeight / 2, 24)) visibleIds.add(id);
+    });
+    if (visibleIds.size > 0) {
+      setActivity((current) => current.some((entry) => visibleIds.has(entry.id) && !entry.read)
+        ? current.map((entry) => visibleIds.has(entry.id) && !entry.read ? { ...entry, read: true } : entry)
+        : current);
+    }
+  };
+  const onRecentActivityViewportLayout = ({ nativeEvent }: LayoutChangeEvent) => {
+    recentActivityViewport.current.height = nativeEvent.layout.height;
+    markVisibleActivityRead();
+  };
+  const onRecentActivityScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    recentActivityViewport.current.scrollTop = nativeEvent.contentOffset.y;
+    recentActivityViewport.current.height = nativeEvent.layoutMeasurement.height;
+    markVisibleActivityRead();
+  };
+  const onRecentActivityPanelLayout = ({ nativeEvent }: LayoutChangeEvent) => {
+    recentActivityViewport.current.panelTop = nativeEvent.layout.y;
+    markVisibleActivityRead();
+  };
+  const pushAccountsRoute = (view: AccountView, record: Selection = null, overrides: Partial<{ role: string; search: string; access: string; setup: string; membership: string; enrollment: string; teacher: string; therapist: string }> = {}) => {
+    const pathname = view === 'Student Requests' ? '/(admin)/accounts/student-requests' : view === 'Archive Center' ? '/(admin)/accounts/archive-center' : '/(admin)/accounts/directory';
+    const recordContext = record?.kind === 'patient' ? { role: 'Student', search: patients.find((patient) => patient.id === record.id)?.name ?? accountSearch } : record?.kind === 'professional' ? { role: professionals.find((person) => person.id === record.id)?.role ?? accountRole, search: professionals.find((person) => person.id === record.id)?.name ?? accountSearch } : {};
+    const context = view === 'Directory' ? { role: accountRole, search: accountSearch, access: accountAccess, setup: accountSetup, membership: accountMembership, enrollment: accountEnrollment, teacher: patientTeacher, therapist: patientTherapist, ...recordContext, ...overrides } : {};
+    const recordParams = record ? { recordKind: record.kind, recordId: record.id } : {};
+    router.push({ pathname, params: { ...context, ...recordParams } } as any);
+  };
+  const goToAccountsView = (view: AccountView, record: Selection = null, context: Partial<{ role: string; search: string; access: string; setup: string; membership: string; enrollment: string; teacher: string; therapist: string }> = {}) => {
+    setMenuOpen(false);
+    pushAccountsRoute(view, record, context);
+    if (view === 'Directory') setViewedAlertIds((current) => new Set([...current, ...professionals.filter((person) => person.invitation === 'Pending' || person.invitation === 'Failed').map((person) => person.id), ...patients.filter((student) => studentSetup(student) === 'Pending').map((student) => student.id)]));
+    if (view === 'Student Requests') setViewedAlertIds((current) => new Set([...current, ...requests.filter((request) => request.status === 'Pending' || request.status === 'More information requested').map((request) => request.id), ...releaseRequests.filter((request) => request.status === 'Pending' || request.status === 'More information requested').map((request) => request.id)]));
+  };
+  const goTo = (target: Page) => {
+    setMenuOpen(false);
+    if (target === 'Accounts') { goToAccountsView('Directory'); return; }
+    router.push({ pathname: '/(admin)/admin-dashboard', params: { page: target === 'Activity Logs' ? 'activity-logs' : target.toLowerCase() } } as any);
+    if (target === 'Activity Logs') setActivity((current) => current.map((entry) => ({ ...entry, read: true })));
+  };
 
-      <View style={styles.headerRight}>
-        <TouchableOpacity
-          style={styles.headerIconBtn}
-          onPress={() => {
-            setShowMenu(false);
-            setShowNotificationsDropdown(!showNotificationsDropdown);
-          }}
-        >
-          <Ionicons name="notifications-outline" size={24} color="#0284C7" />
-          {notifications.some((n) => n.unread) && <View style={styles.notificationDot} />}
-        </TouchableOpacity>
+  const eligibleProfessional = (person: Professional) => person.status === 'Active' && professionalAccess(person) === 'Active' && professionalMembership(person) === 'Active' && person.invitation === 'Completed';
+  const activeTherapists = professionals.filter((person) => person.role === 'Therapist' && eligibleProfessional(person)).sort((a, b) => patients.filter((patient) => patient.therapistId === a.id && patient.enrollment === 'Enrolled').length - patients.filter((patient) => patient.therapistId === b.id && patient.enrollment === 'Enrolled').length || a.name.localeCompare(b.name));
+  const activeTeachers = professionals.filter((person) => person.role === 'Teacher' && eligibleProfessional(person));
+  const therapistCounts = activeTherapists.map((person) => ({ id: person.id, name: person.name, assigned: patients.filter((patient) => patient.therapistId === person.id && patient.enrollment === 'Enrolled').length }));
+  const activeTherapistFor = (id: string | null) => professionals.find((person) => person.id === id)?.name ?? 'Unassigned';
+  const pendingRequests = requests.filter((request) => request.status === 'Pending' || request.status === 'More information requested');
+  const pendingReleaseRequests = releaseRequests.filter((request) => request.status === 'Pending' || request.status === 'More information requested');
+  const pendingInvitations = professionals.filter((person) => person.invitation === 'Pending' || person.invitation === 'Failed');
+  const pendingPatientSetups = patients.filter((patient) => studentSetup(patient) === 'Pending');
+  const pendingAccountSetups = pendingInvitations.length + pendingPatientSetups.length;
+  const reassignmentPatients = patients.filter((patient) => patient.enrollment === 'Enrolled' && patient.therapistId && professionals.some((person) => person.id === patient.therapistId && person.status === 'Suspended'));
+  const unreadCount = notifications.filter((item) => !item.read).length;
+  const shownNotifications = notifications.filter((item) => notificationFilter === 'All' || !item.read);
+  const attentionItems = [
+    ...pendingReleaseRequests.map((request) => {
+      const patient = patients.find((item) => item.id === request.patientId);
+      const therapist = professionals.find((item) => item.id === request.therapistId);
+      const followup = releaseFollowup(request, prototypeNow);
+      return { key: request.id, title: followup.overdue ? 'Student request overdue' : 'Student request', detail: followup.overdue ? `Awaiting ${request.followupRecipient ?? request.origin ?? 'authorized user'} · ${request.reminderCount ?? 0} reminders recorded · last reminder ${request.lastReminderAt ? formatDate(request.lastReminderAt) : 'none'}.` : `${therapist?.name ?? request.origin ?? 'An authorized user'} submitted a request for ${patient?.name ?? 'a Student'}.`, date: `Submitted ${formatDate(request.submitted)}`, icon: 'document-text-outline' as const, tone: 'yellow' as const, action: 'Review', run: () => { setReleaseReplacement(''); setReleaseNote(''); goToAccountsView('Student Requests', { kind: 'release', id: request.id }); } };
+    }),
+    ...pendingRequests.map((request) => {
+      const patient = patients.find((item) => item.id === request.patientId);
+      const therapist = professionals.find((item) => item.id === request.therapistId);
+      return { key: request.id, title: 'Student access request', detail: `${therapist?.name ?? 'A Therapist'} submitted an access suspension request for ${patient?.name ?? 'a Student'}.`, date: `Submitted ${formatDate(request.submitted)}`, icon: 'chatbubble-ellipses-outline' as const, tone: 'yellow' as const, action: 'Review', run: () => { setRequestStatusFilter('Open'); goToAccountsView('Student Requests', { kind: 'request', id: request.id }); } };
+    }),
+    ...reassignmentPatients.map((patient) => ({ key: patient.id, title: 'Reassignment needed', detail: `${patient.name} is assigned to suspended Therapist ${activeTherapistFor(patient.therapistId)}.`, date: '', icon: 'git-branch-outline' as const, tone: 'orange' as const, action: 'Review', run: () => { setAccountRole('Student'); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setPatientTeacher('All teachers'); setPatientTherapist('All therapists'); setAccountSearch(patient.name); goToAccountsView('Directory', { kind: 'patient', id: patient.id }, { role: 'Student', search: patient.name, enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships', teacher: 'All teachers', therapist: 'All therapists' }); } })),
+    ...pendingPatientSetups.map((patient) => ({ key: patient.id, title: 'Student account setup pending', detail: `${patient.name} · Guardian invitation setup is pending.`, date: '', icon: 'mail-unread-outline' as const, tone: 'blue' as const, action: 'Review', run: () => { setAccountRole('Student'); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setAccountSearch(patient.name); goToAccountsView('Directory', { kind: 'patient', id: patient.id }, { role: 'Student', search: patient.name, enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships' }); } })),
+    ...pendingInvitations.map((person) => ({ key: person.id, title: person.invitation === 'Failed' ? 'Invitation delivery issue' : 'Account setup pending', detail: `${person.name} · ${person.role} · ${person.email}`, date: '', icon: 'mail-unread-outline' as const, tone: 'blue' as const, action: 'Review', run: () => goToAccountsView('Directory', { kind: 'professional', id: person.id }, { role: person.role, setup: 'Pending', search: person.name, access: 'All access', membership: 'All memberships', enrollment: 'All enrollment' }) })),
+  ];
 
-        {isDesktop && (
-          <View style={styles.desktopNavLinks}>
-            <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={[styles.desktopNavLink, activeTab === 'dashboard' && styles.desktopNavLinkActive]}>
-              <Text style={[styles.desktopNavText, activeTab === 'dashboard' && styles.desktopNavTextActive]}>Dashboard</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setActiveTab('request')} style={[styles.desktopNavLink, activeTab === 'request' && styles.desktopNavLinkActive]}>
-              <Text style={[styles.desktopNavText, activeTab === 'request' && styles.desktopNavTextActive]}>Requests</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setActiveTab('accounts')} style={[styles.desktopNavLink, activeTab === 'accounts' && styles.desktopNavLinkActive]}>
-              <Text style={[styles.desktopNavText, activeTab === 'accounts' && styles.desktopNavTextActive]}>Accounts</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
-  );
+  const visibleProfessionals = professionals.filter((person) => {
+    const query = accountSearch.trim().toLowerCase();
+    const assignedCount = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled').length;
+    const inactive = professionalAccess(person) === 'Suspended' || professionalMembership(person) === 'Deactivated';
+    return (accountView === 'Archive Center' ? inactive : !inactive)
+      && (accountRole === 'All roles' || accountRole === person.role)
+      && (accountView === 'Archive Center' || accountSetup === 'All setup' || professionalSetup(person) === accountSetup)
+      && (accountView === 'Archive Center' || accountAssignments === 'All assignments' || (accountAssignments === 'Assigned' ? assignedCount > 0 : assignedCount === 0))
+      && (!query || [person.name, person.email, person.role, professionalAccess(person), professionalMembership(person), professionalSetup(person), person.staffId ?? '', person.professionalIdentifier ?? ''].some((value) => value.toLowerCase().includes(query)));
+  });
+  const visibleAccountPatients = patients.filter((patient) => {
+    const query = accountSearch.trim().toLowerCase();
+    const setupStatus = studentSetup(patient);
+    const inactive = studentAccess(patient) === 'Suspended' || studentMembership(patient) === 'Deactivated';
+    return (accountView === 'Archive Center' ? inactive : !inactive && patient.enrollment !== 'Archived')
+      && (accountRole === 'All roles' || accountRole === 'Student')
+      && (accountView === 'Archive Center' || accountSetup === 'All setup' || studentSetup(patient) === setupStatus)
+      && (accountView === 'Archive Center' || accountAssignments === 'All assignments' || (accountAssignments === 'Assigned' ? studentAssignmentStatus(patient) === 'Assigned' : studentAssignmentStatus(patient) === 'Unassigned'))
+      && (!query || [patient.name, patient.studentNumber, patient.guardianContact, studentAccess(patient), studentMembership(patient), 'student'].some((value) => value.toLowerCase().includes(query)));
+  });
+  const trackedClosedEpisodes = careEpisodes.filter((episode) => episode.status === 'Closed');
+  const legacyClosedEpisodes: CareEpisode[] = patients
+    .filter((patient) => patient.enrollment === 'Archived' && !trackedClosedEpisodes.some((episode) => episode.patientId === patient.id))
+    .map((patient) => ({ id: `legacy-${patient.id}`, patientId: patient.id, status: 'Closed' }));
+  const closedCareEpisodes = [...trackedClosedEpisodes, ...legacyClosedEpisodes]
+    .filter((episode) => {
+      const patient = patients.find((item) => item.id === episode.patientId);
+      return !!patient && (accountRole === 'All roles' || accountRole === 'Student') && (!accountSearch.trim() || `${patient.name} ${patient.studentNumber} ${patient.guardianContact} ${archiveEpisodeStatus(episode)} ${episode.closureCategory ?? ''} ${episode.closureReason ?? ''} ${episode.authorizationReference ?? ''}`.toLowerCase().includes(accountSearch.trim().toLowerCase()));
+    })
+    .sort((a, b) => (b.effectiveCloseDate ?? '').localeCompare(a.effectiveCloseDate ?? ''));
+  const accountFilterTags = [
+    ...(accountView === 'Archive Center' && accountAccess !== 'All access' ? [{ label: `Access: ${accountAccess}`, clear: () => setAccountAccess('All access') }] : []),
+    ...(accountSetup !== 'All setup' ? [{ label: `Setup: ${accountSetup}`, clear: () => setAccountSetup('All setup') }] : []),
+    ...(accountAssignments !== 'All assignments' ? [{ label: `Assignments: ${accountAssignments}`, clear: () => setAccountAssignments('All assignments') }] : []),
+  ];
+  const accountViewCriteria = [
+    ...(accountRole !== 'All roles' ? [accountRole] : []),
+    ...accountFilterTags.map(({ label }) => label),
+    ...(accountSearch.trim() ? [`Search: “${accountSearch.trim()}”`] : []),
+  ];
+  const accountViewSummary = accountViewCriteria.length ? `Showing ${accountViewCriteria.join(' · ')}` : 'Showing all accounts';
+  const resetAccountFilters = () => { setAccountRole('All roles'); setAccountAccess('All access'); setAccountSetup('All setup'); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); setAccountAssignments('All assignments'); setPatientTeacher('All teachers'); setPatientTherapist('All therapists'); };
+  const changeAccountRole = (role: string) => { if (role !== accountRole) setSelection(null); setAccountRole(role); if (role === 'Student') setAccountMembership('All memberships'); };
+  const accountFilterKey = [accountView, accountSearch, accountRole, accountAccess, accountSetup, accountAssignments].join('|');
+  const accountPage = accountPageState.filterKey === accountFilterKey ? accountPageState.page : 0;
+  const setAccountPage = (page: number) => setAccountPageState({ page, filterKey: accountFilterKey });
+  const accountRows: AccountRow[] = [
+    ...visibleProfessionals.map((person) => ({ kind: 'professional' as const, person })),
+    ...visibleAccountPatients.map((patient) => ({ kind: 'student' as const, patient })),
+    ...(accountView === 'Archive Center' ? closedCareEpisodes.flatMap((episode) => {
+      const patient = patients.find((item) => item.id === episode.patientId);
+      return patient ? [{ kind: 'archiveEpisode' as const, episode, patient }] : [];
+    }) : []),
+  ].sort((a, b) => {
+    const value = (row: AccountRow) => {
+      if (accountSort.key === 'Account') return row.kind === 'professional' ? row.person.name : row.patient.name;
+      if (accountSort.key === 'ID') return row.kind === 'professional' ? (row.person.role === 'Therapist' ? row.person.staffId ?? '' : row.person.professionalIdentifier ?? '') : row.patient.studentNumber;
+      if (accountSort.key === 'Date') return accountView === 'Archive Center' ? row.kind === 'archiveEpisode' ? row.episode.effectiveCloseDate ?? '' : row.kind === 'professional' ? row.person.lifecycleUpdatedAt ?? '' : row.patient.lifecycleUpdatedAt ?? '' : new Date(`${(row.kind === 'professional' ? row.person.joined : row.patient.registered).slice(0, 10)}T12:00:00`).getTime();
+      if (accountSort.key === 'Access') return row.kind === 'archiveEpisode' ? archiveEpisodeStatus(row.episode) : row.kind === 'professional' ? professionalMembership(row.person) === 'Deactivated' ? 'Deactivated' : professionalAccess(row.person) : studentMembership(row.patient) === 'Deactivated' ? 'Deactivated' : studentAccess(row.patient);
+      if (accountSort.key === 'Setup') return row.kind === 'professional' ? professionalSetup(row.person) : row.kind === 'student' ? studentSetup(row.patient) : '';
+      return row.kind === 'professional' ? patients.filter((student) => (row.person.role === 'Therapist' ? student.therapistId === row.person.id : student.teacherId === row.person.id) && student.enrollment === 'Enrolled').length : -1;
+    };
+    const av = value(a); const bv = value(b);
+    const comparison = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+    return accountSort.direction === 'ascending' ? comparison : -comparison;
+  });
+  const toggleAccountSort = (key: typeof accountSort.key) => setAccountSort((current) => ({ key, direction: current.key === key && current.direction === 'ascending' ? 'descending' : 'ascending' }));
+  const selectedAccountSort = ACCOUNT_SORT_OPTIONS.find((option) => option.key === accountSort.key && option.direction === accountSort.direction) ?? ACCOUNT_SORT_OPTIONS[0];
+  const selectAccountSort = (label: string) => {
+    const option = ACCOUNT_SORT_OPTIONS.find((item) => item.label === label);
+    if (option) setAccountSort({ key: option.key, direction: option.direction });
+  };
+  const accountPageCount = Math.ceil(accountRows.length / 10);
+  const accountPageIndex = Math.min(accountPage, Math.max(0, accountPageCount - 1));
+  const accountPageRows = accountRows.slice(accountPageIndex * 10, (accountPageIndex + 1) * 10);
+  const accountPageNumbers = Array.from({ length: Math.min(5, accountPageCount) }, (_, index) => {
+    const first = Math.max(0, Math.min(accountPageIndex - 2, accountPageCount - 5));
+    return first + index;
+  });
+  const orderedActivity = [...activity].sort((a, b) => b.date.localeCompare(a.date));
+  const visibleLogs = orderedActivity.filter((entry) => (logCategory === 'All activity' || entry.category === logCategory)
+    && (!logSearch.trim() || [entry.title, entry.detail, entry.actor].some((value) => value.toLowerCase().includes(logSearch.trim().toLowerCase()))));
 
-  const renderDashboard = () => (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
+  const makeProfessional = (draft: ProfessionalDraft) => {
+    const profile = draft.role === 'Teacher' ? (({ lookupStaffId: _lookupStaffId, ...teacherRecord }) => teacherRecord)(draft) : draft;
+    const recordIdentifier = draft.role === 'Therapist' ? draft.staffId : draft.professionalIdentifier;
+    const person: Professional = { id: `pro-${draft.role.toLowerCase()}-${recordIdentifier}`, ...profile, access: 'Active', membership: 'Active', status: 'Active', invitation: 'Pending', joined: new Date().toISOString().slice(0, 10), invitationUpdated: new Date().toISOString().slice(0, 10) };
+    setProfessionals((current) => [person, ...current]);
+    addLog(`${draft.role} account created`, `${person.name} · ${draft.role === 'Therapist' ? `Staff ID ${person.staffId}` : `Professional ID ${person.professionalIdentifier}`} · setup pending`, 'Account');
+    addNotification('Invitation awaiting setup', `${person.name} can complete account setup after receiving an invitation.`);
+    setNewAccountOpen(false); setCreatePatientOpen(false); setAccountRole(draft.role); setAccountAccess('All access'); setAccountSetup('All setup'); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); setAccountSearch('');
+    setAccountPage(0);
+    setSelection({ kind: 'professional', id: person.id });
+    flash(`${person.name} added. Account setup is pending.`);
+  };
 
-      <View style={styles.heroCard}>
-        <Text style={styles.heroLabel}>Active Accounts</Text>
-        <Text style={styles.heroNumber}>{accounts.filter((account) => account.status === 'verified').length}</Text>
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.role === 'therapist' && account.status === 'verified').length, backgroundColor: '#1173BA' }]} />
-          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.role === 'teacher' && account.status === 'verified').length, backgroundColor: '#49A11B' }]} />
-          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.role === 'parent' && account.status === 'verified').length, backgroundColor: '#C78800' }]} />
-          <View style={[styles.progressSegment, { flex: accounts.filter((account) => account.status === 'pending').length, backgroundColor: '#C81015' }]} />
-        </View>
-        <View style={styles.legendContainer}>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#1173BA' }]} /><Text style={styles.legendText}>Therapist</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#49A11B' }]} /><Text style={styles.legendText}>Teachers</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C78800' }]} /><Text style={styles.legendText}>Patient</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C81015' }]} /><Text style={styles.legendText}>Pending</Text></View>
-        </View>
-      </View>
+  const makePatient = (record: { studentNumber: string; name: string; grade: string; section: string; guardian: string; guardianEmail: string; guardianPhone: string; school: string }, teacherId: string, therapistId: string) => {
+    const patient: Patient = {
+      id: `pt-${record.studentNumber}`, name: record.name, studentNumber: record.studentNumber, therapistId,
+      access: 'Active', setup: 'Pending', enrollment: 'Enrolled', therapyStatus: 'In progress', registered: new Date().toISOString().slice(0, 10),
+      guardian: record.guardian, guardianContact: record.guardianEmail, school: record.school, grade: record.grade, section: record.section, teacherId,
+    };
+    setPatients((current) => [patient, ...current]);
+    addLog('Student account created', `${patient.name} · ${patient.studentNumber}; invitation pending`, 'Student');
+    addNotification('Student account created', `${patient.name} is assigned to ${activeTherapistFor(therapistId)}. Guardian setup invitation is pending.`);
+    addNotification('New student assignment', `${patient.name} · ${patient.studentNumber} was assigned to ${activeTherapistFor(therapistId)}.`);
+    setAccountSearch(''); setAccountRole('Student'); setAccountAccess('All access'); setAccountSetup('All setup'); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment');
+    setAccountPage(0);
+    flash(`${patient.name} added. The setup invitation is simulated.`);
+  };
 
-      <View style={styles.statsGrid}>
+  const resendInvitation = (person: Professional) => {
+    if (person.invitation === 'Completed') { flash(`${person.name} has already completed account setup.`); return; }
+    setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, invitation: 'Pending', invitationUpdated: new Date().toISOString().slice(0, 10) } : item));
+    addLog('Invitation simulated', `${person.name} · ${person.email}`, 'Account');
+    flash(`Invitation status updated for ${person.name}. No email was sent.`);
+  };
 
-        {/* Therapist Accounts Card */}
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#DDF0F9', borderColor: '#B9DFEE', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
-          <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#1173BA' }]}>{accounts.filter((account) => account.role === 'therapist').length}</Text>
-            <Image
-              source={require('../../../assets/images/admin-therapist.png')}
-              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
-              contentFit="contain"
-            />
-          </View>
-          <Text style={[styles.solidCardTitle, { color: '#1173BA' }]}>Therapist Accounts</Text>
-        </TouchableOpacity>
+  const recordStudentSetupFollowup = (patient: Patient) => {
+    if (studentSetup(patient) === 'Completed') { flash(`${patient.name} has already completed account setup.`); return; }
+    addLog('Student setup follow-up recorded', `${patient.name} · ${patient.studentNumber}; no email was sent`, 'Account');
+    flash(`Setup follow-up recorded for ${patient.name}. No email was sent.`);
+  };
 
-        {/* Teacher Accounts Card */}
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#E2F7CE', borderColor: '#C6ECA7', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
-          <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#49A11B' }]}>{accounts.filter((account) => account.role === 'teacher').length}</Text>
-            <Image
-              source={require('../../../assets/images/admin-teacher.png')}
-              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
-              contentFit="contain"
-            />
-          </View>
-          <Text style={[styles.solidCardTitle, { color: '#49A11B' }]}>Teacher Accounts</Text>
-        </TouchableOpacity>
+  const setProfessionalStatus = (person: Professional, next: ProfessionalStatus, suspensionReason = '') => {
+    const assignedStudents = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled');
+    const hasPatients = assignedStudents.length > 0;
+    if (next === 'Suspended') {
+      if (!suspensionReason.trim()) { flash('Enter a reason to suspend access.'); return; }
+      setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: 'Suspended', access: 'Suspended', membership: professionalMembership(item), lifecycleUpdatedAt: new Date().toISOString() } : item));
+      addLog('Professional access suspended', `${person.name} · ${person.role} · ${suspensionReason}`, 'Account');
+      if (person.role === 'Therapist' && hasPatients) addNotification('Students need reassignment', `${person.name} was suspended; assigned students remain linked until reassigned.`);
+      setSelection(null);
+      flash(`${person.name}’s access is suspended.`);
+      return;
+    }
+    if (person.role === 'Therapist' && next === 'Deactivated' && hasPatients) {
+      setSelection(null);
+      setOffboardingId(person.id);
+      setOffboardingChoices({});
+      setOffboardingReason('');
+      return;
+    }
+    if (person.role === 'Teacher' && next === 'Deactivated' && hasPatients) {
+      setAccountRole('Student'); setSelection(null); setAccountSearch(''); setPatientTeacher(person.id); goToAccountsView('Directory', null, { role: 'Student', search: '', enrollment: 'Enrolled', teacher: person.id, therapist: 'All therapists', access: 'All access', setup: 'All setup' });
+      flash(`Reassign ${assignedStudents.length} enrolled student${assignedStudents.length === 1 ? '' : 's'} to another Teacher before deactivating ${person.name}.`);
+      return;
+    }
+    if (next === 'Active') {
+      const restoringMembership = professionalMembership(person) === 'Deactivated';
+      const accessStillSuspended = professionalAccess(person) === 'Suspended';
+      setConfirmation({
+        title: `${restoringMembership ? 'Reinstate' : 'Reactivate access for'} ${person.name}?`,
+        message: restoringMembership
+          ? `Restore ${person.name}’s center membership. ${accessStillSuspended ? 'Suspended sign-in access remains suspended and needs a separate review. ' : ''}Existing setup and Student relationships remain attached to this record.`
+          : `Restore sign-in access for ${person.name}. Existing Student relationships remain unchanged.`,
+        actionLabel: restoringMembership ? 'Reinstate account' : 'Reactivate access',
+        run: () => {
+          setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: restoringMembership && accessStillSuspended ? 'Suspended' : 'Active', access: restoringMembership ? professionalAccess(item) : 'Active', membership: restoringMembership ? 'Active' : professionalMembership(item), lifecycleUpdatedAt: new Date().toISOString() } : item));
+          addLog(restoringMembership ? 'Professional account reinstated' : 'Professional access reactivated', `${person.name} · ${person.role}`, 'Account');
+          setConfirmation(null); setSelection(null);
+          flash(`${person.name}’s ${restoringMembership ? 'account is reinstated' : 'access is active again'}.`);
+        },
+      });
+      return;
+    }
+    const verb = 'Deactivate account';
+    setConfirmationReason(''); confirmationReasonRef.current = '';
+    setConfirmation({
+      title: `${verb}: ${person.name}?`,
+      message: `This deactivates ${person.name}’s center membership and moves the account to Archive Center while preserving account history.`,
+      actionLabel: verb,
+      danger: true,
+      requiresReason: true,
+      run: () => {
+        if (!confirmationReasonRef.current.trim()) { flash('Enter a reason to deactivate this account.'); return; }
+        setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: next, access: professionalAccess(item), membership: 'Deactivated', lifecycleUpdatedAt: new Date().toISOString() } : item));
+        addLog('Professional account deactivated', `${person.name} · ${person.role} · ${confirmationReasonRef.current.trim()}`, 'Account');
+        setConfirmation(null); setSelection(null);
+        flash(`${person.name}’s account is deactivated.`);
+      },
+    });
+  };
 
-        {/* Patient Accounts Card */}
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FDE9AD', borderColor: '#F3D47B', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
-          <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#C78800' }]}>{accounts.filter((account) => account.role === 'parent').length}</Text>
-            <Image
-              source={require('../../../assets/images/admin-patient.png')}
-              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
-              contentFit="contain"
-            />
-          </View>
-          <Text style={[styles.solidCardTitle, { color: '#C78800' }]}>Patient Accounts</Text>
-        </TouchableOpacity>
+  const confirmProfessionalSuspension = (person: Professional) => {
+    setConfirmationReason(''); confirmationReasonRef.current = '';
+    const hasEnrolledStudents = patients.some((patient) => patient.therapistId === person.id && patient.enrollment === 'Enrolled');
+    setConfirmation({
+      title: `Suspend access for ${person.name}?`,
+      message: `This prevents ${person.name} from signing in. Student assignments and center membership remain unchanged.${person.role === 'Therapist' && hasEnrolledStudents ? ' Assigned Students remain linked and may need reassignment.' : ''}`,
+      actionLabel: 'Suspend access',
+      danger: true,
+      requiresReason: true,
+      run: () => {
+        setProfessionalStatus(person, 'Suspended', confirmationReasonRef.current.trim());
+        setConfirmation(null); setConfirmationReason(''); confirmationReasonRef.current = '';
+      },
+    });
+  };
 
-        {/* Pending Requests Card */}
-        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FBD7D7', borderColor: '#F2B9B9', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('request')}>
-          <View style={styles.solidCardTopRow}>
-            <Text style={[styles.solidCardNum, { color: '#C81015' }]}>{accounts.filter((account) => account.status === 'pending').length}</Text>
-            <Image
-              source={require('../../../assets/images/admin-pending.png')}
-              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
-              contentFit="contain"
-            />
-          </View>
-          <Text style={[styles.solidCardTitle, { color: '#C81015' }]}>Pending Requests</Text>
-        </TouchableOpacity>
+  const finalizeOffboarding = () => {
+    if (!offboardingId) return;
+    if (!offboardingReason.trim()) { flash('Enter a reason to deactivate this account.'); return; }
+    const person = professionals.find((item) => item.id === offboardingId);
+    const assigned = patients.filter((patient) => patient.therapistId === offboardingId && patient.enrollment === 'Enrolled');
+    const missing = assigned.find((patient) => !offboardingChoices[patient.id]);
+    if (missing) { setAssignmentChoicesOpen(missing.id); return; }
+    const changedAt = new Date().toISOString();
+    assigned.forEach((patient) => recordAssignmentEnd(patient, patient.therapistId, 'Therapist', `Therapist reassigned during ${person?.name ?? 'professional'} offboarding: ${offboardingReason.trim()}`, changedAt));
+    setPatients((current) => current.map((patient) => offboardingChoices[patient.id] ? { ...patient, therapistId: offboardingChoices[patient.id] } : patient));
+    setProfessionals((current) => current.map((item) => item.id === offboardingId ? { ...item, status: 'Deactivated', membership: 'Deactivated', lifecycleUpdatedAt: new Date().toISOString() } : item));
+    assigned.forEach((patient) => addLog('Student reassigned', `${patient.name} · ${person?.name} → ${activeTherapistFor(offboardingChoices[patient.id])}`, 'Student'));
+    addLog('Professional account deactivated', `${person?.name} · ${offboardingReason.trim()}`, 'Account');
+    setOffboardingId(null); setOffboardingReason(''); setSelection(null); setAssignmentChoicesOpen(null);
+    flash(`${person?.name} deactivated after student reassignment.`);
+  };
 
-      </View>
+  const reassignPatient = (patient: Patient, therapistId: string) => {
+    const replacement = professionals.find((person) => person.id === therapistId && person.role === 'Therapist' && eligibleProfessional(person));
+    if (!replacement) { flash('Choose an active Therapist to receive this student.'); return; }
+    if (patient.therapistId === therapistId) { flash(`${patient.name} is already assigned to ${replacement.name}.`); return; }
+    const previous = activeTherapistFor(patient.therapistId);
+    setConfirmation({ title: `Reassign ${patient.name}?`, message: `Move this student from ${previous} to ${replacement.name}? Their account and history stay unchanged.`, actionLabel: 'Reassign student', run: () => {
+      recordAssignmentEnd(patient, patient.therapistId, 'Therapist', `Reassigned to ${replacement.name}`);
+      setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, therapistId } : item));
+      addLog('Student reassigned', `${patient.name} · ${previous} → ${replacement.name}`, 'Student');
+      addNotification('Student assignment updated', `${patient.name} is now assigned to ${replacement.name}.`);
+      setConfirmation(null); setAssignmentChoicesOpen(null); setSelection({ kind: 'patient', id: patient.id });
+      flash(`${patient.name} reassigned to ${replacement.name}.`);
+    } });
+  };
 
-      <View style={[styles.bottomGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+  const changeTeacher = (patient: Patient, teacherId: string) => {
+    if (patient.teacherId === teacherId) { setTeacherChoicesOpen(null); return; }
+    const teacher = professionals.find((person) => person.id === teacherId);
+    if (!teacher || teacher.role !== 'Teacher' || !eligibleProfessional(teacher)) { flash('That Teacher is no longer eligible for assignment.'); return; }
+    const previous = professionals.find((person) => person.id === patient.teacherId)?.name ?? 'No Teacher';
+    setConfirmation({ title: `Change Assigned Teacher for ${patient.name}?`, message: `Update the SpeakSteps assignment from ${previous} to ${teacher.name}. School identity records will not change.`, actionLabel: 'Change Teacher', run: () => {
+      recordAssignmentEnd(patient, patient.teacherId, 'Teacher', `Teacher changed to ${teacher.name}`);
+      setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, teacherId } : item));
+      addLog('Assigned Teacher changed', `${patient.name} · ${previous} → ${teacher.name}`, 'Student');
+      addNotification('Assigned Teacher updated', `${patient.name} is now assigned to ${teacher.name}.`);
+      setConfirmation(null); setTeacherChoicesOpen(null); setSelection({ kind: 'patient', id: patient.id }); flash(`${patient.name} is now assigned to ${teacher.name}.`);
+    } });
+  };
 
-        {/* LEFT COLUMN: RECENT REQUESTS */}
-        <View style={[styles.halfColumnBlock, { width: isDesktop ? '48.5%' : '100%' }]}>
-          <View style={styles.recentBlockHeader}>
-            <Text style={styles.recentBlockTitle}>Recent Requests</Text>
-            <TouchableOpacity onPress={() => setActiveTab('request')}>
-              <Text style={styles.viewAllText}>View All</Text>
-            </TouchableOpacity>
-          </View>
+  const changePatientAccess = (patient: Patient, next: PatientAccess) => {
+    if (next === 'Setup pending') return;
+    setConfirmationReason(''); confirmationReasonRef.current = '';
+    const actionLabel = next === 'Suspended' ? 'Suspend access' : 'Reactivate access';
+    setConfirmation({
+      title: `${actionLabel}: ${patient.name}?`,
+      message: next === 'Suspended'
+        ? `This prevents ${patient.name} and their Guardian from signing in. Enrollment, identity details, assignments, and therapy status remain unchanged.`
+        : `This restores sign-in access for ${patient.name}. It does not start or restore a care episode.`,
+      actionLabel,
+      danger: next === 'Suspended',
+      requiresReason: next === 'Suspended',
+      run: () => {
+        setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, access: next, lifecycleUpdatedAt: new Date().toISOString() } : item));
+        const reason = confirmationReasonRef.current.trim();
+        addLog(next === 'Suspended' ? 'Student access suspended' : 'Student access reactivated', `${patient.name} · ${patient.studentNumber}${next === 'Suspended' ? ` · ${reason}` : ''}`, 'Student');
+        addNotification(next === 'Suspended' ? 'Student access suspended' : 'Student access reactivated', `${patient.name} · ${next === 'Suspended' ? reason : 'Access restored by Center Admin'}`);
+        setConfirmation(null); setConfirmationReason('');  setSelection({ kind: 'patient', id: patient.id });
+        flash(`Access ${next === 'Suspended' ? 'suspended' : 'reactivated'} for ${patient.name}.`);
+      },
+    });
+  };
 
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollableList}>
-            {accounts.filter((account) => account.status === 'pending').slice(0, 4).map((request, index, list) => (
-              <TouchableOpacity
-                key={request.id}
-                style={[styles.requestItemDashboard, index === list.length - 1 && { borderBottomWidth: 0 }]}
-                activeOpacity={0.7}
-                onPress={() => setActiveTab('request')}
-              >
-                <Image source={require('../../../assets/images/person1.jpg')} style={styles.requestAvatar} contentFit="cover" />
-                <View style={styles.requestDetails}>
-                  <Text style={styles.requestName} numberOfLines={1}>{request.name}</Text>
-                  <Text style={styles.requestSubtext} numberOfLines={1}>{request.role}   {new Date(request.createdAt).toLocaleDateString()}</Text>
-                </View>
-                <View style={styles.requestRightActions}>
-                  <View style={styles.pendingBadgeDashboard}><Text style={styles.pendingBadgeTextDashboard}>{request.status}</Text></View>
-                  <View style={[styles.chevronCircle, { backgroundColor: '#0284C7', marginLeft: 8 }]}><Ionicons name="chevron-forward" size={14} color="#FFFFFF" /></View>
-                </View>
-              </TouchableOpacity>
-            ))}
-            {!adminLoading && accounts.filter((account) => account.status === 'pending').length === 0
-              ? <Text style={styles.detailText}>No pending account requests.</Text>
-              : null}
-          </ScrollView>
-        </View>
+  const changePatientMembership = (patient: Patient, next: 'Active' | 'Deactivated') => {
+    const deactivating = next === 'Deactivated';
+    setConfirmationReason(''); confirmationReasonRef.current = '';
+    setConfirmation({
+      title: `${deactivating ? 'Deactivate' : 'Reactivate'} ${patient.name}'s account?`,
+      message: deactivating
+        ? `This deactivates ${patient.name}'s account membership and moves the account to Archive Center. Enrollment, assignments, and account access are preserved.`
+        : `This restores ${patient.name}'s account membership and moves it out of Archive Center if access is active.`,
+      actionLabel: deactivating ? 'Deactivate account' : 'Reactivate account',
+      danger: deactivating,
+      requiresReason: deactivating,
+      run: () => {
+        if (deactivating && !confirmationReasonRef.current.trim()) { flash('Enter a reason to deactivate this account.'); return; }
+        setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, membership: next, lifecycleUpdatedAt: new Date().toISOString() } : item));
+        addLog(deactivating ? 'Student account deactivated' : 'Student account reactivated', `${patient.name} · ${patient.studentNumber}${deactivating ? ` · ${confirmationReasonRef.current.trim()}` : ''}`, 'Account');
+        addNotification(deactivating ? 'Student account deactivated' : 'Student account reactivated', `${patient.name} · ${deactivating ? 'Moved to Archive Center' : 'Membership restored'}`);
+        setConfirmation(null); setConfirmationReason(''); setSelection(null);
+        flash(`${patient.name}'s account ${deactivating ? 'deactivated' : 'reactivated'}.`);
+      },
+    });
+  };
 
-        {/* RIGHT COLUMN: RECENT ACTIVITIES */}
-        <View style={[styles.halfColumnBlock, { width: isDesktop ? '48.5%' : '100%' }]}>
-          <View style={styles.recentBlockHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.recentBlockTitle}>Recent Activities</Text>
-              <Ionicons name="person-outline" size={18} color="#1E3A8A" style={{ marginLeft: 8 }} />
+  const closeEnrollmentRecord = (patient: Patient, details: { category: Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>; reason: string; effectiveDate: string; authorizationReference: string }) => {
+    const now = new Date().toISOString();
+    const endedAssignments: AssignmentHistory[] = [
+      ...(patient.therapistId ? [{ id: `assignment-${patient.id}-therapist-${details.effectiveDate}`, patientId: patient.id, professionalId: patient.therapistId, role: 'Therapist' as const, endedAt: details.effectiveDate, endReason: `${details.category}: ${details.reason}` }] : []),
+      ...(patient.teacherId ? [{ id: `assignment-${patient.id}-teacher-${details.effectiveDate}`, patientId: patient.id, professionalId: patient.teacherId, role: 'Teacher' as const, endedAt: details.effectiveDate, endReason: `${details.category}: ${details.reason}` }] : []),
+    ];
+    if (endedAssignments.length) setAssignmentHistory((current) => [...endedAssignments, ...current]);
+    const existingEpisode = careEpisodes.find((episode) => episode.patientId === patient.id && episode.status === 'Active');
+    const closedEpisode: CareEpisode = {
+      ...(existingEpisode ?? { id: `episode-${patient.id}-${careEpisodes.length + 1}`, patientId: patient.id }),
+      status: 'Closed', effectiveCloseDate: details.effectiveDate, closureCategory: details.category,
+      closureReason: details.reason, authorizedBy: 'Center Admin', authorizationReference: details.authorizationReference,
+      therapistIdAtClose: patient.therapistId,
+    };
+    setCareEpisodes((current) => existingEpisode
+      ? current.map((episode) => episode.id === existingEpisode.id ? closedEpisode : episode)
+      : [closedEpisode, ...current]);
+    setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, enrollment: 'Archived', therapistId: null, teacherId: undefined, lifecycleUpdatedAt: now } : item));
+    addLog('Student enrollment closed', `${patient.name} · ${patient.studentNumber} · ${details.category} · Effective ${details.effectiveDate} · ${details.reason} · Authorization ${details.authorizationReference}`, 'Student');
+    addNotification('Student enrollment closed', `${patient.name} · ${details.category}`);
+  };
+
+  const recordAssignmentEnd = (patient: Patient, professionalId: string | undefined | null, role: ProfessionalRole, endReason: string, endedAt = new Date().toISOString()) => {
+    if (!professionalId) return;
+    setAssignmentHistory((current) => [{ id: `assignment-${patient.id}-${professionalId}-${endedAt}`, patientId: patient.id, professionalId, role, endedAt, endReason }, ...current]);
+  };
+
+  const openClosureForm = (patient: Patient) => {
+    setClosurePatient(patient);
+    setClosureCategory('Authorized withdrawal');
+    setClosureReason('');
+    setClosureEffectiveDate(new Date().toISOString().slice(0, 10));
+    setClosureAuthorizationReference('');
+  };
+
+  const submitClosureForm = () => {
+    if (!closurePatient || closurePatient.enrollment !== 'Enrolled') return;
+    const validDate = isValidIsoDate(closureEffectiveDate);
+    if (!closureReason.trim() || !validDate || !closureAuthorizationReference.trim()) { flash('Enter the closure reason, a valid effective date, and the authorization reference.'); return; }
+    const details = { category: closureCategory as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>, reason: closureReason.trim(), effectiveDate: closureEffectiveDate, authorizationReference: closureAuthorizationReference.trim() };
+    const patient = closurePatient;
+    setClosurePatient(null);
+    setConfirmation({
+      title: `Close enrollment — ${details.category.replace('Authorized ', '')}?`,
+      message: `This closes ${patient.name}’s current care episode. Account access stays unchanged. Their current professional assignments will end and remain in Assignment History. The episode will appear in Closed care episodes. Effective ${details.effectiveDate}. Authorization: ${details.authorizationReference}.`,
+      actionLabel: 'Close enrollment', danger: true,
+      run: () => {
+        closeEnrollmentRecord(patient, details);
+        setConfirmation(null); setSelection({ kind: 'patient', id: patient.id });
+        flash(`${patient.name}’s enrollment closed in this demo session.`);
+      },
+    });
+  };
+
+  const openReenrollment = (patient: Patient) => {
+    if (patient.enrollment !== 'Archived') { flash('This student already has an active enrollment.'); return; }
+    if (patients.some((item) => item.id !== patient.id && item.studentNumber === patient.studentNumber && item.enrollment === 'Enrolled')) { flash('An active enrollment already exists for this Student identity.'); return; }
+    setReenrollmentPatient(patient); setReenrollmentTherapistId(''); setReenrollmentTeacherId('');
+  };
+
+  const completeReenrollment = () => {
+    const patient = reenrollmentPatient;
+    if (!patient || patient.enrollment !== 'Archived') return;
+    const therapist = professionals.find((person) => person.id === reenrollmentTherapistId && person.role === 'Therapist' && eligibleProfessional(person));
+    const teacher = professionals.find((person) => person.id === reenrollmentTeacherId && person.role === 'Teacher' && eligibleProfessional(person));
+    if (!therapist || !teacher) { flash('Choose an eligible Therapist and Teacher to continue.'); return; }
+    if (patients.some((item) => item.id !== patient.id && item.studentNumber === patient.studentNumber && item.enrollment === 'Enrolled')) { flash('An active enrollment already exists for this Student identity.'); return; }
+    const now = new Date().toISOString();
+    const hasPriorEpisode = careEpisodes.some((episode) => episode.patientId === patient.id && episode.status === 'Closed');
+    const legacyAssignments: AssignmentHistory[] = !hasPriorEpisode ? [
+      ...(patient.therapistId ? [{ id: `legacy-assignment-${patient.id}-therapist`, patientId: patient.id, professionalId: patient.therapistId, role: 'Therapist' as const, endReason: 'Previously linked to the closed episode; end details not recorded.' }] : []),
+      ...(patient.teacherId ? [{ id: `legacy-assignment-${patient.id}-teacher`, patientId: patient.id, professionalId: patient.teacherId, role: 'Teacher' as const, endReason: 'Previously linked to the closed episode; end details not recorded.' }] : []),
+    ] : [];
+    setCareEpisodes((current) => [
+      ...(!hasPriorEpisode ? [{ id: `legacy-${patient.id}`, patientId: patient.id, status: 'Closed' as const, therapistIdAtClose: patient.therapistId }] : []),
+      { id: `episode-${patient.id}-${careEpisodes.length + 1}`, patientId: patient.id, status: 'Active', startedAt: now },
+      ...current,
+    ]);
+    if (legacyAssignments.length) setAssignmentHistory((current) => [...legacyAssignments, ...current]);
+    setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, enrollment: 'Enrolled', therapistId: therapist.id, teacherId: teacher.id, lifecycleUpdatedAt: now } : item));
+    addLog('Student re-enrollment initiated', `${patient.name} · ${patient.studentNumber} · new care episode · Therapist ${therapist.name} · Teacher ${teacher.name}`, 'Student');
+    addNotification('Student re-enrollment initiated', `${patient.name} · a new care episode was started.`);
+    setReenrollmentPatient(null); setReenrollmentTherapistId(''); setReenrollmentTeacherId('');
+    flash(`New care episode started for ${patient.name} in this demo session.`);
+  };
+
+  const resolveRequest = (request: SuspensionRequest, status: Exclude<RequestStatus, 'Pending'>) => {
+    if (request.status !== 'Pending' && request.status !== 'More information requested') { flash('This request has already been resolved.'); return; }
+    const patient = patients.find((item) => item.id === request.patientId);
+    const therapist = professionals.find((item) => item.id === request.therapistId);
+    if (!releaseNote.trim()) { flash('Add a short administrative reason before recording this decision.'); return; }
+    if (status === 'Approved' && patient?.enrollment === 'Archived') { flash('Restore the Student enrollment before approving this request.'); return; }
+    if (status === 'Approved' && patient && (studentSetup(patient) !== 'Completed' || studentAccess(patient) !== 'Active')) { flash('This Student does not currently have active sign-in access to suspend.'); return; }
+    const now = new Date().toISOString();
+    const decisionText = status === 'Approved' ? 'Suspension approved' : status === 'Declined' ? 'Request declined' : 'More information requested';
+    setRequests((current) => current.map((item) => item.id === request.id ? { ...item, status, ...(status !== 'More information requested' ? { resolvedBy: 'Center Admin', resolvedAt: now, resolutionReason: releaseNote.trim() } : {}), events: [...(item.events ?? []), { id: `event-${Date.now()}`, title: decisionText, detail: status === 'Approved' ? `Student and Guardian sign-in suspended. Enrollment and assignments are unchanged. Reason: ${releaseNote.trim()}` : releaseNote.trim(), actor: 'Center Admin', date: now }] } : item));
+    if (status === 'Approved' && patient) setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, access: 'Suspended', lifecycleUpdatedAt: new Date().toISOString() } : item));
+    if (status === 'More information requested') {
+      addLog('Access suspension request needs more information', `${patient?.name ?? 'Student'} \u00B7 ${releaseNote.trim()}`, 'Request');
+      addNotification('Access request needs more information', `${patient?.name ?? 'Student'} \u00B7 ${releaseNote.trim()}`);
+      setRequestAction(''); setReleaseNote(''); setSelection(null); flash('More information requested. Access remains unchanged.'); return;
+    }
+    const decision = status === 'Approved' ? 'approved' : 'declined';
+    addLog(`Suspension request ${decision}`, `${patient?.name ?? 'Patient'} \u00B7 request ${request.id} \u00B7 by ${therapist?.name ?? 'Therapist'}`, 'Request');
+    addNotification(`Request ${decision}`, `${patient?.name ?? 'Patient'} \u00B7 request ${request.id}`);
+    addNotification(status === 'Approved' ? 'Student access suspended' : 'Student access request declined', `${patient?.name ?? 'Student'} \u00B7 ${request.id}`);
+    setSelection(null); flash(status === 'Approved' ? `Access suspended for ${patient?.name}.` : `Request declined. ${patient?.name} access is unchanged.`);
+  };
+
+  const resolveReleaseRequest = (request: ReleaseRequest, decision: 'More information requested' | 'Approved & reassigned' | 'Approved & archived' | 'Declined') => {
+    const patient = patients.find((item) => item.id === request.patientId);
+    if (!patient) { flash('This student record is no longer available.'); return; }
+    if (request.status !== 'Pending' && request.status !== 'More information requested') { flash('This request has already been resolved.'); return; }
+    const stage = releaseStage(request);
+    if ((decision.startsWith('Approved') || decision === 'Declined') && stage !== 'Ready for Admin Review') { flash('Wait for the required Guardian or Teacher response before making a final decision.'); return; }
+    if (decision === 'Approved & reassigned' && (!releaseReplacement || releaseReplacement === patient.therapistId)) { flash('Choose an active replacement Therapist first.'); return; }
+    if ((decision === 'More information requested' || decision === 'Declined' || decision === 'Approved & archived') && !releaseNote.trim()) { flash('Add an administrative note before recording this decision.'); return; }
+    if (decision === 'Approved & archived' && (!isValidIsoDate(releaseEffectiveDate) || !releaseAuthorizationReference.trim())) { flash('Enter a valid effective date and authorization reference before closing enrollment.'); return; }
+    if (decision === 'Approved & archived' && (!request.attachment || request.teacherVerification !== 'Verified' || (request.origin !== 'Therapist' && request.guardianConfirmation !== 'Confirmed' && request.guardianConfirmation !== 'Not required'))) { flash('Archival requires verified school evidence, Teacher verification, and any required Guardian confirmation.'); return; }
+    if (decision === 'Approved & archived' && (!['Transfer', 'Withdrawal', 'Enrollment release'].includes(request.requestType ?? 'Enrollment release') || request.reason === 'No longer receiving services')) { flash('A Therapist assignment change cannot archive Student enrollment.'); return; }
+    if (decision.startsWith('Approved')) {
+      const replacementName = professionals.find((person) => person.id === releaseReplacement)?.name;
+      const archived = decision === 'Approved & archived';
+      setConfirmation({ title: archived ? `Close enrollment - ${patient.name}?` : `Approve reassignment for ${patient.name}?`, message: archived ? `This records an authorized ${request.requestType === 'Transfer' ? 'external transfer' : 'withdrawal'}, ends current assignments, and keeps account access unchanged. Effective ${releaseEffectiveDate}. Authorization: ${releaseAuthorizationReference}. Evidence: ${request.attachment}. Administrative note: ${releaseNote.trim()}` : `Change the SpeakSteps Therapist assignment from ${activeTherapistFor(patient.therapistId)} to ${replacementName}. Enrollment and access stay unchanged.`, actionLabel: archived ? 'Close enrollment' : 'Approve & Reassign', danger: archived, run: () => { applyReleaseDecision(request, decision); setConfirmation(null); setRequestAction(''); } });
+      return;
+    }
+    applyReleaseDecision(request, decision);
+  };
+
+  const applyReleaseDecision = (request: ReleaseRequest, decision: ReleaseRequest['status']) => {
+    const patient = patients.find((item) => item.id === request.patientId);
+    if (!patient) return;
+    if (decision === 'Approved & reassigned') {
+      const replacement = professionals.find((person) => person.id === releaseReplacement && person.role === 'Therapist' && eligibleProfessional(person));
+      if (!replacement || replacement.id === patient.therapistId) { flash('The selected Therapist is no longer eligible. Choose another replacement.'); return; }
+    }
+    if (decision === 'Approved & archived' && (!request.attachment || request.teacherVerification !== 'Verified' || (request.origin !== 'Therapist' && request.guardianConfirmation !== 'Confirmed' && request.guardianConfirmation !== 'Not required') || !['Transfer', 'Withdrawal', 'Enrollment release'].includes(request.requestType ?? 'Enrollment release') || request.reason === 'No longer receiving services')) { flash('This request does not have the required verified school evidence for archival.'); return; }
+    const now = new Date().toISOString();
+    const resolutionReason = decision === 'Approved & archived' ? `${request.reason} \u00B7 Effective ${releaseEffectiveDate} \u00B7 Authorization ${releaseAuthorizationReference.trim()} \u00B7 Evidence ${request.attachment} \u00B7 ${releaseNote.trim()}` : decision === 'Approved & reassigned' ? `Reassigned to ${professionals.find((person) => person.id === releaseReplacement)?.name ?? 'selected Therapist'}` : releaseNote.trim();
+    const resolutionTitle = decision === 'Approved & archived' ? 'Enrollment closed' : decision === 'Approved & reassigned' ? 'Therapist assignment updated' : 'Request declined';
+    setReleaseRequests((current) => current.map((item) => item.id === request.id ? { ...item, status: decision, ...(decision !== 'More information requested' ? { resolvedBy: 'Center Admin', resolvedAt: now, resolutionReason, ...(decision === 'Approved & archived' ? { effectiveCloseDate: releaseEffectiveDate, authorizationReference: releaseAuthorizationReference.trim() } : {}), events: [...(item.events ?? []), { id: `event-${Date.now()}`, title: resolutionTitle, detail: resolutionReason, actor: 'Center Admin', date: now }] } : {}) } : item));
+    if (decision === 'Approved & reassigned') {
+      const replacement = professionals.find((person) => person.id === releaseReplacement)!;
+      recordAssignmentEnd(patient, patient.therapistId, 'Therapist', `Reassigned to ${replacement.name}`);
+      setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, therapistId: replacement.id } : item));
+      addLog('Student release approved & reassigned', `${patient.name} \u00B7 ${replacement.name}`, 'Request');
+      addNotification('Student assignment updated', `${patient.name} is now assigned to ${replacement.name}.`);
+    } else if (decision === 'Approved & archived') {
+      closeEnrollmentRecord(patient, {
+        category: request.reason === 'Transferred to another school' ? 'External transfer' : request.reason === 'Officially withdrawn' ? 'Authorized withdrawal' : 'Other authorized administrative closure',
+        reason: `${request.reason} \u00B7 ${releaseNote.trim()}`,
+        effectiveDate: releaseEffectiveDate,
+        authorizationReference: releaseAuthorizationReference.trim(),
+      });
+      addLog('Student release approved & archived', `${patient.name} \u00B7 ${request.reason} \u00B7 ${request.attachment}`, 'Request');
+      addNotification('Student enrollment archived', `${patient.name} \u00B7 ${patient.studentNumber}`);
+    } else if (decision === 'More information requested') {
+      addLog('More information requested', `${patient.name} \u00B7 ${releaseNote.trim() || 'Clarification requested'}`, 'Request');
+      addNotification('Release request needs more information', `${patient.name} \u00B7 ${releaseNote.trim() || 'Please add supporting context.'}`);
+      setReleaseRequests((current) => current.map((item) => item.id === request.id ? { ...item, workflowStage: 'Awaiting Supporting Evidence', events: [...(item.events ?? []), { id: `event-${Date.now()}`, title: 'More information requested', detail: releaseNote.trim(), actor: 'Center admin', date: new Date().toISOString() }] } : item));
+    } else {
+      addLog('Student release request declined', `${patient.name} \u00B7 ${releaseNote.trim() || 'Existing assignment retained'}`, 'Request');
+      addNotification('Student request declined', `${patient.name} \u00B7 ${releaseNote.trim()}`);
+    }
+    if (decision.startsWith('Approved')) addNotification('Student request resolved', `${patient.name} \u00B7 ${decision.toLowerCase()}.`);
+    setReleaseReplacement(''); setReleaseNote(''); setReleaseEffectiveDate(new Date().toISOString().slice(0, 10)); setReleaseAuthorizationReference(''); setSelection(null);
+    flash(decision === 'More information requested' ? 'More information requested. The current assignment remains unchanged.' : `Release request ${decision.toLowerCase()}.`);
+  };
+
+  const recordReleaseReminder = (request: ReleaseRequest) => {
+    if (request.status !== 'Pending' && request.status !== 'More information requested') { flash('This request no longer needs a reminder.'); return; }
+    if (request.origin === 'Therapist') { flash('This request is not waiting on a Guardian or Teacher response.'); return; }
+    const count = request.reminderCount ?? 0;
+    const days = Math.floor((prototypeNow - new Date(`${request.submitted}T12:00:00`).getTime()) / 86400000);
+    const followup = releaseFollowup(request, prototypeNow);
+    const threshold = followup.nextDay;
+    if (threshold === undefined || days < threshold) { flash('The next follow-up reminder is not due yet.'); return; }
+    const day = threshold;
+    const patient = patients.find((item) => item.id === request.patientId);
+    const date = new Date(prototypeNow).toISOString();
+    const followupTitle = day === 14 ? 'Day 14 admin escalation recorded' : `Day ${day} reminder recorded`;
+    setReleaseRequests((current) => current.map((item) => item.id === request.id ? { ...item, reminderCount: count + 1, lastReminderAt: date, events: [...(item.events ?? []), { id: `event-${item.id}-${count + 1}`, title: followupTitle, detail: `${day === 14 ? 'Administrative escalation' : 'Follow-up reminder'} for ${item.followupRecipient ?? item.origin ?? 'authorized user'} recorded. No message was sent.`, actor: 'System simulation', date }] } : item));
+    addLog(day === 14 ? 'Student request Day 14 escalation recorded' : 'Student request follow-up recorded', `${patient?.name ?? 'Student'} \u00B7 Day ${day} \u00B7 no message sent`, 'Request');
+    flash(`Day ${day} ${day === 14 ? 'escalation' : 'follow-up'} recorded. No message was sent.`);
+  };
+
+  const openDashboardMetric = (target: 'accounts' | 'students' | 'requests') => {
+    if (target === 'accounts') { setAccountRole('All roles'); setAccountAccess('All access'); setAccountSetup('Pending'); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); goToAccountsView('Directory', null, { role: 'All roles', access: 'All access', setup: 'Pending', membership: 'All memberships', enrollment: 'All enrollment' }); }
+    else if (target === 'students') { setAccountRole('Student'); setAccountEnrollment('Enrolled'); setAccountAccess('All access'); setAccountSetup('All setup'); setPatientTherapist('All therapists'); setPatientTeacher('All teachers'); setAccountSearch(''); goToAccountsView('Directory', null, { role: 'Student', enrollment: 'Enrolled', access: 'All access', setup: 'All setup', membership: 'All memberships', search: '', teacher: 'All teachers', therapist: 'All therapists' }); }
+    else { setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setRequestStatusFilter('Open'); goToAccountsView('Student Requests'); }
+  };
+
+  const openNotification = (item: (typeof notifications)[number]) => {
+    setNotifications((current) => current.map((note) => note.id === item.id ? { ...note, read: true } : note));
+    setShowNotifications(false);
+    const student = patients.find((person) => item.detail.includes(person.name));
+    const professional = professionals.find((person) => item.detail.includes(person.name));
+    const text = `${item.title} ${item.detail}`.toLowerCase();
+
+    if (text.includes('invitation') || text.includes('setup')) {
+      if (student) {
+        setAccountRole('Student'); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setAccountSearch(student.name); goToAccountsView('Directory', { kind: 'patient', id: student.id }, { role: 'Student', enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships', search: student.name });
+      } else {
+        setAccountRole(professional?.role ?? 'All roles'); setAccountAccess('All access'); setAccountSetup('Pending'); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); setAccountSearch(professional?.name ?? ''); goToAccountsView('Directory', professional ? { kind: 'professional', id: professional.id } : null, { role: professional?.role ?? 'All roles', access: 'All access', setup: 'Pending', membership: 'All memberships', enrollment: 'All enrollment', search: professional?.name ?? '' });
+      }
+      return;
+    }
+    if (text.includes('reassign')) {
+      setAccountRole('Student'); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setAccountSearch(student?.name ?? ''); goToAccountsView('Directory', student ? { kind: 'patient', id: student.id } : null, { role: 'Student', enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships', search: student?.name ?? '' });
+      return;
+    }
+    if (text.includes('request') || text.includes('suspend') || text.includes('release')) {
+      const release = releaseRequests.find((request) => (request.status === 'Pending' || request.status === 'More information requested') && (!student || request.patientId === student.id));
+      const access = requests.find((request) => (request.status === 'Pending' || request.status === 'More information requested') && (!student || request.patientId === student.id));
+      setRequestStatusFilter('Open'); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); goToAccountsView('Student Requests', release ? { kind: 'release', id: release.id } : access ? { kind: 'request', id: access.id } : null);
+      return;
+    }
+    if (student) {
+      setAccountRole('Student'); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setAccountSearch(student.name); goToAccountsView('Directory', { kind: 'patient', id: student.id }, { role: 'Student', enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships', search: student.name });
+      return;
+    }
+    if (professional) {
+      setAccountRole(professional.role); setAccountSearch(professional.name); goToAccountsView('Directory', { kind: 'professional', id: professional.id }, { role: professional.role, search: professional.name, access: 'All access', setup: 'All setup', membership: 'All memberships', enrollment: 'All enrollment' });
+      return;
+    }
+    goTo('Activity Logs'); setLogSearch(item.title);
+  };
+
+  const selectedProfessional = selection?.kind === 'professional' ? professionals.find((person) => person.id === selection.id) : undefined;
+  const selectedProfessionalStudents = selectedProfessional ? patients.filter((patient) => (selectedProfessional.role === 'Therapist' ? patient.therapistId === selectedProfessional.id : patient.teacherId === selectedProfessional.id)) : [];
+  const selectedArchiveEpisode = selection?.kind === 'archiveEpisode' ? closedCareEpisodes.find((episode) => episode.id === selection.id) : undefined;
+  const selectedPatient = selection?.kind === 'patient' ? patients.find((patient) => patient.id === selection.id) : selectedArchiveEpisode ? patients.find((patient) => patient.id === selectedArchiveEpisode.patientId) : undefined;
+  const selectedRequest = selection?.kind === 'request' ? requests.find((request) => request.id === selection.id) : undefined;
+  const selectedRelease = selection?.kind === 'release' ? releaseRequests.find((request) => request.id === selection.id) : undefined;
+  const selectedRequestPatient = selectedRequest ? patients.find((patient) => patient.id === selectedRequest.patientId) : undefined;
+  const selectedRequestTherapist = selectedRequest ? professionals.find((person) => person.id === selectedRequest.therapistId) : undefined;
+  const selectedReleasePatient = selectedRelease ? patients.find((patient) => patient.id === selectedRelease.patientId) : undefined;
+  const selectedReleaseSubmitter = selectedRelease && selectedReleasePatient ? selectedRelease.origin === 'Guardian' ? selectedReleasePatient.guardian || 'Guardian' : professionals.find((person) => person.id === (selectedRelease.origin === 'Teacher' ? selectedReleasePatient.teacherId : selectedRelease.therapistId))?.name ?? selectedRelease.origin ?? 'Therapist' : '';
+  const selectedAccessSubmitter = selectedRequestTherapist?.name ?? 'Therapist';
+  const selectedReleaseResolutionEvent = selectedRelease?.events?.slice().reverse().find((event) => /archiv|assignment updated|declined/i.test(event.title));
+  const selectedAccessResolutionEvent = selectedRequest?.events?.slice().reverse().find((event) => /suspension approved|request declined/i.test(event.title));
+  const inlineAccountDetails = desktop && Boolean(selectedProfessional || selectedPatient || selectedRelease || selectedRequest);
+  useEffect(() => {
+    const targetWidth = inlineAccountDetails ? Math.min(520, Math.max(360, width * 0.34)) : 0;
+    Animated.parallel([
+      Animated.timing(accountDetailPaneWidth, { toValue: targetWidth, duration: 230, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(accountDetailPaneOpacity, { toValue: inlineAccountDetails ? 1 : 0, duration: 170, useNativeDriver: false }),
+    ]).start();
+  }, [accountDetailPaneOpacity, accountDetailPaneWidth, inlineAccountDetails, width]);
+  useEffect(() => {
+    if (!inlineAccountDetails || Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const pane = accountDetailPaneRef.current as HTMLElement | null;
+      if (!(event.target instanceof Element) || pane?.contains(event.target)) return;
+      if (event.target.closest('button, a, input, select, textarea, [role="button"], [role="tab"]')) return;
+      setSelection(null);
+    };
+    document.addEventListener('click', closeOnOutsideClick);
+    return () => document.removeEventListener('click', closeOnOutsideClick);
+  }, [inlineAccountDetails]);
+  useEffect(() => {
+    const accountDetailsOpen = page === 'Accounts' && (accountView === 'Directory' || accountView === 'Student Requests') && Boolean(selection);
+    if (!accountDetailsOpen || confirmation || Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setSelection(null);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [accountView, confirmation, page, selection]);
+  const offboardingPerson = professionals.find((person) => person.id === offboardingId);
+  const offboardingPatients = patients.filter((patient) => patient.therapistId === offboardingId && patient.enrollment === 'Enrolled');
+  const eligibleReplacements = (patientId: string) => activeTherapists.filter((person) => person.id !== patients.find((item) => item.id === patientId)?.therapistId);
+
+  if (!fontsLoaded) return null;
+
+  const avatar = (name: string, color = C.blue) => <View style={[styles.avatar, { backgroundColor: color === C.blue ? C.blueSoft : color + '18' }]}><Text style={[styles.avatarText, { color }]}>{initials(name)}</Text></View>;
+  const selectedAccountHeader = selectedProfessional ? <AccountDetailsHeader
+    name={selectedProfessional.name}
+    identifier={`${selectedProfessional.role === 'Therapist' ? 'Staff ID' : 'Professional ID'}: ${selectedProfessional.role === 'Therapist' ? selectedProfessional.staffId || 'Not recorded' : selectedProfessional.professionalIdentifier || 'Unavailable in school records'}`}
+    email={selectedProfessional.email}
+    avatar={avatar(selectedProfessional.name)}
+    states={[
+      { label: `Access ${professionalAccess(selectedProfessional).toLowerCase()}`, tone: professionalAccess(selectedProfessional) === 'Active' ? 'green' : 'red' },
+      { label: selectedProfessional.invitation === 'Completed' ? 'Setup completed' : selectedProfessional.invitation === 'Failed' ? 'Setup needs attention' : 'Setup pending', tone: selectedProfessional.invitation === 'Completed' ? 'green' : selectedProfessional.invitation === 'Failed' ? 'red' : 'yellow' },
+      ...(professionalMembership(selectedProfessional) === 'Deactivated' ? [{ label: 'Membership deactivated', tone: 'red' as const }] : []),
+    ]}
+    onClose={() => setSelection(null)}
+  /> : selectedPatient ? <AccountDetailsHeader
+    name={selectedPatient.name}
+    identifier={`Student Number: ${selectedPatient.studentNumber}`}
+    email={selectedPatient.guardianContact.includes('@') ? selectedPatient.guardianContact : undefined}
+    avatar={avatar(selectedPatient.name, C.green)}
+    states={[
+      { label: `Access ${studentAccess(selectedPatient).toLowerCase()}`, tone: studentAccess(selectedPatient) === 'Active' ? 'green' : 'red' },
+      { label: studentSetup(selectedPatient) === 'Completed' ? 'Setup completed' : 'Setup pending', tone: studentSetup(selectedPatient) === 'Completed' ? 'green' : 'yellow' },
+      ...(studentMembership(selectedPatient) === 'Deactivated' ? [{ label: 'Account in Archive Center', tone: 'red' as const }] : []),
+    ]}
+    onClose={() => setSelection(null)}
+  /> : (selectedRelease && selectedReleasePatient) || (selectedRequest && selectedRequestPatient) ? (() => {
+    const patient = selectedReleasePatient ?? selectedRequestPatient!;
+    const status = selectedRelease?.status ?? selectedRequest!.status;
+    const stage = selectedRelease ? releaseStage(selectedRelease) : 'Ready for Admin Review';
+    return <AccountDetailsHeader name={patient.name} identifier={`Student Number: ${patient.studentNumber}`} email={patient.guardianContact.includes('@') ? patient.guardianContact : undefined} avatar={avatar(patient.name, C.green)} states={[{ label: status, tone: status === 'Approved' || status.startsWith('Approved') ? 'green' : status === 'Declined' ? 'neutral' : 'yellow' }, { label: stage, tone: stage === 'Ready for Admin Review' ? 'blue' : 'yellow' }]} onClose={() => setSelection(null)} />;
+  })() : null;
+  const searchedStudentId = accountView === 'Directory'
+    && Boolean(accountSearch.trim())
+    && (accountRole === 'All roles' || accountRole === 'Student')
+    && patients.some((patient) => patient.enrollment !== 'Archived' && studentAccess(patient) !== 'Suspended' && studentMembership(patient) === 'Active' && patient.studentNumber.trim().toLowerCase() === accountSearch.trim().toLowerCase());
+  const showStudentDetailsColumns = accountRole === 'Student' || searchedStudentId;
+  const professionalRow = (person: Professional) => {
+    const assigned = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled').length;
+    const identifier = person.role === 'Therapist' ? person.staffId ?? 'Not recorded' : person.professionalIdentifier ?? 'Unavailable';
+    return <Pressable key={person.id} onPress={accountView === 'Archive Center' ? undefined : () => setSelection({ kind: 'professional', id: person.id })} style={({ hovered }) => [styles.tableRow, inlineAccountDetails && detailPanelStyles.tableWithPanel, hovered && styles.rowHover]} accessibilityRole={accountView === 'Archive Center' ? 'group' : 'button'} accessibilityLabel={`View ${person.name}, ${person.role}`}>
+      <View style={[styles.personCell, inlineAccountDetails && detailPanelStyles.personColumnWithPanel]}>{inlineAccountDetails ? null : avatar(person.name)}<View style={styles.personText}><Text style={styles.personName}>{person.name}</Text><Text style={styles.secondaryText}>{person.email}</Text></View></View>
+      <Text style={[styles.tableCell, styles.idTableCell, inlineAccountDetails && detailPanelStyles.idColumnWithPanel]} numberOfLines={1}>{identifier}</Text>
+      <View style={[styles.tableCell, styles.statusTableCell, inlineAccountDetails && detailPanelStyles.statusColumnWithPanel]}><Status label={professionalMembership(person) === 'Deactivated' ? 'Deactivated' : professionalAccess(person)} tone={professionalAccess(person) === 'Active' && professionalMembership(person) !== 'Deactivated' ? 'green' : 'red'} />{professionalMembership(person) === 'Deactivated' ? <Text style={styles.secondaryText}>Membership deactivated</Text> : null}</View>
+      <View style={[styles.tableCell, styles.setupTableCell, inlineAccountDetails && detailPanelStyles.setupColumnWithPanel]}>{accountView === 'Archive Center' ? <Text style={styles.secondaryText}>{person.lifecycleUpdatedAt ? formatDate(person.lifecycleUpdatedAt) : 'Date not recorded'}</Text> : <SetupStatus label={person.invitation === 'Failed' ? 'Failed' : professionalSetup(person)} />}</View>
+      {accountView === 'Archive Center' ? <View style={[styles.tableCell, styles.assignmentTableCell, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}><TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${person.name} details`} onPress={(event) => { event.stopPropagation(); setSelection({ kind: 'professional', id: person.id }); }} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="eye-outline" size={17} color={C.blueDeep} /></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${professionalMembership(person) === 'Deactivated' ? 'Reinstate' : 'Restore access for'} ${person.name}`} onPress={(event) => { event.stopPropagation(); setProfessionalStatus(person, 'Active'); }} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="refresh-outline" size={17} color={C.blueDeep} /></TouchableOpacity></View> : <Text style={[styles.tableCell, styles.assignmentTableCell, inlineAccountDetails && detailPanelStyles.assignmentColumnWithPanel]}>{assigned}</Text>}
+      {accountView === 'Archive Center' ? null : <View style={styles.rowAction}><Ionicons name="chevron-forward" size={17} color={C.subtle} /></View>}
+    </Pressable>;
+  };
+  const accountStudentRow = (patient: Patient) => <Pressable key={patient.id} onPress={accountView === 'Archive Center' ? undefined : () => setSelection({ kind: 'patient', id: patient.id })} style={({ hovered }) => [styles.tableRow, inlineAccountDetails && detailPanelStyles.tableWithPanel, hovered && styles.rowHover]} accessibilityRole={accountView === 'Archive Center' ? 'group' : 'button'} accessibilityLabel={`View Student ${patient.name}, student number ${patient.studentNumber}`}>
+    <View style={[styles.personCell, inlineAccountDetails && detailPanelStyles.personColumnWithPanel]}>{inlineAccountDetails ? null : avatar(patient.name, C.green)}<View style={styles.personText}><Text style={styles.personName}>{patient.name}</Text><Text style={styles.secondaryText}>{patient.guardianContact}</Text></View></View>
+    <Text style={[styles.tableCell, styles.idTableCell, inlineAccountDetails && detailPanelStyles.idColumnWithPanel]}>{patient.studentNumber}</Text>
+    {showStudentDetailsColumns ? <><Text style={[styles.tableCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]} numberOfLines={1}>{professionals.find((person) => person.id === patient.teacherId)?.name ?? 'Unassigned'}</Text><Text style={[styles.tableCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]} numberOfLines={1}>{professionals.find((person) => person.id === patient.therapistId)?.name ?? 'Unassigned'}</Text><Text style={[styles.tableCell, styles.enrollmentTableCell, inlineAccountDetails && detailPanelStyles.enrollmentColumnWithPanel]}>{patient.enrollment}</Text></> : null}
+    <View style={[styles.tableCell, styles.statusTableCell, inlineAccountDetails && detailPanelStyles.statusColumnWithPanel]}><Status label={studentMembership(patient) === 'Deactivated' ? 'Deactivated' : studentAccess(patient)} tone={studentMembership(patient) === 'Deactivated' || studentAccess(patient) === 'Suspended' ? 'red' : 'green'} /></View>
+    <View style={[styles.tableCell, styles.setupTableCell, inlineAccountDetails && detailPanelStyles.setupColumnWithPanel]}>{accountView === 'Archive Center' ? <Text style={styles.secondaryText}>{patient.lifecycleUpdatedAt ? formatDate(patient.lifecycleUpdatedAt) : 'Date not recorded'}</Text> : <SetupStatus label={studentSetup(patient)} />}</View>
+    {accountView === 'Archive Center' ? <View style={[styles.tableCell, styles.assignmentTableCell, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}><TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${patient.name} details`} onPress={(event) => { event.stopPropagation(); setSelection({ kind: 'patient', id: patient.id }); }} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="eye-outline" size={17} color={C.blueDeep} /></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityLabel={`${studentMembership(patient) === 'Deactivated' ? 'Reinstate' : 'Restore access for'} ${patient.name}`} onPress={(event) => { event.stopPropagation(); if (studentMembership(patient) === 'Deactivated') changePatientMembership(patient, 'Active'); else changePatientAccess(patient, 'Active'); }} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="refresh-outline" size={17} color={C.blueDeep} /></TouchableOpacity></View> : <><Text style={[styles.tableCell, styles.assignmentTableCell, inlineAccountDetails && detailPanelStyles.assignmentColumnWithPanel]}>{studentAssignmentStatus(patient)}</Text><View style={styles.rowAction}><Ionicons name="chevron-forward" size={17} color={C.subtle} /></View></>}
+  </Pressable>;
+  const archiveActions = (row: AccountRow) => {
+    const name = row.kind === 'professional' ? row.person.name : row.patient.name;
+    const view = () => setSelection(row.kind === 'professional' ? { kind: 'professional', id: row.person.id } : { kind: 'patient', id: row.patient.id });
+    const restore = () => row.kind === 'professional' ? setProfessionalStatus(row.person, 'Active') : studentMembership(row.patient) === 'Deactivated' ? changePatientMembership(row.patient, 'Active') : changePatientAccess(row.patient, 'Active');
+    const restoreLabel = row.kind === 'professional'
+      ? professionalMembership(row.person) === 'Deactivated' ? `Reinstate ${name}` : `Restore access for ${name}`
+      : studentMembership(row.patient) === 'Deactivated' ? `Reinstate ${name}` : `Restore access for ${name}`;
+    return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${name} details`} onPress={(event) => { event.stopPropagation(); view(); }} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="eye-outline" size={17} color={C.blueDeep} /></TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={restoreLabel} onPress={(event) => { event.stopPropagation(); restore(); }} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="refresh-outline" size={17} color={C.blueDeep} /></TouchableOpacity>
+    </View>;
+  };
+  const mobileAccountRow = (row: AccountRow) => row.kind === 'professional' ? (() => {
+    const person = row.person;
+    const identifier = person.role === 'Therapist' ? person.staffId ?? 'Staff ID unavailable' : person.professionalIdentifier ?? 'School ID unavailable';
+    const assigned = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled').length;
+    return <Pressable key={person.id} onPress={accountView === 'Archive Center' ? undefined : () => setSelection({ kind: 'professional', id: person.id })} style={({ hovered }) => [styles.mobileRow, hovered && styles.rowHover]} accessibilityRole={accountView === 'Archive Center' ? 'group' : 'button'} accessibilityLabel={`View ${person.name}, ${person.role}`}>
+      <View style={styles.personCell}>{avatar(person.name)}<View style={styles.personText}><Text style={styles.personName}>{person.name}</Text><Text style={styles.secondaryText}>{person.role} · {person.email}</Text><Text style={styles.secondaryText}>{identifier}</Text></View></View>
+      <View style={styles.mobileRowBottom}><Status label={professionalMembership(person) === 'Deactivated' ? 'Deactivated' : professionalAccess(person)} tone={professionalAccess(person) === 'Active' && professionalMembership(person) !== 'Deactivated' ? 'green' : 'red'} />{accountView === 'Archive Center' ? <Text style={styles.secondaryText}>{person.lifecycleUpdatedAt ? formatDate(person.lifecycleUpdatedAt) : 'Date not recorded'}</Text> : <><SetupStatus label={person.invitation === 'Failed' ? 'Failed' : professionalSetup(person)} compact /><Text style={styles.secondaryText}>{assigned} assigned</Text></>}</View>
+      {accountView === 'Archive Center' ? <View style={[styles.mobileRowBottom, { justifyContent: 'flex-end' }]}>{archiveActions(row)}</View> : null}
+    </Pressable>;
+  })() : <Pressable key={row.patient.id} onPress={accountView === 'Archive Center' ? undefined : () => setSelection({ kind: 'patient', id: row.patient.id })} style={({ hovered }) => [styles.mobileRow, hovered && styles.rowHover]} accessibilityRole={accountView === 'Archive Center' ? 'group' : 'button'} accessibilityLabel={`View Student ${row.patient.name}, ${row.patient.studentNumber}`}>
+    <View style={styles.personCell}>{avatar(row.patient.name, C.green)}<View style={styles.personText}><Text style={styles.personName}>{row.patient.name}</Text><Text style={styles.secondaryText}>Student · {row.patient.studentNumber}</Text><Text style={styles.secondaryText}>{row.patient.guardianContact}</Text></View></View>
+    <View style={styles.mobileRowBottom}><Status label={studentMembership(row.patient) === 'Deactivated' ? 'Deactivated' : studentAccess(row.patient)} tone={studentMembership(row.patient) === 'Deactivated' || studentAccess(row.patient) === 'Suspended' ? 'red' : 'green'} />{accountView === 'Archive Center' ? <Text style={styles.secondaryText}>{row.patient.lifecycleUpdatedAt ? formatDate(row.patient.lifecycleUpdatedAt) : 'Date not recorded'}</Text> : <><SetupStatus label={studentSetup(row.patient)} compact /><Text style={styles.secondaryText}>{studentAssignmentStatus(row.patient)}</Text></>}</View>
+    {showStudentDetailsColumns ? <View style={styles.studentMobileDetails}><Text style={styles.secondaryText}>Teacher · {professionals.find((person) => person.id === row.patient.teacherId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Therapist · {professionals.find((person) => person.id === row.patient.therapistId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Enrollment · {row.patient.enrollment}</Text></View> : null}
+    {accountView === 'Archive Center' ? <View style={[styles.mobileRowBottom, { justifyContent: 'flex-end' }]}>{archiveActions(row)}</View> : null}
+  </Pressable>;
+
+  const activityLine = (entry: ActivityEntry, compactMode = false) => <View key={entry.id} onLayout={({ nativeEvent }) => { recentActivityRows.current.set(entry.id, { top: nativeEvent.layout.y, height: nativeEvent.layout.height }); markVisibleActivityRead(); }} style={[styles.activityItem, compactMode && styles.activityItemCompact]}>
+    {!entry.read ? <View style={[styles.activityMark, { backgroundColor: C.blue }]} /> : null}
+    <View style={styles.activityCopy}><Text style={styles.activityTitle}>{entry.title}</Text><Text style={styles.secondaryText}>{entry.detail} · {entry.actor}</Text></View>
+    <Text style={styles.activityDate}>{formatTimestamp(entry.date)}</Text>
+  </View>;
+
+  const dashboard = () => {
+    const metrics = [
+      { label: 'Active Therapists', icon: 'heart-outline' as const, value: professionals.filter((person) => person.role === 'Therapist' && professionalAccess(person) === 'Active' && professionalMembership(person) === 'Active').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Therapist', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
+      { label: 'Active Teachers', icon: 'school-outline' as const, value: professionals.filter((person) => person.role === 'Teacher' && professionalAccess(person) === 'Active' && professionalMembership(person) === 'Active').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Teacher', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
+      { label: 'Registered Students', icon: 'people-outline' as const, value: patients.filter((patient) => patient.enrollment === 'Enrolled').length, foot: 'Currently enrolled', click: () => openDashboardMetric('students') },
+      { label: 'Account Setups', icon: 'mail-unread-outline' as const, value: pendingAccountSetups, foot: 'Invitations awaiting setup', click: () => openDashboardMetric('accounts'), attention: pendingInvitations.some((person) => !viewedAlertIds.has(person.id)) || pendingPatientSetups.some((student) => !viewedAlertIds.has(student.id)) },
+      { label: 'Administrative Requests', icon: 'document-text-outline' as const, value: pendingRequests.length + pendingReleaseRequests.length, foot: 'Student requests to review', click: () => openDashboardMetric('requests'), attention: pendingRequests.some((request) => !viewedAlertIds.has(request.id)) || pendingReleaseRequests.some((request) => !viewedAlertIds.has(request.id)) },
+    ];
+    const pageCount = Math.max(1, Math.ceil(attentionItems.length / 10));
+    const pageIndex = Math.min(attentionPage, pageCount - 1);
+    const rows = attentionItems.slice(pageIndex * 10, pageIndex * 10 + 10);
+    const maxCaseload = Math.max(1, ...therapistCounts.map((person) => person.assigned));
+    return <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false} onLayout={onRecentActivityViewportLayout} onScroll={onRecentActivityScroll} scrollEventThrottle={100}>
+      <Header title="Dashboard" subtitle="Manage your center's accounts, student access, and recent activity." />
+      {adminError ? <Text style={{ color: C.red, marginBottom: 12 }} accessibilityLiveRegion="polite">{adminError}</Text> : null}
+      {adminLoading ? <Text style={styles.secondaryText}>Loading live account data…</Text> : null}
+      {adminUsers.some((user) => user.status === 'pending') ? (
+        <View style={styles.attentionPanel}>
+          <View style={styles.sectionHeading}>
+            <View>
+              <Text style={styles.sectionTitle}>Pending account approvals</Text>
+              <Text style={styles.sectionSub}>Review requests from the live account service.</Text>
             </View>
           </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollableList}>
-            {notifications.slice(0, 6).map((activity, index) => {
-              const activityColor = ['#49A11B', '#1173BA', '#C78800', '#C81015'][index % 4];
-              return (
-              <View
-                key={activity.id}
-                style={[
-                  styles.activityItem,
-                  {
-                    backgroundColor: `${activityColor}12`,
-                    borderColor: `${activityColor}40`,
-                  },
-                ]}
-              >
-                <View style={styles.activityTopRow}>
-                  <Text style={[styles.activityTitle, { color: activityColor }]} numberOfLines={1}>
-                    {activity.action}
-                  </Text>
-
-                  <View style={styles.activityBadgeRow}>
-                    <View style={styles.activityRoleBadge}>
-                      <Text style={[styles.activityRoleText, { color: activityColor }]}>
-                        {activity.name}
-                      </Text>
-                    </View>
-                    <View style={styles.activityTimeBadge}>
-                      <Text style={[styles.activityTimeText, { color: activityColor }]}>
-                        {new Date(activity.time).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <Text style={[styles.activitySubtitle, { color: activityColor }]} numberOfLines={1}>
-                  {activity.detail}
-                </Text>
+          {adminUsers.filter((user) => user.status === 'pending').map((user) => (
+            <View key={user.id} style={styles.attentionRow}>
+              <View style={styles.attentionCopy}>
+                <Text style={styles.attentionTitle}>{user.name}</Text>
+                <Text style={styles.secondaryText}>{user.email} · {user.role}</Text>
               </View>
-              );
-            })}
-            {!adminLoading && notifications.length === 0
-              ? <Text style={styles.detailText}>No recent activity is available.</Text>
-              : null}
-          </ScrollView>
-        </View>
-
-      </View>
-
-    </ScrollView>
-  );
-
-  const renderRequests = () => (
-    <View style={styles.tabContainer}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
-
-        <View style={styles.subTabsContainer}>
-          {['All', 'Pending', 'Verified', 'Rejected'].map((tab) => (
-            <TouchableOpacity key={tab} onPress={() => setRequestSubTab(tab)} style={styles.subTabBtn}>
-              <Text style={[styles.subTabText, requestSubTab === tab && styles.subTabTextActive]}>{tab}</Text>
-              {requestSubTab === tab && <View style={styles.subTabIndicator} />}
-            </TouchableOpacity>
+              <Button
+                label="Approve"
+                kind="primary"
+                disabled={updatingAccountId === user.id}
+                onPress={() => { void handleUpdateAccountStatus(user, 'verified'); }}
+              />
+              <Button
+                label="Reject"
+                kind="danger"
+                disabled={updatingAccountId === user.id}
+                onPress={() => { void handleUpdateAccountStatus(user, 'rejected'); }}
+              />
+            </View>
           ))}
         </View>
-
-        {adminError ? <Text style={{ color: '#B91C1C', marginBottom: 12 }}>{adminError}</Text> : null}
-        {adminLoading ? <Text style={styles.detailText}>Loading account requests…</Text> : null}
-        {visibleRequests.map((req) => {
-          const roleLabel = req.role === 'parent' ? 'Patient' : req.role[0].toUpperCase() + req.role.slice(1);
-          const roleColor = req.role === 'teacher' ? '#16A34A' : req.role === 'parent' ? '#D97706' : '#0284C7';
-          const pending = req.status === 'pending';
-          return (
-          <View key={req.id} style={styles.fullCard}>
-            <View style={styles.cardHeaderRow}>
-              <Image source={require('../../../assets/images/person1.jpg')} style={styles.cardAvatarLarge} contentFit="cover" />
-              <View style={styles.cardHeaderInfo}>
-                <Text style={styles.cardNameLarge}>{req.name}</Text>
-                <Text style={styles.cardEmailText}>{req.email}</Text>
-              </View>
-              <View style={[styles.roleBadge, { backgroundColor: `${roleColor}20` }]}>
-                <Text style={[styles.roleBadgeText, { color: roleColor }]}>{roleLabel}</Text>
-              </View>
-            </View>
-
-            <View style={styles.cardDivider} />
-
-            <View style={styles.cardBody}>
-              {req.role === 'parent' ? <Text style={styles.detailText}><Text style={styles.detailLabel}>Child:</Text> {req.childName || '—'}{req.childAge ? `, age ${req.childAge}` : ''}</Text> : null}
-              {req.role === 'parent' ? <Text style={styles.detailText}><Text style={styles.detailLabel}>Student ID:</Text> {req.studentId || '—'}</Text> : null}
-              <Text style={styles.detailText}><Text style={styles.detailLabel}>Contact:</Text> {req.contact || '—'}</Text>
-              <Text style={styles.detailText}><Text style={styles.detailLabel}>Created:</Text> {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '—'}</Text>
-
-              <View style={styles.warningBox}>
-                <Ionicons name={pending ? 'warning-outline' : 'information-circle-outline'} size={16} color={pending ? '#D97706' : '#0284C7'} />
-                <Text style={styles.warningText}>Account status: {req.status}</Text>
-              </View>
-            </View>
-
-            {pending ? <View style={styles.cardActionsRow}>
-              <TouchableOpacity
-                style={styles.rejectBtn}
-                disabled={updatingAccountId === req.id}
-                onPress={() => triggerAlert(
-                  'Reject Request',
-                  `Reject ${req.name}'s account request?`,
-                  'Reject',
-                  '#EF4444',
-                  'close-circle',
-                  () => { void handleUpdateAccountStatus(req.id, 'rejected'); }
-                )}
-              >
-                <Text style={styles.rejectBtnText}>{updatingAccountId === req.id ? 'Updating…' : 'Reject'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.approveBtn}
-                disabled={updatingAccountId === req.id}
-                onPress={() => { void handleUpdateAccountStatus(req.id, 'verified'); }}
-              >
-                <Text style={styles.approveBtnText}>{updatingAccountId === req.id ? 'Updating…' : 'Approve Request'}</Text>
-              </TouchableOpacity>
-            </View> : null}
+      ) : null}
+      <View style={styles.attentionPanel}>
+        <View style={styles.sectionHeading}>
+          <View>
+            <Text style={styles.sectionTitle}>Search live student records</Text>
+            <Text style={styles.sectionSub}>Search the backend patient directory.</Text>
           </View>
-          );
-        })}
-        {!adminLoading && visibleRequests.length === 0 ? <Text style={styles.detailText}>No accounts match this status.</Text> : null}
-      </ScrollView>
-    </View>
-  );
-
-  const renderAccounts = () => (
-    <View style={styles.tabContainer}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
-
-        <View style={styles.subTabsContainer}>
-          {['All', 'Therapist', 'Teacher', 'Patient'].map((tab) => (
-            <TouchableOpacity key={tab} onPress={() => setAccountSubTab(tab)} style={styles.subTabBtn}>
-              <Text style={[styles.subTabText, accountSubTab === tab && styles.subTabTextActive]}>{tab}</Text>
-              {accountSubTab === tab && <View style={styles.subTabIndicator} />}
-            </TouchableOpacity>
-          ))}
         </View>
-
-        <TextInput
-          value={accountSearch}
-          onChangeText={setAccountSearch}
-          placeholder="Search accounts by name, email, or student ID"
-          placeholderTextColor="#94A3B8"
-          style={{ backgroundColor: '#FFFFFF', borderColor: '#CBD5E1', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12, color: '#1E293B' }}
-          autoCapitalize="none"
-        />
-        <TextInput
+        <SearchBox
           value={patientSearch}
-          onChangeText={setPatientSearch}
-          placeholder="Search patients by name or 9-digit patient ID"
-          placeholderTextColor="#94A3B8"
-          style={{ backgroundColor: '#FFFFFF', borderColor: '#CBD5E1', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12, color: '#1E293B' }}
-          autoCapitalize="none"
+          onChange={setPatientSearch}
+          placeholder="Search students by name or patient code"
+          fullWidth
         />
-        {patientSearchLoading ? <Text style={styles.detailText}>Searching patients…</Text> : null}
-        {patientSearchError ? <Text style={{ color: '#B91C1C', marginBottom: 12 }}>{patientSearchError}</Text> : null}
-        {patientResults.map((patient) => (
-          <View key={patient.id} style={[styles.fullCard, { paddingVertical: 12 }]}>
-            <Text style={styles.cardNameLarge}>{[patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ')}</Text>
-            <Text style={styles.cardEmailText}>Patient ID: {patient.patientCode || '—'}</Text>
+        {patientSearchLoading ? <Text style={styles.secondaryText}>Searching students…</Text> : null}
+        {patientSearchError ? <Text style={{ color: C.red }}>{patientSearchError}</Text> : null}
+        {patientResults.map((result) => (
+          <View key={result.id} style={styles.attentionRow}>
+            <View style={styles.attentionCopy}>
+              <Text style={styles.attentionTitle}>{`${result.firstName} ${result.middleName} ${result.lastName}`.replace(/\s+/g, ' ').trim()}</Text>
+              <Text style={styles.secondaryText}>{result.patientCode} · {result.guardianEmail || 'No guardian email'}</Text>
+            </View>
           </View>
         ))}
-        {adminError ? <Text style={{ color: '#B91C1C', marginBottom: 12 }}>{adminError}</Text> : null}
-        {adminLoading ? <Text style={styles.detailText}>Loading accounts…</Text> : null}
-        {visibleAccounts.map((acc) => {
-          const roleLabel = acc.role === 'parent' ? 'Patient' : acc.role[0].toUpperCase() + acc.role.slice(1);
-          const roleColor = acc.role === 'teacher' ? '#16A34A' : acc.role === 'parent' ? '#D97706' : '#0284C7';
-          const statusColor = acc.status === 'verified' ? '#16A34A' : acc.status === 'pending' ? '#D97706' : '#DC2626';
-          const nextStatus = acc.status === 'verified' ? 'rejected' : 'verified';
-          const statusAction = acc.status === 'pending' ? 'Approve' : acc.status === 'verified' ? 'Deactivate' : 'Reactivate';
-          return (
-          <View key={acc.id} style={styles.fullCard}>
-             <View style={styles.cardHeaderRow}>
-              <Image source={require('../../../assets/images/person1.jpg')} style={styles.cardAvatarLarge} contentFit="cover" />
-              <View style={styles.cardHeaderInfo}>
-                <Text style={styles.cardNameLarge}>{acc.name}</Text>
-                <Text style={styles.cardEmailText}>{acc.email}</Text>
-              </View>
-              <View style={[styles.roleBadge, { backgroundColor: `${roleColor}20` }]}>
-                <Text style={[styles.roleBadgeText, { color: roleColor }]}>{roleLabel}</Text>
-              </View>
-            </View>
+        {patientSearch.trim() && !patientSearchLoading && !patientSearchError && patientResults.length === 0
+          ? <Text style={styles.secondaryText}>No matching students found.</Text>
+          : null}
+      </View>
+      <View style={[styles.metricStrip, compact && styles.metricStripCompact]}>{metrics.map((metric) => <TouchableOpacity key={metric.label} onPress={metric.click} style={[styles.metric, compact && styles.metricCompact]} accessibilityRole="button" accessibilityLabel={metric.label + ': ' + metric.value + '. ' + metric.foot}><View style={styles.metricTop}><Ionicons name={metric.icon} size={17} color={C.blue} /><Text style={styles.metricLabel}>{metric.label}</Text></View><View style={styles.metricValueLine}><Text style={styles.metricValue}>{metric.value}</Text>{metric.attention ? <View style={styles.attentionDot} /> : null}</View><Text style={styles.metricFoot}>{metric.foot}</Text></TouchableOpacity>)}</View>
 
-            <View style={styles.cardDivider} />
+      <View style={styles.attentionPanel}>
+        <View style={styles.sectionHeading}><View><Text style={styles.sectionTitle}>Requires attention</Text><Text style={styles.sectionSub}>Items that need an administrator decision</Text></View><View style={styles.attentionCount} accessibilityLabel={`${attentionItems.length} items require attention`}><Text style={[styles.countText, attentionItems.length === 0 && styles.countTextClear]}>{attentionItems.length}</Text><Text style={[styles.attentionCountLabel, attentionItems.length === 0 && styles.countTextClear]}>items</Text></View></View>
+        {rows.map((item) => <View key={item.key} style={styles.attentionRow}><View style={[styles.attentionIcon, { backgroundColor: item.tone === 'yellow' ? C.yellowSoft : item.tone === 'orange' ? C.orangeSoft : C.blueSoft }]}><Ionicons name={item.icon} size={19} color={item.tone === 'yellow' ? C.yellow : item.tone === 'orange' ? C.orange : C.blue} /></View><View style={styles.attentionCopy}><Pressable accessibilityRole="link" accessibilityLabel={`Open ${item.title}`} onPress={item.run} hitSlop={4}><Text style={styles.attentionTitle}>{item.title}</Text></Pressable><Text style={styles.secondaryText}>{item.detail}</Text>{item.date ? <Text style={styles.attentionTime}>{item.date}</Text> : null}</View><Pressable accessibilityRole="link" onPress={item.run} hitSlop={8}><Text style={styles.linkText}>View</Text></Pressable></View>)}
+        {attentionItems.length === 0 ? <View style={styles.clearState}><Ionicons name="checkmark-circle-outline" size={23} color={C.green} /><Text style={styles.clearStateText}>Everything is up to date.</Text></View> : null}
+        {pageCount > 1 ? <View style={styles.pagination}><Text style={styles.secondaryText}>Showing {pageIndex * 10 + 1} to {Math.min((pageIndex + 1) * 10, attentionItems.length)} of {attentionItems.length}</Text><View style={styles.paginationActions}><Button label="Previous" disabled={pageIndex === 0} onPress={() => setAttentionPage(Math.max(0, pageIndex - 1))} /><Button label="Next" disabled={pageIndex >= pageCount - 1} onPress={() => setAttentionPage(Math.min(pageCount - 1, pageIndex + 1))} /></View></View> : null}
+      </View>
 
-            <View style={styles.accountStatusRow}>
-              <Text style={styles.detailLabel}>Account Status:</Text>
-              <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
-                <Text style={[styles.statusBadgeText, { color: statusColor }]}>{acc.status}</Text>
-              </View>
-            </View>
+      <View style={styles.assignmentOverview}>
+        <View style={styles.sectionHeading}><View><Text style={styles.sectionTitle}>Therapist caseloads</Text><Text style={styles.sectionSub}>Current enrolled assignments; no caseload limit</Text></View><TouchableOpacity onPress={() => goToAccountsView('Directory', null, { role: 'Therapist', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' })} accessibilityRole="link"><Text style={styles.linkText}>View accounts</Text></TouchableOpacity></View>
+        <View style={styles.caseloadList}>{therapistCounts.map((person) => { const fill = '#287A4B'; return <TouchableOpacity key={person.id} accessibilityRole="link" accessibilityLabel={'View ' + person.name + ' in Accounts. ' + person.assigned + ' enrolled Students'} onPress={() => goToAccountsView('Directory', { kind: 'professional', id: person.id }, { role: 'Therapist', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment', search: person.name })} style={styles.caseloadRow}><View style={styles.smallAvatar}><Text style={styles.smallAvatarText}>{initials(person.name)}</Text></View><Text style={styles.assignmentOverviewName}>{person.name}</Text><View style={styles.caseloadTrack}><View style={[styles.caseloadFill, { width: (person.assigned / maxCaseload * 100) + '%', backgroundColor: fill }]} /></View><Text style={styles.assignmentOverviewCount}>{person.assigned} Students</Text><Ionicons name="chevron-forward" size={15} color={C.subtle} /></TouchableOpacity>; })}{activeTherapists.length === 0 ? <Text style={styles.secondaryText}>No active Therapists. Student enrollment is unavailable until one is active.</Text> : null}</View>
+      </View>
 
-            {acc.role === 'parent' ? <Text style={styles.detailText}>Child: {acc.childName || '—'}{acc.childAge ? `, age ${acc.childAge}` : ''} · Student ID: {acc.studentId || '—'}</Text> : null}
-
-            <View style={styles.cardActionsRow}>
-              <TouchableOpacity
-                style={styles.suspendBtn}
-                disabled={updatingAccountId === acc.id}
-                onPress={() => triggerAlert(
-                  `${statusAction} Account`,
-                  `${statusAction} ${acc.name}'s account?`,
-                  statusAction,
-                  acc.status === 'verified' ? '#EF4444' : '#0284C7',
-                  'alert-circle',
-                  () => { void handleUpdateAccountStatus(acc.id, nextStatus); }
-                )}
-              >
-                <Ionicons name="person-circle-outline" size={16} color="#DC2626" />
-                <Text style={styles.suspendBtnText}>{updatingAccountId === acc.id ? 'Updating…' : statusAction}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          );
-        })}
-        {!adminLoading && visibleAccounts.length === 0 ? <Text style={styles.detailText}>No accounts match this search.</Text> : null}
-      </ScrollView>
+      <View style={styles.activityPanel} onLayout={onRecentActivityPanelLayout}><View style={styles.sectionHeading}><View><Text style={styles.sectionTitle}>Recent activity</Text><Text style={styles.sectionSub}>Latest changes across your center</Text></View><TouchableOpacity onPress={() => goTo('Activity Logs')} accessibilityRole="link"><Text style={styles.linkText}>View logs</Text></TouchableOpacity></View>{orderedActivity.slice(0, 5).map((entry) => activityLine(entry, true))}{orderedActivity.length === 0 ? <Text style={styles.secondaryText}>Activity will appear here as changes are recorded.</Text> : null}</View>
+    </ScrollView>;
+  };
+  const accountPagination = accountPageCount > 1 ? <View style={[styles.accountPagination, compact && styles.accountPaginationCompact]}>
+    <Text style={styles.accountPaginationSummary}>Showing {accountPageIndex * 10 + 1}–{Math.min((accountPageIndex + 1) * 10, accountRows.length)} of {accountRows.length} {accountView === 'Archive Center' ? 'records' : 'accounts'}</Text>
+    <View style={[styles.accountPaginationControls, compact && styles.accountPaginationControlsCompact]}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="First page" disabled={accountPageIndex === 0} onPress={() => setAccountPage(0)} style={[styles.pageArrow, accountPageIndex === 0 && styles.pageArrowDisabled]}><Ionicons name="chevron-back" size={13} color={accountPageIndex === 0 ? C.subtle : C.muted} /><Ionicons name="chevron-back" size={13} color={accountPageIndex === 0 ? C.subtle : C.muted} style={styles.doubleChevronSecond} /></TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous page" disabled={accountPageIndex === 0} onPress={() => setAccountPage(accountPageIndex - 1)} style={[styles.pageArrow, accountPageIndex === 0 && styles.pageArrowDisabled]}><Ionicons name="chevron-back" size={15} color={accountPageIndex === 0 ? C.subtle : C.muted} /></TouchableOpacity>
+      {accountPageNumbers.map((pageNumber) => <TouchableOpacity key={pageNumber} accessibilityRole="button" accessibilityLabel={`Page ${pageNumber + 1}`} accessibilityState={{ selected: pageNumber === accountPageIndex }} onPress={() => setAccountPage(pageNumber)} style={[styles.pageNumber, pageNumber === accountPageIndex && styles.pageNumberActive]}><Text style={[styles.pageNumberText, pageNumber === accountPageIndex && styles.pageNumberTextActive]}>{pageNumber + 1}</Text></TouchableOpacity>)}
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next page" disabled={accountPageIndex >= accountPageCount - 1} onPress={() => setAccountPage(accountPageIndex + 1)} style={[styles.pageArrow, accountPageIndex >= accountPageCount - 1 && styles.pageArrowDisabled]}><Ionicons name="chevron-forward" size={15} color={accountPageIndex >= accountPageCount - 1 ? C.subtle : C.muted} /></TouchableOpacity>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Last page" disabled={accountPageIndex >= accountPageCount - 1} onPress={() => setAccountPage(accountPageCount - 1)} style={[styles.pageArrow, accountPageIndex >= accountPageCount - 1 && styles.pageArrowDisabled]}><Ionicons name="chevron-forward" size={13} color={accountPageIndex >= accountPageCount - 1 ? C.subtle : C.muted} /><Ionicons name="chevron-forward" size={13} color={accountPageIndex >= accountPageCount - 1 ? C.subtle : C.muted} style={styles.doubleChevronSecond} /></TouchableOpacity>
     </View>
-  );
+    {!compact ? <View style={styles.accountPaginationSide} /> : null}
+  </View> : null;
+  const archiveDirectoryRow = (row: AccountRow) => {
+    const person = row.kind === 'professional' ? row.person : undefined;
+    const patient = row.kind === 'professional' ? undefined : row.patient;
+    const name = person?.name ?? patient?.name ?? 'Student record unavailable';
+    const identifier = person ? person.role === 'Therapist' ? person.staffId ?? 'Staff ID not recorded' : person.professionalIdentifier ?? 'Professional ID not recorded' : patient?.studentNumber ?? 'Student number unavailable';
+    const status = row.kind === 'archiveEpisode' ? archiveEpisodeStatus(row.episode) : person ? professionalMembership(person) === 'Deactivated' ? 'Deactivated' : 'Suspended' : studentMembership(patient!) === 'Deactivated' ? 'Deactivated' : 'Suspended';
+    const date = row.kind === 'archiveEpisode' ? row.episode.effectiveCloseDate : person?.lifecycleUpdatedAt ?? patient?.lifecycleUpdatedAt;
+    const canReenroll = row.kind === 'archiveEpisode' && row.patient.enrollment === 'Archived' && !careEpisodes.some((episode) => episode.patientId === row.patient.id && episode.status === 'Active');
+    const viewRecord = () => setSelection(row.kind === 'archiveEpisode' ? { kind: 'archiveEpisode', id: row.episode.id } : person ? { kind: 'professional', id: person.id } : { kind: 'patient', id: patient!.id });
+    const restoreRecord = () => {
+      if (row.kind === 'archiveEpisode') { openReenrollment(row.patient); return; }
+      if (person) { setProfessionalStatus(person, 'Active'); return; }
+      if (studentMembership(patient!) === 'Deactivated') changePatientMembership(patient!, 'Active');
+      else changePatientAccess(patient!, 'Active');
+    };
+    const restoreLabel = row.kind === 'archiveEpisode' ? `Re-enroll ${name}` : person ? professionalMembership(person) === 'Deactivated' ? `Reinstate ${name}` : `Restore access for ${name}` : studentMembership(patient!) === 'Deactivated' ? `Reinstate ${name}` : `Restore access for ${name}`;
+    const statusTone = status === 'Completed / Discharged' ? 'green' : status === 'Withdrawn' || status === 'Transferred' || status === 'Closed' || status === 'Closure details not recorded' ? 'neutral' : 'red';
+    return <View key={row.kind === 'archiveEpisode' ? `episode-${row.episode.id}` : person ? `professional-${person.id}` : `student-${patient!.id}`} style={styles.tableRow}>
+      <View style={styles.personCell}><View style={styles.personText}><Text style={styles.personName}>{name}</Text><Text style={styles.secondaryText}>{person ? `${person.role} · ${person.email}` : row.kind === 'archiveEpisode' ? `Student · ${row.episode.closureCategory ?? 'Closure details not recorded'}` : 'Student account'}</Text></View></View>
+      <Text style={[styles.tableCell, styles.idTableCell]} numberOfLines={1}>{identifier}</Text>
+      <View style={[styles.tableCell, styles.statusTableCell]}><Status label={status} tone={statusTone} /></View>
+      <Text style={[styles.tableCell, styles.setupTableCell]}>{date ? formatDate(date) : 'Date not recorded'}</Text>
+      <View style={[styles.tableCell, styles.assignmentTableCell, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+        <TooltipIconButton icon="eye-outline" label={`View ${row.kind === 'archiveEpisode' ? 'care episode' : 'account'} details for ${name}`} hint="Opens this record's details and historical relationships." onPress={viewRecord} buttonStyle={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }} />
+        <TooltipIconButton icon="refresh-outline" label={restoreLabel} hint={row.kind === 'archiveEpisode' ? canReenroll ? 'Starts a new care episode for this existing student identity.' : 'This student already has an active episode and cannot be re-enrolled from this historical record.' : 'Restores this account state only; it does not start or restore therapy.'} onPress={restoreRecord} disabled={row.kind === 'archiveEpisode' && !canReenroll} buttonStyle={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }} />
+      </View>
+    </View>;
+  };
+  const archiveDirectoryPage = () => <>
+    <View style={styles.accountSearchArea}><SearchBox value={accountSearch} onChange={setAccountSearch} placeholder="Search names, identifiers, or status" fullWidth /></View>
+    <View style={styles.accountRoleTabs} accessibilityRole="tablist" accessibilityLabel="Filter archive records by role">{(['All roles', 'Student', 'Therapist', 'Teacher'] as const).map((role) => { const selected = accountRole === role; const label = role === 'All roles' ? 'All' : role; return <Pressable key={role} accessibilityRole="tab" accessibilityLabel={role === 'All roles' ? 'All archive records' : role} accessibilityState={{ selected }} onPress={() => changeAccountRole(role)} style={({ hovered, pressed }) => [styles.accountRoleTab, hovered && styles.accountRoleTabHover, pressed && styles.accountRoleTabPressed]}><Text style={[styles.accountRoleTabText, selected && styles.accountRoleTabTextSelected]}>{label}</Text>{selected ? <View style={styles.accountRoleTabIndicator} /> : null}</Pressable>; })}</View>
+    <View style={styles.directoryMeta}><Text style={styles.resultCount}>{accountRows.length} {accountRows.length === 1 ? 'archived record' : 'archived records'}</Text><Text style={styles.secondaryText}>Closed care episodes and restricted accounts</Text></View>
+    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ width: '100%' as any, minWidth: 720, flexGrow: 1 }}><View style={[styles.table, { width: '100%' as any, minWidth: 720 }]}><View style={styles.tableHead}><View style={[styles.tableHeadCell, styles.personHead]}><Text style={styles.columnFilterLabel}>Account</Text></View><View style={[styles.tableHeadCell, styles.idTableCell]}><Text style={styles.columnFilterLabel}>ID</Text></View><View style={[styles.tableHeadCell, styles.statusTableCell]}><Text style={styles.columnFilterLabel}>Status</Text></View><View style={[styles.tableHeadCell, styles.setupTableCell]}><Text style={styles.columnFilterLabel}>Date</Text></View><View style={[styles.tableHeadCell, styles.assignmentTableCell]}><Text style={styles.columnFilterLabel}>Actions</Text></View></View>{accountPageRows.map(archiveDirectoryRow)}{accountPagination}</View></ScrollView>
+    {accountRows.length === 0 ? <EmptyState title={accountSearch ? 'No matching archive records' : 'No archived records'} detail={accountSearch ? 'Try another name, identifier, status, or role.' : 'Closed care episodes and accounts with restricted access will appear here.'} action={accountSearch ? <Button label="Clear search" onPress={() => setAccountSearch('')} /> : null} /> : null}
+  </>;
+  const accounts = () => accountView === 'Student Requests' ? studentRequestsPage() : <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
+    <Header title={accountView} subtitle={accountView === 'Directory' ? 'Manage student and professional accounts across your center.' : 'Review closed care episodes and accounts with restricted access.'} action={accountView === 'Directory' ? <Button label="Add Account" kind="primary" icon="add" onPress={() => { setCreatePatientOpen(true); setNewAccountOpen(true); }} /> : undefined} />
+    {accountView === 'Archive Center' ? archiveDirectoryPage() : <>
+    <View style={styles.accountSearchArea}>
+      <View style={styles.accountSearchRow}>
+        <SearchBox value={accountSearch} onChange={setAccountSearch} placeholder="Search names, emails, and IDs" fullWidth />
+        {!desktop ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Filters${accountFilterTags.length ? `, ${accountFilterTags.length} active` : ''}`} accessibilityState={{ expanded: accountFiltersOpen }} onPress={() => setAccountFiltersOpen(true)} style={styles.accountFiltersButton}><Ionicons name="filter-outline" size={17} color={C.blueDeep} /><Text style={styles.accountFiltersButtonText}>Filters</Text>{accountFilterTags.length ? <View style={styles.accountFiltersCount}><Text style={styles.accountFiltersCountText}>{accountFilterTags.length}</Text></View> : null}</TouchableOpacity> : null}
+      </View>
+      {accountFilterTags.length ? <View style={styles.accountFilterTagRow}>{accountFilterTags.map((tag) => <TouchableOpacity key={tag.label} accessibilityRole="button" accessibilityLabel={`Remove ${tag.label} filter`} onPress={tag.clear} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>{tag.label}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}<TouchableOpacity accessibilityRole="button" onPress={resetAccountFilters} style={styles.accountFilterReset}><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity></View> : null}
+      {!desktop ? <Modal visible={accountFiltersOpen} transparent animationType="fade" onRequestClose={() => setAccountFiltersOpen(false)}><Pressable style={styles.overlay} onPress={() => setAccountFiltersOpen(false)}><Pressable style={[styles.dialog, styles.accountFiltersDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title="Filters" subtitle="Choose which accounts to show." onClose={() => setAccountFiltersOpen(false)} /><ScrollView style={styles.accountFiltersDialogBody} contentContainerStyle={styles.accountFiltersDialogContent} showsVerticalScrollIndicator={false}>
+        <Filter label="Sort by" value={selectedAccountSort.label} options={ACCOUNT_SORT_OPTIONS.map((option) => option.label)} onChange={selectAccountSort} />
+        <Filter label="Setup" value={accountSetup} options={['All setup', 'Pending', 'Completed']} onChange={setAccountSetup} />
+        <Filter label="Assignments" value={accountAssignments} options={['All assignments', 'Assigned', 'Unassigned']} onChange={setAccountAssignments} />
+      </ScrollView><View style={styles.dialogActions}><Button label="Reset filters" onPress={resetAccountFilters} /><Button label="Done" kind="primary" onPress={() => setAccountFiltersOpen(false)} /></View></Pressable></Pressable></Modal> : null}
+    </View>
+    <View style={styles.accountRoleTabs} accessibilityRole="tablist" accessibilityLabel="Filter accounts by role">
+      {(['All roles', 'Student', 'Therapist', 'Teacher'] as const).map((role) => {
+        const selected = accountRole === role;
+        const label = role === 'All roles' ? 'All' : role;
+        return <Pressable key={role} accessibilityRole="tab" accessibilityLabel={role === 'All roles' ? 'All accounts' : role} accessibilityState={{ selected }} onPress={() => changeAccountRole(role)} style={({ hovered, pressed }) => [styles.accountRoleTab, hovered && styles.accountRoleTabHover, pressed && styles.accountRoleTabPressed]}>
+          <Text style={[styles.accountRoleTabText, selected && styles.accountRoleTabTextSelected]}>{label}</Text>
+          {selected ? <View style={styles.accountRoleTabIndicator} /> : null}
+        </Pressable>;
+      })}
+    </View>
+    <View style={styles.directoryMeta}><Text style={styles.resultCount}>{visibleProfessionals.length + visibleAccountPatients.length} accounts</Text><Text style={styles.secondaryText}>{accountViewSummary}</Text></View>
+    {desktop ? <View style={styles.table}><View style={[styles.tableHead, inlineAccountDetails && detailPanelStyles.tableWithPanel]}>
+      <View style={[styles.tableHeadCell, styles.personHead, inlineAccountDetails && detailPanelStyles.personColumnWithPanel]}><ColumnFilter label="Account" active={selectedAccountSort.label !== ACCOUNT_SORT_OPTIONS[0].label} options={ACCOUNT_SORT_OPTIONS.map((option) => ({ label: option.label, selected: selectedAccountSort.label === option.label, onSelect: () => selectAccountSort(option.label) }))} /></View>
+      <View style={[styles.tableHeadCell, styles.idTableCell, inlineAccountDetails && detailPanelStyles.idColumnWithPanel]}><SortHeader label="ID" onPress={() => toggleAccountSort('ID')} active={accountSort.key === 'ID'} direction={accountSort.direction} /></View>
+      {showStudentDetailsColumns ? <><View style={[styles.tableHeadCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]}><Text style={styles.columnFilterLabel}>Teacher</Text></View><View style={[styles.tableHeadCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]}><Text style={styles.columnFilterLabel}>Therapist</Text></View><View style={[styles.tableHeadCell, styles.enrollmentTableCell, inlineAccountDetails && detailPanelStyles.enrollmentColumnWithPanel]}><Text style={styles.columnFilterLabel}>Enrollment</Text></View></> : null}
+      <View style={[styles.tableHeadCell, styles.statusTableCell, inlineAccountDetails && detailPanelStyles.statusColumnWithPanel]}><Text style={styles.columnFilterLabel}>Access</Text></View>
+      <View style={[styles.tableHeadCell, styles.setupTableCell, inlineAccountDetails && detailPanelStyles.setupColumnWithPanel]}><ColumnFilter label="Setup" onSort={() => toggleAccountSort('Setup')} sortDirection={accountSort.key === 'Setup' ? accountSort.direction : null} active={accountSetup !== 'All setup'} options={['All setup', 'Pending', 'Completed'].map((value) => ({ label: value, selected: accountSetup === value, onSelect: () => setAccountSetup(value) }))} /></View>
+      <View style={[styles.tableHeadCell, styles.assignmentTableCell, inlineAccountDetails && detailPanelStyles.assignmentColumnWithPanel]}><ColumnFilter label="Assignments" onSort={() => toggleAccountSort('Assignments')} sortDirection={accountSort.key === 'Assignments' ? accountSort.direction : null} active={accountAssignments !== 'All assignments'} options={['All assignments', 'Assigned', 'Unassigned'].map((value) => ({ label: value, selected: accountAssignments === value, onSelect: () => setAccountAssignments(value) }))} /></View>
+      <View style={styles.rowAction} />
+    </View>{accountPageRows.map((row) => row.kind === 'professional' ? professionalRow(row.person) : accountStudentRow(row.patient))}{accountPagination}</View> : <><View style={styles.mobileRows}>{accountPageRows.map(mobileAccountRow)}</View>{accountPagination}</>}
+    {visibleProfessionals.length + visibleAccountPatients.length === 0 ? <EmptyState title="No matching records." detail="Try clearing your search or filters." action={accountSearch || accountFilterTags.length ? <Button label="Clear search and filters" onPress={() => { resetAccountFilters(); setAccountSearch(''); }} /> : null} /> : null}
+    </>}
+  </ScrollView>;
 
-  return (
-    <ImageBackground
-      source={require('../../../assets/images/admin-bg.png')}
-      style={styles.backgroundImage}
-      resizeMode="cover"
-    >
-      <SafeAreaView style={styles.safeArea}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <StatusBar barStyle="dark-content" />
+  const filteredStudentRequests = [...releaseRequests.map((request) => ({ kind: 'release' as const, request })), ...requests.map((request) => ({ kind: 'access' as const, request }))].filter(({ kind, request }) => {
+    const patient = patients.find((item) => item.id === request.patientId);
+    const open = request.status === 'Pending' || request.status === 'More information requested';
+    const type = kind === 'access' ? 'Account access suspension' : (request as ReleaseRequest).requestType ?? 'Enrollment release';
+    const stage = kind === 'access' ? 'Ready for Admin Review' : releaseStage(request as ReleaseRequest);
+    const follow = kind === 'release' ? releaseFollowup(request as ReleaseRequest, prototypeNow) : null;
+    const origin = kind === 'access' ? 'Therapist' : (request as ReleaseRequest).origin ?? 'Therapist';
+    const submitter = kind === 'access' ? professionals.find((person) => person.id === (request as SuspensionRequest).therapistId)?.name ?? 'Therapist' : origin === 'Guardian' ? patient?.guardian || 'Guardian' : professionals.find((person) => person.id === (origin === 'Teacher' ? patient?.teacherId : (request as ReleaseRequest).therapistId))?.name ?? origin;
+    const haystack = `${patient?.name ?? ''} ${patient?.studentNumber ?? ''} ${request.id} ${submitter}`.toLowerCase();
+    return !!patient && (requestStatusFilter === 'All statuses' || (requestStatusFilter === 'Open' ? open : !open)) && (requestTypeFilter === 'All types' || type === requestTypeFilter) && (requestStageFilter === 'All stages' || stage === requestStageFilter) && (requestFollowupFilter === 'All follow-ups' || (requestFollowupFilter === 'Overdue' ? !!follow?.overdue : requestFollowupFilter === 'Reminder due' ? !!follow?.due : true)) && (!requestSearch.trim() || haystack.includes(requestSearch.trim().toLowerCase()));
+  }).sort((a, b) => {
+    if (requestStatusFilter !== 'Open') return new Date(b.request.submitted).getTime() - new Date(a.request.submitted).getTime();
+    const priority = ({ kind, request }: typeof a) => {
+      if (kind === 'access') return 0;
+      const item = request as ReleaseRequest;
+      const stage = releaseStage(item);
+      if (stage === 'Ready for Admin Review') return 0;
+      if (releaseFollowup(item, prototypeNow).overdue) return 1;
+      if (stage === 'Awaiting Guardian Confirmation' || stage === 'Awaiting Teacher Verification') return 2;
+      return 3;
+    };
+    return priority(a) - priority(b) || new Date(a.request.submitted).getTime() - new Date(b.request.submitted).getTime();
+  });
 
-        <View style={styles.mainWrapper}>
+  const studentRequestsPage = () => <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
+    <Header title="Student Requests" subtitle="Review enrollment, assignment, and access requests using their existing verification history." />
+    <View style={styles.requestToolbar}><SearchBox value={requestSearch} onChange={setRequestSearch} placeholder="Search Student, Student Number, or Request ID" /></View>
+    <View style={styles.directoryMeta}><Text style={styles.resultCount}>{filteredStudentRequests.length} {filteredStudentRequests.length === 1 ? 'request' : 'requests'}</Text><View style={styles.requestMetaControls}><Text style={styles.secondaryText}>{requestStatusFilter === 'Open' ? 'Open requests \u00B7 priority order' : 'Resolution history'}</Text><TouchableOpacity onPress={() => { setRequestSearch(''); setRequestTypeFilter('All types'); setRequestStageFilter('All stages'); setRequestFollowupFilter('All follow-ups'); setRequestStatusFilter('Open'); }} style={[styles.accountFilterReset, { marginLeft: 0 }]} accessibilityRole="button" accessibilityLabel="Reset request search and filters"><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity></View></View>
+    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ width: '100%' as any, minWidth: 1052, flexGrow: 1 }}><View style={[styles.requestList, { width: '100%' as any }]}><View style={styles.requestTableHeader}><Text style={[styles.requestColumnHeader, { flex: 170 }]}>Student</Text><View style={{ flex: 180 }}><ColumnFilter label="Request Type" active={requestTypeFilter !== 'All types'} options={['All types', 'Transfer', 'Withdrawal', 'Enrollment release', 'Therapist assignment release', 'Account access suspension'].map((value) => ({ label: value, selected: requestTypeFilter === value, onSelect: () => setRequestTypeFilter(value) }))} /></View><Text style={[styles.requestColumnHeader, { flex: 195 }]}>Submitted By</Text><View style={{ flex: 205 }}><ColumnFilter label="Workflow Stage" active={requestStageFilter !== 'All stages'} options={['All stages', 'Awaiting Guardian Confirmation', 'Awaiting Teacher Verification', 'Ready for Admin Review', 'Awaiting Supporting Evidence'].map((value) => ({ label: value, selected: requestStageFilter === value, onSelect: () => setRequestStageFilter(value) }))} /></View><View style={{ flex: 150 }}><ColumnFilter label="Status" active={requestStatusFilter !== 'Open' || requestFollowupFilter !== 'All follow-ups'} options={[
+      { label: 'Open', selected: requestStatusFilter === 'Open' && requestFollowupFilter === 'All follow-ups', onSelect: () => { setRequestStatusFilter('Open'); setRequestFollowupFilter('All follow-ups'); } },
+      { label: 'Resolved', selected: requestStatusFilter === 'Resolved' && requestFollowupFilter === 'All follow-ups', onSelect: () => { setRequestStatusFilter('Resolved'); setRequestFollowupFilter('All follow-ups'); } },
+      { label: 'All statuses', selected: requestStatusFilter === 'All statuses' && requestFollowupFilter === 'All follow-ups', onSelect: () => { setRequestStatusFilter('All statuses'); setRequestFollowupFilter('All follow-ups'); } },
+      { label: 'Reminder due', selected: requestFollowupFilter === 'Reminder due', onSelect: () => { setRequestStatusFilter('Open'); setRequestFollowupFilter('Reminder due'); } },
+      { label: 'Overdue', selected: requestFollowupFilter === 'Overdue', onSelect: () => { setRequestStatusFilter('Open'); setRequestFollowupFilter('Overdue'); } },
+    ]} /></View><View style={styles.rowAction} /></View>{filteredStudentRequests.map(({ kind, request }) => {
+      const patient = patients.find((item) => item.id === request.patientId)!;
+      const stage = kind === 'access' ? 'Ready for Admin Review' : releaseStage(request as ReleaseRequest);
+      const status = request.status;
+      const origin = kind === 'access' ? 'Therapist' : (request as ReleaseRequest).origin ?? 'Therapist';
+      const followup = kind === 'release' ? releaseFollowup(request as ReleaseRequest, prototypeNow) : null;
+      const submitter = kind === 'access' ? professionals.find((person) => person.id === (request as SuspensionRequest).therapistId)?.name ?? 'Therapist' : origin === 'Guardian' ? patient.guardian || 'Guardian' : professionals.find((person) => person.id === (origin === 'Teacher' ? patient.teacherId : (request as ReleaseRequest).therapistId))?.name ?? origin;
+      const typeLabel = kind === 'access' ? 'Account access suspension' : (request as ReleaseRequest).requestType === 'Transfer' ? 'School transfer' : (request as ReleaseRequest).requestType === 'Withdrawal' ? 'Withdrawal' : (request as ReleaseRequest).requestType === 'Therapist assignment release' ? 'Therapist assignment release' : 'Enrollment release';
+      const statusTone = status === 'Pending' || status === 'More information requested' ? 'yellow' : status === 'Approved' || status.startsWith('Approved') ? 'green' : 'neutral';
+      const onOpen = () => { setRequestAction(''); setReleaseReplacement(''); setReleaseNote(''); setReleaseEffectiveDate(new Date().toISOString().slice(0, 10)); setReleaseAuthorizationReference(''); setRequestHistoryExpanded(false); setSelection(kind === 'access' ? { kind: 'request', id: request.id } : { kind: 'release', id: request.id }); };
+       return <Pressable key={`${kind}-${request.id}`} onPress={onOpen} style={({ hovered }) => [styles.requestTableRow, hovered && styles.rowHover]} accessibilityRole="button" accessibilityLabel={`Review ${typeLabel} for ${patient.name}, request ${request.id}`}><View style={[styles.requestTableCell, { flex: 170 }]}><Text style={styles.personName}>{patient.name}</Text><Text style={styles.secondaryText}>{patient.studentNumber}</Text><Text style={styles.requestId}>ID {request.id}</Text></View><View style={[styles.requestTableCell, { flex: 180 }]}><Text style={styles.requestCellPrimary}>{typeLabel}</Text></View><View style={[styles.requestTableCell, { flex: 195 }]}><Text style={styles.requestCellPrimary}>{submitter}</Text><Text style={styles.secondaryText}>{origin} {'\u00B7'} {formatDate(request.submitted)}</Text></View><View style={[styles.requestTableCell, { flex: 205 }]}><Text style={styles.requestCellPrimary}>{stage}</Text></View><View style={[styles.requestTableCell, { flex: 150 }]}><Status label={status} tone={statusTone} />{followup?.overdue ? <Text style={styles.requestStatusMeta}>Follow-up overdue</Text> : followup?.due ? <Text style={styles.requestStatusMeta}>Reminder due</Text> : null}</View><View style={styles.rowAction}><Ionicons name="chevron-forward" size={17} color={C.blueDeep} /></View></Pressable>;
+    })}{filteredStudentRequests.length === 0 ? <EmptyState title={releaseRequests.length + requests.length === 0 ? 'No requests yet' : 'No requests match these filters'} detail={releaseRequests.length + requests.length === 0 ? 'Student-related administrative requests will appear here.' : 'Change the search or filters to find requests.'} action={releaseRequests.length + requests.length === 0 ? null : <Button label="Reset search and filters" onPress={() => { setRequestSearch(''); setRequestTypeFilter('All types'); setRequestStatusFilter('Open'); setRequestStageFilter('All stages'); setRequestFollowupFilter('All follow-ups'); }} />} /> : null}</View></ScrollView>
+  </ScrollView>;
+  const logsPage = () => <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
+    <Header title="Activity Logs" subtitle="A chronological record of account, student, and request decisions." />
+    <View style={styles.directoryControls}><SearchBox value={logSearch} onChange={setLogSearch} placeholder="Search activity, record, or administrator" /><Filter label="Category" value={logCategory} options={['All activity', 'Account', 'Student', 'Request', 'Settings']} onChange={setLogCategory} /></View>
+    <View style={styles.logList}>{visibleLogs.map((entry) => {
+      const relatedPatient = patients.find((patient) => entry.detail.includes(patient.name));
+      const relatedProfessional = professionals.find((person) => entry.detail.includes(person.name));
+      const relatedRequest = relatedPatient && entry.category === 'Request' ? [...releaseRequests.map((request) => ({ kind: 'release' as const, request })), ...requests.map((request) => ({ kind: 'access' as const, request }))].find(({ request }) => request.patientId === relatedPatient.id) : undefined;
+      const openRelated = () => {
+        if (relatedRequest) goToAccountsView('Student Requests', { kind: relatedRequest.kind === 'release' ? 'release' : 'request', id: relatedRequest.request.id });
+        else if (relatedPatient) goToAccountsView('Directory', { kind: 'patient', id: relatedPatient.id }, { role: 'Student', search: relatedPatient.name, enrollment: relatedPatient.enrollment, access: 'All access', setup: 'All setup', membership: 'All memberships' });
+        else if (relatedProfessional) goToAccountsView('Directory', { kind: 'professional', id: relatedProfessional.id }, { role: relatedProfessional.role, search: relatedProfessional.name, access: 'All access', setup: 'All setup', membership: 'All memberships', enrollment: 'All enrollment' });
+      };
+      return <View key={entry.id} style={styles.logRow}><View style={styles.logDate}><Text style={styles.logDateDay}>{formatDate(entry.date)}</Text><Text style={styles.secondaryText}>{formatTimestamp(entry.date).split(', ')[1]}</Text></View>{!entry.read ? <View style={[styles.activityMark, { backgroundColor: C.blue }]} /> : null}<View style={styles.activityCopy}><Text style={styles.activityTitle}>{entry.title}</Text><Text style={styles.secondaryText}>{entry.detail}</Text></View><View style={styles.logActor}><Text style={styles.secondaryText}>{entry.actor}</Text></View>{relatedPatient || relatedProfessional ? <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Open related record for ${relatedPatient?.name ?? relatedProfessional?.name}`} onPress={openRelated} style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="eye-outline" size={17} color={C.blueDeep} /></TouchableOpacity> : null}</View>;
+    })}</View>
+    {visibleLogs.length === 0 ? <EmptyState title="No activity found" detail="Try a different category or search term." action={<Button label="Clear filters" onPress={() => { setLogSearch(''); setLogCategory('All activity'); }} />} /> : null}
+  </ScrollView>;
 
-          {renderTopHeader(
-            activeTab === 'dashboard' ? 'Welcome, Admin' : (activeTab === 'request' ? 'Requests' : 'Accounts'),
-            activeTab !== 'dashboard'
-          )}
+  const settingsPage = () => <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
+    <Header title="Center Profile" subtitle="Center information used to identify this administrative workspace." />
+    <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Center information</Text><Text style={styles.sectionSub}>These changes are local to this demo session.</Text>{([['name', 'Center name'], ['email', 'Administrator email'], ['phone', 'Phone'], ['address', 'Address']] as const).map(([key, label]) => <View key={key} style={styles.settingRow}><Text style={styles.settingLabel}>{label}</Text><TextInput value={centerSettings[key]} onChangeText={(value) => { setCenterSettings((current) => ({ ...current, [key]: value })); setSettingsSaved(false); }} style={styles.settingInput} accessibilityLabel={label} /></View>)}<View style={styles.settingsAction}><Button label={settingsSaved ? 'Saved' : 'Save settings'} kind="primary" onPress={() => { setSettingsSaved(true); addLog('Center profile updated', `${centerSettings.name} · local demo settings`, 'Settings'); flash('Center profile settings saved in this demo.'); }} /></View></View>
+    <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Administrator profile</Text><View style={styles.profileSummary}>{avatar('Center Admin')}<View><Text style={styles.personName}>Center Admin</Text><Text style={styles.secondaryText}>Administrator · {centerSettings.name}</Text></View></View><Button label="View profile" onPress={() => setShowProfileDetails(true)} /></View>
+  </ScrollView>;
 
-          <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-            {activeTab === 'dashboard' && renderDashboard()}
-            {activeTab === 'request' && renderRequests()}
-            {activeTab === 'accounts' && renderAccounts()}
+  const selectNav = (target: Page) => goTo(target);
+  const selectAccountView = (view: AccountView) => goToAccountsView(view);
+  const sidebar = (inDrawer = false) => <Pressable nativeID={desktop && !inDrawer ? 'center-admin-sidebar' : undefined} style={[styles.sidebar, desktop && !inDrawer && styles.sidebarRail, desktop && !inDrawer && sidebarExpanded && styles.sidebarRailExpanded, inDrawer && styles.sidebarDrawer]}>
+    <View style={[styles.brandLockup, desktop && !inDrawer && !sidebarExpanded && styles.brandLockupRail]}><Image source={require('../../../assets/images/speaksteps-children-mark.png')} style={styles.brandMark} contentFit="contain" />{!desktop || inDrawer || sidebarExpanded ? <View><Text style={styles.brandName}>SpeakSteps</Text><Text style={styles.brandSub}>CENTER ADMIN</Text></View> : null}</View>
+    {!desktop || inDrawer || sidebarExpanded ? <Text style={styles.navCaption}>WORKSPACE</Text> : null}{NAV.map((item) => item.label === 'Accounts' ? desktop && !inDrawer && !sidebarExpanded ? <View key="Accounts" style={{ marginBottom: 3, gap: 3 }} accessibilityRole="list" accessibilityLabel="Account sections">
+      {(['Directory', 'Student Requests', 'Archive Center'] as AccountView[]).map((view) => <TouchableOpacity key={view} onPress={() => selectAccountView(view)} style={[styles.navItem, styles.navItemRail, page === 'Accounts' && accountView === view && styles.navItemActive]} accessibilityRole="button" accessibilityLabel={view} accessibilityState={{ selected: page === 'Accounts' && accountView === view }}><Ionicons name={accountViewIcon(view, page === 'Accounts' && accountView === view)} size={19} color={page === 'Accounts' && accountView === view ? C.blue : C.muted} /></TouchableOpacity>)}
+    </View> : <View key="Accounts" style={{ marginBottom: 3 }}>
+      <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', borderRadius: 8, backgroundColor: page === 'Accounts' ? '#F5F9FC' : 'transparent', marginBottom: 2 }}>
+        <TouchableOpacity onPress={() => desktop && !inDrawer && !sidebarExpanded ? setAccountsExpanded((value) => !value) : selectAccountView('Directory')} style={{ flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: desktop && !inDrawer && !sidebarExpanded ? 0 : 11, justifyContent: desktop && !inDrawer && !sidebarExpanded ? 'center' : 'flex-start' }} accessibilityRole="button" accessibilityLabel={desktop && !inDrawer && !sidebarExpanded ? `${accountsExpanded ? 'Hide' : 'Show'} Accounts submodules` : 'Accounts, open Directory'} accessibilityState={{ selected: page === 'Accounts' && accountView === 'Directory', expanded: desktop && !inDrawer && !sidebarExpanded ? accountsExpanded : undefined }}><Ionicons name={page === 'Accounts' ? 'people' : 'people-outline'} size={19} color={page === 'Accounts' ? C.blueDeep : C.muted} />{!desktop || inDrawer || sidebarExpanded ? <Text style={[styles.navText, page === 'Accounts' && { color: C.blueDeep, fontFamily: 'Geist-SemiBold' }]}>Accounts</Text> : null}</TouchableOpacity>
+        {(!desktop || inDrawer || sidebarExpanded) ? <TouchableOpacity onPress={() => setAccountsExpanded((value) => !value)} accessibilityRole="button" accessibilityLabel={`${accountsExpanded ? 'Collapse' : 'Expand'} Accounts navigation`} accessibilityState={{ expanded: accountsExpanded }} style={{ width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Ionicons name={accountsExpanded ? 'chevron-down' : 'chevron-forward'} size={15} color={C.muted} /></TouchableOpacity> : null}
+      </View>
+      {accountsExpanded && (!desktop || inDrawer || sidebarExpanded) ? <View style={{ marginLeft: 19, paddingLeft: 13, borderLeftWidth: 1, borderLeftColor: C.line, marginBottom: 5 }} accessibilityRole="list">
+        {(['Directory', 'Student Requests', 'Archive Center'] as AccountView[]).map((view) => <TouchableOpacity key={view} onPress={() => selectAccountView(view)} style={{ minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 10, marginVertical: 1, borderRadius: 7, backgroundColor: page === 'Accounts' && accountView === view ? C.blueSoft : 'transparent' }} accessibilityRole="button" accessibilityLabel={view} accessibilityState={{ selected: page === 'Accounts' && accountView === view }}><Ionicons name={accountViewIcon(view, page === 'Accounts' && accountView === view)} size={17} color={page === 'Accounts' && accountView === view ? C.blue : C.subtle} /><Text style={{ flex: 1, color: page === 'Accounts' && accountView === view ? C.blue : C.muted, fontFamily: page === 'Accounts' && accountView === view ? 'Geist-SemiBold' : 'Geist-Medium', fontSize: 14 }}>{view}</Text></TouchableOpacity>)}
+      </View> : null}
+    </View> : <TouchableOpacity key={item.label} onPress={() => selectNav(item.label)} style={[styles.navItem, desktop && !inDrawer && !sidebarExpanded && styles.navItemRail, page === item.label && styles.navItemActive]} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected: page === item.label }}><Ionicons name={page === item.label ? item.activeIcon : item.icon} size={19} color={page === item.label ? C.blue : C.muted} />{!desktop || inDrawer || sidebarExpanded ? <Text style={[styles.navText, page === item.label && styles.navTextActive]}>{item.label}</Text> : null}</TouchableOpacity>)}
+    {desktop && !inDrawer ? <TouchableOpacity onPress={() => { setSidebarExpanded(!sidebarExpanded); setAccountsExpanded(!sidebarExpanded && page === 'Accounts'); }} style={[styles.sidebarPinButton, !sidebarExpanded && styles.navItemRail, sidebarExpanded && styles.navItemActive]} accessibilityRole="button" accessibilityLabel={sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'} accessibilityState={{ expanded: sidebarExpanded }}><Octicons name={sidebarExpanded ? 'sidebar-collapse' : 'sidebar-expand'} size={18} color={sidebarExpanded ? C.blue : C.muted} /></TouchableOpacity> : null}
+
+  </Pressable>;
+
+  const selectedDetailsContent = <>
+
+       {selectedProfessional ? <ProfessionalDetails person={selectedProfessional} students={selectedProfessionalStudents} historicalAssignments={assignmentHistory.filter((entry) => entry.professionalId === selectedProfessional.id).map((assignment) => ({ assignment, student: patients.find((patient) => patient.id === assignment.patientId) }))} onOpenStudent={(student) => setSelection({ kind: 'patient', id: student.id })} onResendInvitation={() => resendInvitation(selectedProfessional)} onSuspend={() => confirmProfessionalSuspension(selectedProfessional)} onReactivate={() => setProfessionalStatus(selectedProfessional, 'Active')} onDeactivate={() => setProfessionalStatus(selectedProfessional, 'Deactivated')} /> : null}
+{selectedPatient ? <>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}>
+    <Text style={detailPanelStyles.accountDetailSectionTitle}>Student relationships</Text>
+    <View style={detailPanelStyles.studentAssignmentBlock}>
+      <Text style={detailPanelStyles.studentFieldLabel}>Assigned Teacher</Text>
+      <View style={detailPanelStyles.studentAssignmentValue}><Text numberOfLines={1} style={[detailPanelStyles.studentDetailValue, { flex: 1 }]}>{professionals.find((person) => person.id === selectedPatient.teacherId)?.name ?? 'Not assigned'}</Text>{selectedPatient.enrollment === 'Enrolled' && selectedPatient.teacherId && !activeTeachers.some((person) => person.id === selectedPatient.teacherId) ? <Status label="Needs reassignment" tone="yellow" /> : null}{selectedPatient.enrollment === 'Enrolled' ? <TooltipIconButton icon="pencil" label="Change Teacher assignment" hint="Changes the SpeakSteps assignment only. School records stay unchanged." onPress={() => setTeacherChoicesOpen(teacherChoicesOpen === selectedPatient.id ? null : selectedPatient.id)} buttonStyle={detailPanelStyles.assignmentIconButton} /> : null}</View>
+      {teacherChoicesOpen === selectedPatient.id ? <View style={styles.choiceList}>{activeTeachers.filter((teacher) => teacher.id !== selectedPatient.teacherId).map((teacher) => <TouchableOpacity key={teacher.id} onPress={() => changeTeacher(selectedPatient, teacher.id)} style={styles.choiceRow}><View><Text style={styles.personName}>{teacher.name}</Text><Text style={styles.secondaryText}>{teacher.email}</Text></View><Ionicons name="chevron-forward" size={15} color={C.subtle} /></TouchableOpacity>)}{activeTeachers.filter((teacher) => teacher.id !== selectedPatient.teacherId).length === 0 ? <Text style={styles.secondaryText}>No eligible replacement Teachers are available.</Text> : null}</View> : null}
+    </View>
+    <View style={detailPanelStyles.studentAssignmentBlock}>
+      <Text style={detailPanelStyles.studentFieldLabel}>Assigned Therapist</Text>
+      <View style={detailPanelStyles.studentAssignmentValue}><Text numberOfLines={1} style={[detailPanelStyles.studentDetailValue, { flex: 1 }]}>{activeTherapistFor(selectedPatient.therapistId)}</Text>{selectedPatient.enrollment === 'Enrolled' && selectedPatient.therapistId && !activeTherapists.some((person) => person.id === selectedPatient.therapistId) ? <Status label="Needs reassignment" tone="yellow" /> : null}{selectedPatient.enrollment === 'Enrolled' ? <TooltipIconButton icon="swap-horizontal" label="Reassign Therapist" hint="Choose an eligible Therapist. The current assignment stays until confirmed." onPress={() => setAssignmentChoicesOpen(assignmentChoicesOpen === selectedPatient.id ? null : selectedPatient.id)} buttonStyle={detailPanelStyles.assignmentIconButton} /> : null}</View>
+      {assignmentChoicesOpen === selectedPatient.id ? <View style={styles.choiceList}>{eligibleReplacements(selectedPatient.id).map((person) => <TouchableOpacity key={person.id} accessibilityRole="radio" accessibilityLabel={`Assign ${person.name} as Therapist`} accessibilityState={{ selected: false }} onPress={() => reassignPatient(selectedPatient, person.id)} style={styles.choiceRow}><View><Text style={styles.personName}>{person.name}</Text><Text style={styles.secondaryText}>{patients.filter((item) => item.therapistId === person.id && item.enrollment === 'Enrolled').length} enrolled Students</Text></View><View accessibilityElementsHidden style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: C.blue, backgroundColor: C.white }} /></TouchableOpacity>)}{eligibleReplacements(selectedPatient.id).length > 0 ? <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancel Therapist reassignment" onPress={() => setAssignmentChoicesOpen(null)} style={{ minHeight: 38, alignSelf: 'flex-end', justifyContent: 'center', paddingHorizontal: 8 }}><Text style={{ color: C.blue, fontFamily: 'Geist-Medium', fontSize: 12 }}>Cancel</Text></TouchableOpacity> : null}{eligibleReplacements(selectedPatient.id).length === 0 ? <Text style={styles.secondaryText}>No eligible replacement Therapists are available.</Text> : null}</View> : null}
+    </View>
+  </View>
+  {selectedArchiveEpisode ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={detailPanelStyles.accountDetailSectionTitle}>Closed care episode</Text><View style={detailPanelStyles.accountDetailGrid}><Detail label="Status" value={archiveEpisodeStatus(selectedArchiveEpisode)} /><Detail label="Effective date" value={selectedArchiveEpisode.effectiveCloseDate ? formatDate(selectedArchiveEpisode.effectiveCloseDate) : 'Not recorded'} /><Detail label="Closure reason" value={selectedArchiveEpisode.closureReason ?? 'Not recorded'} /><Detail label="Authorization reference" value={selectedArchiveEpisode.authorizationReference ?? 'Not recorded'} /><Detail label="Authorized by" value={selectedArchiveEpisode.authorizedBy ?? 'Not recorded'} /><Detail label="Previous Therapist" value={selectedArchiveEpisode.therapistIdAtClose ? professionals.find((person) => person.id === selectedArchiveEpisode.therapistIdAtClose)?.name ?? 'Professional record unavailable' : 'Not recorded'} /></View>{assignmentHistory.filter((entry) => entry.patientId === selectedPatient.id).length ? <><Text style={[detailPanelStyles.accountDetailSectionTitle, { marginTop: 10 }]}>Historical assignments</Text>{assignmentHistory.filter((entry) => entry.patientId === selectedPatient.id).map((entry) => <View key={entry.id} style={styles.requestEvent}><View style={styles.activityCopy}><Text style={styles.activityTitle}>{professionals.find((person) => person.id === entry.professionalId)?.name ?? 'Professional record unavailable'} · {entry.role}</Text><Text style={styles.secondaryText}>{entry.endReason ?? 'Reason not recorded'} · {entry.endedAt ? formatDate(entry.endedAt) : 'End date not recorded'}</Text></View></View>)}</> : null}</View> : null}
+  <View style={[styles.detailSection, detailPanelStyles.studentDetailSection]}><Text style={detailPanelStyles.accountDetailSectionTitle}>Guardian information</Text><View style={detailPanelStyles.accountDetailGrid}><Detail label="Guardian" value={selectedPatient.guardian || 'Not recorded'} /><Detail label="Registered email or contact" value={selectedPatient.guardianContact || 'Not recorded'} /></View></View>
+  <View style={[styles.detailSection, detailPanelStyles.studentDetailSection]}><Text style={detailPanelStyles.accountDetailSectionTitle}>School identity</Text><View style={detailPanelStyles.accountDetailGrid}><Detail label="Grade level" value={selectedPatient.grade ?? 'Not recorded'} /><Detail label="Section" value={selectedPatient.section ?? 'Not recorded'} /><Detail label="School" value={selectedPatient.school || 'Not recorded'} /></View><Text style={styles.sourceNote}>For corrections, use the authorized school-record process.</Text></View>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><View style={styles.sectionHeading}><View style={{ flex: 1, minWidth: 0 }}><Text style={detailPanelStyles.accountDetailSectionTitle}>Therapy enrollment</Text><Text style={styles.secondaryText}>{selectedPatient.enrollment === 'Enrolled' ? 'Account access, enrollment, and therapy status are managed separately.' : 'This care episode is closed. Re-enroll from Archive Center to begin a new episode.'}</Text></View><Status label={selectedPatient.enrollment === 'Enrolled' ? 'Active' : 'Closed'} tone={selectedPatient.enrollment === 'Enrolled' ? 'blue' : 'neutral'} /></View>{selectedPatient.enrollment === 'Enrolled' ? <AccountDetailsActionRow title="Close enrollment" detail="Requires a documented authorized withdrawal or transfer. Clinical discharge stays with the Therapist." label="Close enrollment" onPress={() => openClosureForm(selectedPatient)} tone="danger" /> : <Text style={styles.sourceNote}>This does not change account access. Historical episodes and assignments remain in Archive Center.</Text>}</View>
+  <View style={[styles.detailSection, detailPanelStyles.studentDetailSection]}><Text style={detailPanelStyles.accountDetailSectionTitle}>Account record</Text><View style={detailPanelStyles.accountDetailGrid}><Detail label="Therapy status" value={selectedPatient.therapyStatus} /><Detail label="Created" value={formatDate(selectedPatient.registered)} /></View></View>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={detailPanelStyles.accountDetailSectionTitle}>Account actions</Text>{studentMembership(selectedPatient) === 'Deactivated' ? <Text style={styles.sourceNote}>This account is in Archive Center. Account access and enrollment remain separate.</Text> : <>{studentSetup(selectedPatient) === 'Pending' ? <AccountDetailsActionRow title="Follow up on setup" detail="No email is sent." label="Follow up" onPress={() => recordStudentSetupFollowup(selectedPatient)} tone="primary" /> : null}{studentSetup(selectedPatient) === 'Completed' && studentAccess(selectedPatient) === 'Active' ? <AccountDetailsActionRow title="Suspend access" detail="Student and Guardian sign-in will be suspended." label="Suspend access" onPress={() => changePatientAccess(selectedPatient, 'Suspended')} /> : null}{studentSetup(selectedPatient) === 'Completed' && studentAccess(selectedPatient) === 'Suspended' && selectedPatient.enrollment === 'Enrolled' ? <AccountDetailsActionRow title="Restore account access" detail="Restore Student and Guardian sign-in." label="Reactivate access" onPress={() => changePatientAccess(selectedPatient, 'Active')} tone="primary" /> : null}{studentAccess(selectedPatient) === 'Suspended' && selectedPatient.enrollment === 'Archived' ? <Text style={styles.sourceNote}>Restore enrollment before reactivating account access.</Text> : null}</>}</View>
+</> : null}{selectedRelease && selectedReleasePatient ? <>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Request overview</Text><View style={styles.detailGrid}><Detail label="Submitted by" value={selectedReleaseSubmitter + ' \u00B7 ' + (selectedRelease.origin ?? 'Therapist')} /><Detail label="Submitted" value={formatDate(selectedRelease.submitted)} /><Detail label="Reason" value={selectedRelease.reason} /></View></View>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Original explanation</Text><Text style={styles.requestReason}>{selectedRelease.explanation}</Text><Text style={styles.sourceNote}>Submitted by {selectedReleaseSubmitter} \u00B7 {selectedRelease.origin ?? 'Therapist'}</Text></View>
+  {selectedRelease.requestType === 'Therapist assignment release' || selectedRelease.reason === 'No longer receiving services' ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Assignment</Text><Detail label="Currently assigned Therapist" value={activeTherapistFor(selectedReleasePatient.therapistId)} /><Text style={styles.sourceNote}>This request changes the Therapist assignment only. Enrollment and account access stay unchanged.</Text></View> : <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Verification and evidence</Text><View style={styles.detailGrid}><Detail label="Guardian confirmation" value={selectedRelease.guardianConfirmation ?? 'Not recorded'} /><Detail label="Teacher verification" value={selectedRelease.teacherVerification ?? 'Not recorded'} /><Detail label="School evidence" value={selectedRelease.attachment ?? 'Not provided'} /></View>{!selectedRelease.attachment || selectedRelease.teacherVerification !== 'Verified' || (selectedRelease.origin !== 'Therapist' && selectedRelease.guardianConfirmation !== 'Confirmed' && selectedRelease.guardianConfirmation !== 'Not required') ? <View style={styles.requestWarning}><Text style={styles.requestWarningTitle}>Archive prerequisites incomplete</Text><Text style={styles.secondaryText}>Required school evidence, Teacher verification, or Guardian confirmation is still missing.</Text></View> : null}</View>}
+  {(selectedRelease.status === 'Pending' || selectedRelease.status === 'More information requested') && selectedRelease.origin !== 'Therapist' ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Follow-up</Text><View style={styles.detailGrid}><Detail label="Responsible party" value={selectedRelease.followupRecipient ?? selectedRelease.origin ?? 'Guardian'} /><Detail label="Request sent" value={formatDate(selectedRelease.submitted)} /><Detail label="Reminders recorded" value={String(selectedRelease.reminderCount ?? 0) + (selectedRelease.lastReminderAt ? ' \u00B7 last ' + formatDate(selectedRelease.lastReminderAt) : '')} /></View>{releaseFollowup(selectedRelease, prototypeNow).overdue ? <Text style={styles.requestOverdue}>Overdue \u00B7 Day 14 escalation {releaseFollowup(selectedRelease, prototypeNow).day14Recorded ? 'recorded' : 'due'}</Text> : null}{releaseFollowup(selectedRelease, prototypeNow).due ? <Button label={releaseFollowup(selectedRelease, prototypeNow).nextDay === 14 ? 'Record Day 14 escalation' : 'Record Day ' + releaseFollowup(selectedRelease, prototypeNow).nextDay + ' reminder'} kind="secondary" onPress={() => recordReleaseReminder(selectedRelease)} /> : <Text style={styles.sourceNote}>{releaseFollowup(selectedRelease, prototypeNow).day14Recorded ? 'Day 14 escalation already recorded. No message was sent.' : 'No message was sent.'}</Text>}</View> : null}
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><View style={styles.sectionHeading}><Text style={styles.requestSectionTitle}>Request history</Text>{(selectedRelease.events ?? []).length > 2 ? <TouchableOpacity onPress={() => setRequestHistoryExpanded((value) => !value)}><Text style={styles.linkText}>{requestHistoryExpanded ? 'Show less' : 'Show older'}</Text></TouchableOpacity> : null}</View>{[...(selectedRelease.events ?? [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, requestHistoryExpanded ? undefined : 2).map((event) => <View key={event.id} style={styles.requestEvent}><View style={styles.requestEventMark} /><View style={styles.activityCopy}><Text style={styles.activityTitle}>{event.title}</Text><Text style={styles.secondaryText}>{event.detail}</Text><Text style={styles.attentionTime}>{event.actor} \u00B7 {formatTimestamp(event.date)}</Text></View></View>)}</View>
+  {(selectedRelease.status === 'Pending' || selectedRelease.status === 'More information requested') ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Choose administrative action</Text>{releaseStage(selectedRelease) !== 'Ready for Admin Review' ? <View style={styles.requestWarning}><Text style={styles.requestWarningTitle}>{releaseStage(selectedRelease)}</Text><Text style={styles.secondaryText}>Waiting on {selectedRelease.followupRecipient ?? 'the required verifier'}. Final decisions are unavailable until verification is complete.</Text></View> : null}<View style={styles.requestActionOptions}>{[
+    { id: 'info', label: 'Request More Information', detail: 'Ask the submitter for clarification', show: true },
+    { id: 'reassign', label: 'Approve & Reassign', detail: 'Change the Therapist assignment only', show: selectedRelease.requestType === 'Therapist assignment release' && releaseStage(selectedRelease) === 'Ready for Admin Review' },
+    { id: 'archive', label: 'Approve & Archive', detail: 'End school enrollment after verification', show: ['Transfer', 'Withdrawal', 'Enrollment release'].includes(selectedRelease.requestType ?? 'Enrollment release') && selectedRelease.reason !== 'No longer receiving services' && releaseStage(selectedRelease) === 'Ready for Admin Review' && !!selectedRelease.attachment && selectedRelease.teacherVerification === 'Verified' && (selectedRelease.origin === 'Therapist' || selectedRelease.guardianConfirmation === 'Confirmed' || selectedRelease.guardianConfirmation === 'Not required') },
+    { id: 'decline', label: 'Decline Request', detail: 'Keep enrollment and assignment unchanged', show: releaseStage(selectedRelease) === 'Ready for Admin Review' },
+  ].filter((option) => option.show).map((option) => <TouchableOpacity key={option.id} accessibilityRole="radio" accessibilityState={{ selected: requestAction === option.id }} onPress={() => { setRequestAction(requestAction === option.id ? '' : option.id); setReleaseNote(''); setReleaseEffectiveDate(new Date().toISOString().slice(0, 10)); setReleaseAuthorizationReference(''); }} style={[styles.requestActionOption, requestAction === option.id && styles.requestActionOptionSelected]}><View style={[styles.radioOuter, requestAction === option.id && styles.radioOuterSelected]}>{requestAction === option.id ? <View style={styles.radioInner} /> : null}</View><View style={{ flex: 1 }}><Text style={styles.requestCellPrimary}>{option.label}</Text><Text style={styles.secondaryText}>{option.detail}</Text></View></TouchableOpacity>)}</View>
+  {requestAction === 'info' ? <View style={styles.actionPanel}><Detail label="Recipient" value={selectedRelease.followupRecipient ?? selectedRelease.origin ?? 'Therapist'} /><Text style={styles.fieldLabel}>Information needed</Text><TextInput value={releaseNote} onChangeText={setReleaseNote} placeholder="Describe the needed clarification" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View> : null}
+  {requestAction === 'reassign' ? <View style={styles.actionPanel}><Detail label="Current Therapist" value={activeTherapistFor(selectedReleasePatient.therapistId)} /><SelectControl label="Replacement Therapist" value={releaseReplacement} options={['', ...activeTherapists.map((person) => person.id).filter((id) => id !== selectedReleasePatient.therapistId)]} getLabel={(id) => id ? (professionals.find((person) => person.id === id)?.name ?? id) + ' \u00B7 ' + patients.filter((item) => item.therapistId === id && item.enrollment === 'Enrolled').length + ' students' : 'Choose an eligible Therapist'} onChange={setReleaseReplacement} /><Text style={styles.sourceNote}>Caseload is informational; there is no maximum.</Text></View> : null}
+  {requestAction === 'archive' ? <View style={styles.actionPanel}><Text style={styles.requestCellPrimary}>This closes the care episode and ends its current professional assignments. Account access stays unchanged.</Text><Text style={styles.secondaryText}>Verified evidence: {selectedRelease.attachment} \u00B7 Teacher: {selectedRelease.teacherVerification}</Text><View style={styles.field}><Text style={styles.fieldLabel}>Effective date</Text><TextInput value={releaseEffectiveDate} onChangeText={setReleaseEffectiveDate} placeholder="YYYY-MM-DD" placeholderTextColor={C.subtle} style={styles.input} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Authorization reference</Text><TextInput value={releaseAuthorizationReference} onChangeText={setReleaseAuthorizationReference} placeholder="Approved request or authorization ID" placeholderTextColor={C.subtle} style={styles.input} /></View><Text style={styles.fieldLabel}>Administrative resolution note</Text><TextInput value={releaseNote} onChangeText={setReleaseNote} placeholder="Record the administrative reason" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View> : null}
+  {requestAction === 'decline' ? <View style={styles.actionPanel}><Text style={styles.fieldLabel}>Reason for declining</Text><TextInput value={releaseNote} onChangeText={setReleaseNote} placeholder="Enter the administrative reason" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View> : null}
+  </View> : <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Administrative resolution</Text><Text style={styles.detailValue}>{selectedRelease.status}</Text><Detail label="Resolved by" value={selectedRelease.resolvedBy ?? selectedReleaseResolutionEvent?.actor ?? 'Not recorded'} /><Detail label="Decision date" value={selectedRelease.resolvedAt ? formatTimestamp(selectedRelease.resolvedAt) : selectedReleaseResolutionEvent ? formatTimestamp(selectedReleaseResolutionEvent.date) : 'Not recorded'} /><Detail label="Reason" value={selectedRelease.resolutionReason ?? selectedReleaseResolutionEvent?.detail ?? 'Not recorded on the original request'} /></View>}
+</> : null}
+{selectedRequest && selectedRequestPatient ? <>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Request overview</Text><View style={styles.detailGrid}><Detail label="Submitted by" value={selectedAccessSubmitter + ' \u00B7 Therapist'} /><Detail label="Submitted" value={formatDate(selectedRequest.submitted)} /><Detail label="Current access" value={studentAccess(selectedRequestPatient)} /><Detail label="Assigned Therapist" value={activeTherapistFor(selectedRequestPatient.therapistId)} /></View></View>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Original explanation</Text><Text style={styles.requestReason}>{selectedRequest.reason}</Text><Text style={styles.sourceNote}>Submitted by {selectedAccessSubmitter} \u00B7 Therapist</Text></View>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Access conditions</Text><Text style={styles.secondaryText}>Approval suspends Student and Guardian sign-in only. Enrollment, assignments, and therapy status remain unchanged.</Text></View>
+  <View style={[styles.detailSection, detailPanelStyles.detailSection]}><View style={styles.sectionHeading}><Text style={styles.requestSectionTitle}>Request history</Text>{(selectedRequest.events ?? []).length > 2 ? <TouchableOpacity onPress={() => setRequestHistoryExpanded((value) => !value)}><Text style={styles.linkText}>{requestHistoryExpanded ? 'Show less' : 'Show older'}</Text></TouchableOpacity> : null}</View>{[...(selectedRequest.events ?? [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, requestHistoryExpanded ? undefined : 2).map((event) => <View key={event.id} style={styles.requestEvent}><View style={styles.requestEventMark} /><View style={styles.activityCopy}><Text style={styles.activityTitle}>{event.title}</Text><Text style={styles.secondaryText}>{event.detail}</Text><Text style={styles.attentionTime}>{event.actor} \u00B7 {formatTimestamp(event.date)}</Text></View></View>)}</View>
+  {selectedRequest.status === 'Pending' || selectedRequest.status === 'More information requested' ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Choose administrative action</Text><View style={styles.requestActionOptions}>{[{ id: 'info', label: 'Request More Information', detail: 'Ask the Therapist for clarification' }, { id: 'suspend', label: 'Approve Suspension', detail: 'Suspend Student and Guardian sign-in only' }, { id: 'decline', label: 'Decline Request', detail: 'Leave current account access unchanged' }].map((option) => <TouchableOpacity key={option.id} accessibilityRole="radio" accessibilityState={{ selected: requestAction === option.id }} onPress={() => { setRequestAction(requestAction === option.id ? '' : option.id); setReleaseNote(''); }} style={[styles.requestActionOption, requestAction === option.id && styles.requestActionOptionSelected]}><View style={[styles.radioOuter, requestAction === option.id && styles.radioOuterSelected]}>{requestAction === option.id ? <View style={styles.radioInner} /> : null}</View><View style={{ flex: 1 }}><Text style={styles.requestCellPrimary}>{option.label}</Text><Text style={styles.secondaryText}>{option.detail}</Text></View></TouchableOpacity>)}</View>{requestAction ? <View style={styles.actionPanel}><Text style={styles.fieldLabel}>{requestAction === 'info' ? 'Information needed' : requestAction === 'decline' ? 'Reason for declining' : 'Reason for suspension'}</Text><TextInput value={releaseNote} onChangeText={setReleaseNote} placeholder="Enter an administrative note" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View> : null}</View> : <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Administrative resolution</Text><Text style={styles.detailValue}>{selectedRequest.status}</Text><Detail label="Resolved by" value={selectedRequest.resolvedBy ?? selectedAccessResolutionEvent?.actor ?? 'Not recorded'} /><Detail label="Decision date" value={selectedRequest.resolvedAt ? formatTimestamp(selectedRequest.resolvedAt) : selectedAccessResolutionEvent ? formatTimestamp(selectedAccessResolutionEvent.date) : 'Not recorded'} /><Detail label="Reason" value={selectedRequest.resolutionReason ?? selectedAccessResolutionEvent?.detail ?? 'Not recorded on the original request'} /></View>}
+</> : null}
+
+    </>;
+
+  const selectedRequestFooter = selectedRelease && requestAction && (selectedRelease.status === 'Pending' || selectedRelease.status === 'More information requested') ? <View style={styles.requestDrawerFooter}><TouchableOpacity accessibilityRole="button" onPress={() => { setRequestAction(''); setReleaseNote(''); setReleaseReplacement(''); }} style={styles.requestCancel}><Text style={styles.requestCancelText}>Cancel</Text></TouchableOpacity><Button label={requestAction === 'info' ? 'Record Information Request' : requestAction === 'reassign' ? 'Confirm Reassignment' : requestAction === 'archive' ? 'Approve & Archive' : 'Decline Request'} kind={requestAction === 'archive' ? 'danger' : 'primary'} disabled={requestAction === 'info' || requestAction === 'decline' || requestAction === 'archive' ? !releaseNote.trim() || requestAction === 'archive' && (releaseStage(selectedRelease) !== 'Ready for Admin Review' || !selectedRelease.attachment || selectedRelease.teacherVerification !== 'Verified' || (selectedRelease.origin !== 'Therapist' && selectedRelease.guardianConfirmation !== 'Confirmed' && selectedRelease.guardianConfirmation !== 'Not required')) : requestAction === 'reassign' ? !releaseReplacement || releaseStage(selectedRelease) !== 'Ready for Admin Review' : false} onPress={() => resolveReleaseRequest(selectedRelease, requestAction === 'info' ? 'More information requested' : requestAction === 'reassign' ? 'Approved & reassigned' : requestAction === 'archive' ? 'Approved & archived' : 'Declined')} /></View> : selectedRequest && requestAction && (selectedRequest.status === 'Pending' || selectedRequest.status === 'More information requested') ? <View style={styles.requestDrawerFooter}><TouchableOpacity accessibilityRole="button" onPress={() => { setRequestAction(''); setReleaseNote(''); }} style={styles.requestCancel}><Text style={styles.requestCancelText}>Cancel</Text></TouchableOpacity><Button label={requestAction === 'info' ? 'Record Information Request' : requestAction === 'suspend' ? 'Approve Suspension' : 'Decline Request'} kind={requestAction === 'suspend' ? 'danger' : 'primary'} disabled={!releaseNote.trim()} onPress={() => requestAction === 'suspend' ? setConfirmation({ title: `Suspend access for ${selectedRequestPatient?.name ?? 'this Student'}?`, message: 'Student and Guardian sign-in will be suspended. Enrollment, assignments, and therapy status stay unchanged.', actionLabel: 'Suspend Access', danger: true, run: () => { resolveRequest(selectedRequest, 'Approved'); setConfirmation(null); } }) : resolveRequest(selectedRequest, requestAction === 'info' ? 'More information requested' : 'Declined')} /></View> : null;
+
+  return <View nativeID="admin-portal-root" style={[styles.appRoot, desktop ? styles.appRootDesktop : styles.appRootCompact]}>
+    <Stack.Screen options={{ headerShown: false, title: `SpeakSteps · ${page}` }} />
+    <StatusBar barStyle="dark-content" />
+    {desktop ? sidebar() : null}
+    <View style={styles.workspace}>
+      <View style={styles.topbar}>{!desktop ? <IconButton icon="menu-outline" label="Open navigation" onPress={() => { if (page === 'Accounts') setAccountsExpanded(true); setMenuOpen(true); }} /> : <View style={styles.breadcrumb}><Text style={styles.breadcrumbRoot}>Center workspace</Text><Ionicons name="chevron-forward" size={13} color={C.subtle} />{page === 'Accounts' ? <><Text style={styles.breadcrumbCurrent}>Accounts</Text><Ionicons name="chevron-forward" size={13} color={C.subtle} /><Text style={styles.breadcrumbCurrent}>{accountView}</Text></> : <Text style={styles.breadcrumbCurrent}>{page}</Text>}</View>}<View style={styles.topbarRight}><View ref={notificationAnchorRef} collapsable={false}><IconButton icon="notifications-outline" label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} onPress={() => setShowNotifications(true)} /></View><View style={styles.adminMenuAnchor}><View style={styles.adminChip}><View style={styles.adminInitial}><Text style={styles.adminInitialText}>CA</Text></View>{desktop ? <Text style={styles.adminChipText}>Center Admin</Text> : null}<Pressable onHoverIn={openProfileMenu} onHoverOut={scheduleProfileMenuClose} onPress={() => { if (!desktop) setShowProfile((visible) => !visible); }} style={styles.adminMenuArrow} accessibilityRole="button" accessibilityLabel="Account options" accessibilityState={{ expanded: showProfile }}><Ionicons name="chevron-down" size={14} color={C.muted} /></Pressable></View>{showProfile ? <Pressable style={styles.profileMenu} onHoverIn={openProfileMenu} onHoverOut={scheduleProfileMenuClose}><TouchableOpacity style={styles.profileMenuItem} onPress={() => { setShowProfile(false); setShowProfileDetails(true); }} accessibilityRole="button"><Ionicons name="person-outline" size={17} color={C.muted} /><Text style={styles.profileMenuText}>Profile</Text></TouchableOpacity><TouchableOpacity style={styles.profileMenuItem} onPress={() => { setShowProfile(false); selectNav('Settings'); }} accessibilityRole="button"><Ionicons name="settings-outline" size={17} color={C.muted} /><Text style={styles.profileMenuText}>Settings</Text></TouchableOpacity><TouchableOpacity style={styles.profileMenuItem} onPress={() => { setShowProfile(false); setConfirmation({ title: 'Sign out of Center Admin?', message: 'You will return to the sign-in screen. Your session will be cleared.', actionLabel: 'Sign out', run: () => { setConfirmation(null); void handleLogout(); } }); }} accessibilityRole="button"><Ionicons name="log-out-outline" size={17} color={C.red} /><Text style={[styles.profileMenuText, { color: C.red }]}>Log out</Text></TouchableOpacity></Pressable> : null}</View></View></View>
+      <View style={[styles.content, inlineAccountDetails && styles.contentSplit]}>
+        <View style={styles.contentMain}>{page === 'Dashboard' ? dashboard() : page === 'Accounts' ? accounts() : page === 'Activity Logs' ? logsPage() : settingsPage()}</View>
+        <Animated.View ref={accountDetailPaneRef} pointerEvents={inlineAccountDetails ? 'auto' : 'none'} style={[styles.accountDetailPane, { width: accountDetailPaneWidth, opacity: accountDetailPaneOpacity }]}>
+          {inlineAccountDetails ? <>
+            <View style={detailPanelStyles.accountDetailHeader}>{selectedAccountHeader}</View>
+            <ScrollView style={styles.accountDetailScroll} contentContainerStyle={styles.accountDetailContent} showsVerticalScrollIndicator={false}>{selectedDetailsContent}</ScrollView>
+            {selectedRequestFooter}
+          </> : null}
+        </Animated.View>
+      </View>
+    </View>
+
+    <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}><Pressable style={styles.overlay} onPress={() => setMenuOpen(false)}><Pressable style={styles.mobileDrawer} onPress={(event) => event.stopPropagation()}>{sidebar(true)}</Pressable></Pressable></Modal>
+    <Modal visible={showProfileDetails} transparent animationType="fade" onRequestClose={() => setShowProfileDetails(false)}><Pressable style={styles.overlay} onPress={() => setShowProfileDetails(false)}><Pressable style={styles.confirmDialog} onPress={(event) => event.stopPropagation()}><ModalHeader title="Administrator profile" subtitle="Center administration" onClose={() => setShowProfileDetails(false)} /><View style={styles.profileSummary}>{avatar('Center Admin')}<View><Text style={styles.personName}>Center Admin</Text><Text style={styles.secondaryText}>{centerSettings.email}</Text></View></View><Text style={styles.secondaryText}>{centerSettings.name}</Text><View style={styles.dialogActions}><Button label="Close" onPress={() => setShowProfileDetails(false)} /></View></Pressable></Pressable></Modal>
+
+    <Modal visible={showNotifications} transparent animationType="fade" onRequestClose={() => setShowNotifications(false)} onShow={() => notificationAnchorRef.current?.measureInWindow((x, y, anchorWidth, anchorHeight) => { const popoverWidth = Math.min(360, width - 24); setNotificationPosition({ top: y + anchorHeight + 8, left: Math.max(12, Math.min(width - popoverWidth - 12, x + anchorWidth / 2 - popoverWidth / 2)) }); })}>
+      <View style={styles.notificationLayer}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowNotifications(false)} accessibilityLabel="Close notifications" />
+        <Pressable onPress={(event) => event.stopPropagation()} style={[styles.notificationPopover, { top: notificationPosition.top, left: notificationPosition.left }]}>
+          <ModalHeader title="Notifications" onClose={() => setShowNotifications(false)} />
+          <View style={styles.segmentRow}>
+            {(['All', 'Unread'] as const).map((filter) => <TouchableOpacity key={filter} onPress={() => setNotificationFilter(filter)} style={[styles.segment, notificationFilter === filter && styles.segmentActive]}><Text style={[styles.segmentText, notificationFilter === filter && styles.segmentTextActive]}>{filter}</Text></TouchableOpacity>)}
+            <TouchableOpacity onPress={() => setNotifications((current) => current.map((item) => ({ ...item, read: true })))} style={styles.markAll}><Text style={styles.linkText}>Mark all read</Text></TouchableOpacity>
           </View>
+          <ScrollView style={styles.notificationList} keyboardShouldPersistTaps="handled">
+            {shownNotifications.map((item) => <TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={item.title + '. ' + item.detail} onPress={() => openNotification(item)} style={styles.notificationRow}>
+              {!item.read ? <View style={styles.unreadMark} /> : null}
+              <View style={styles.activityCopy}><Text style={styles.activityTitle}>{item.title}</Text><Text style={styles.secondaryText}>{item.detail}</Text><Text style={styles.activityDate}>{formatTimestamp(item.date)}</Text></View>
+            </TouchableOpacity>)}
+            {shownNotifications.length === 0 ? <Text style={styles.secondaryText}>You?re all caught up.</Text> : null}
+          </ScrollView>
+        </Pressable>
+      </View>
+    </Modal>
 
-          {!isDesktop && (
-            <View style={styles.bottomNav}>
-              <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('dashboard')}>
-                <Ionicons name={activeTab === 'dashboard' ? 'home' : 'home-outline'} size={24} color={activeTab === 'dashboard' ? '#0284C7' : '#94A3B8'} />
-                <Text style={[styles.navText, activeTab === 'dashboard' && styles.navTextActive]}>Dashboard</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('request')}>
-                <Ionicons name={activeTab === 'request' ? 'clipboard' : 'clipboard-outline'} size={24} color={activeTab === 'request' ? '#0284C7' : '#94A3B8'} />
-                <Text style={[styles.navText, activeTab === 'request' && styles.navTextActive]}>Request</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('accounts')}>
-                <Ionicons name={activeTab === 'accounts' ? 'people' : 'people-outline'} size={24} color={activeTab === 'accounts' ? '#0284C7' : '#94A3B8'} />
-                <Text style={[styles.navText, activeTab === 'accounts' && styles.navTextActive]}>Accounts</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+    <Modal visible={newAccountOpen} transparent animationType="fade" onRequestClose={() => { setNewAccountOpen(false); setCreatePatientOpen(false); }}><Pressable style={styles.overlay} onPress={() => { setNewAccountOpen(false); setCreatePatientOpen(false); }}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}>{createPatientOpen ? <CreatePatientDialog teachers={activeTeachers.map(({ id, name }) => ({ id, name }))} therapists={therapistCounts} existingNumbers={patients.map((patient) => patient.studentNumber)} onClose={() => { setCreatePatientOpen(false); setNewAccountOpen(false); }} onCreate={makePatient} onSwitchRole={(role) => { setCreatePatientOpen(false); setAccountNewRole(role); }} /> : <CreateProfessionalDialog key={accountNewRole} role={accountNewRole} existingProfessionals={professionals} onClose={() => setNewAccountOpen(false)} onCreate={makeProfessional} onSwitchRole={(role) => { if (role === 'Student') setCreatePatientOpen(true); else setAccountNewRole(role); }} />}</Pressable></Pressable></Modal>
 
-        </View>
+    <Modal visible={Boolean(closurePatient)} transparent animationType="fade" onRequestClose={() => setClosurePatient(null)}><Pressable style={styles.overlay} onPress={() => setClosurePatient(null)}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title={`Close enrollment — ${closureCategory.replace('Authorized ', '')}`} subtitle="Record an authorized administrative closure" onClose={() => setClosurePatient(null)} /><View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Clinical discharge is recorded by the Therapist. This form is for an authorized withdrawal, external transfer, or other administrative closure.</Text></View>{closurePatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{closurePatient.name}</Text><Text style={styles.secondaryText}>{closurePatient.studentNumber} · {closurePatient.school}</Text></View> : null}<View style={styles.field}><Text style={styles.fieldLabel}>Closure category</Text><SelectControl label="Closure category" value={closureCategory} options={['Authorized withdrawal', 'External transfer', 'Other authorized administrative closure']} getLabel={(value) => value} onChange={(value) => setClosureCategory(value as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>)} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Documented reason</Text><TextInput value={closureReason} onChangeText={setClosureReason} placeholder="Enter the authorized reason" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Effective date</Text><TextInput value={closureEffectiveDate} onChangeText={setClosureEffectiveDate} placeholder="YYYY-MM-DD" placeholderTextColor={C.subtle} style={styles.input} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Authorization reference</Text><TextInput value={closureAuthorizationReference} onChangeText={setClosureAuthorizationReference} placeholder="Authorization or record reference" placeholderTextColor={C.subtle} style={styles.input} /></View><View style={styles.dialogActions}><Button label="Cancel" onPress={() => setClosurePatient(null)} /><Button label="Review closure" kind="primary" disabled={!closureReason.trim() || !closureAuthorizationReference.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(closureEffectiveDate)} onPress={submitClosureForm} /></View></Pressable></Pressable></Modal>
 
-        {showMenu && (
-          <Modal transparent animationType="fade" visible={showMenu} onRequestClose={() => setShowMenu(false)}>
-            <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-              <View style={[styles.menuDropdownContainer, isDesktop && { top: 76, left: 24 }]}>
-                <TouchableOpacity
-                  style={styles.menuUserHeader}
-                  activeOpacity={0.8}
-                  onPress={() => { setShowMenu(false); setShowProfileModal(true); }}
-                >
-                  <View style={styles.menuAvatarCircle}>
-                    <Text style={styles.menuAvatarText}>A</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.menuUserName} numberOfLines={1}>Admin User</Text>
-                    <Text style={styles.menuUserRole} numberOfLines={1}>System Administrator</Text>
-                  </View>
-                </TouchableOpacity>
+    <Modal visible={Boolean(reenrollmentPatient)} transparent animationType="fade" onRequestClose={() => setReenrollmentPatient(null)}><Pressable style={styles.overlay} onPress={() => setReenrollmentPatient(null)}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title="Re-enroll student?" subtitle="Start a new care episode" onClose={() => setReenrollmentPatient(null)} /><Text style={styles.confirmMessage}>This will begin a new enrollment for {reenrollmentPatient?.name ?? 'this Student'}. Previous therapy records and professional assignments will remain archived.</Text>{reenrollmentPatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{reenrollmentPatient.name}</Text><Text style={styles.secondaryText}>{reenrollmentPatient.studentNumber} · {reenrollmentPatient.school}</Text></View> : null}<View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Next step: verify eligibility and choose the new assigned Therapist and Teacher. The Therapist makes clinical treatment decisions.</Text></View><View style={styles.field}><Text style={styles.fieldLabel}>New Therapist</Text><SelectControl label="New Therapist" value={reenrollmentTherapistId} options={['', ...professionals.filter((person) => person.role === 'Therapist' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Therapist'} onChange={setReenrollmentTherapistId} /></View><View style={styles.field}><Text style={styles.fieldLabel}>New Teacher</Text><SelectControl label="New Teacher" value={reenrollmentTeacherId} options={['', ...professionals.filter((person) => person.role === 'Teacher' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Teacher'} onChange={setReenrollmentTeacherId} /></View><View style={styles.dialogActions}><Button label="Cancel" onPress={() => setReenrollmentPatient(null)} /><Button label="Continue to Enrollment" kind="primary" disabled={!reenrollmentTherapistId || !reenrollmentTeacherId} onPress={completeReenrollment} /></View></Pressable></Pressable></Modal>
 
-                <View style={styles.menuSectionDivider} />
 
-                <TouchableOpacity style={styles.menuOptionRow} activeOpacity={0.7} onPress={() => { setShowMenu(false); setShowProfileModal(true); }}>
-                  <View style={styles.menuIconCircle}>
-                    <Ionicons name="person-outline" size={16} color="#0284C7" />
-                  </View>
-                  <Text style={styles.menuOptionLabel}>Profile</Text>
-                  <Text style={styles.menuOptionChevron}>›</Text>
-                </TouchableOpacity>
+    <Modal visible={Boolean(selection) && !inlineAccountDetails} transparent animationType="fade" onRequestClose={() => setSelection(null)}><Pressable style={[styles.overlay, (selectedProfessional || selectedPatient || selectedRelease || selectedRequest) && styles.professionalDrawerOverlay]} onPress={() => setSelection(null)}><Pressable style={[styles.dialog, selectedProfessional ? styles.professionalDrawer : (selectedPatient || selectedRelease || selectedRequest) ? [styles.studentDrawer, compact && styles.studentDrawerCompact] : styles.detailDialog, selectedAccountHeader && detailPanelStyles.accountDetailDialog]} onPress={(event) => event.stopPropagation()}>
+      {selectedAccountHeader ? <View style={detailPanelStyles.accountDetailHeader}>{selectedAccountHeader}</View> : null}
+      <ScrollView style={[styles.detailScroll, selectedAccountHeader && detailPanelStyles.accountDetailModalScroll, (selectedProfessional || selectedPatient || selectedRelease || selectedRequest) && styles.professionalDrawerScroll]} contentContainerStyle={selectedAccountHeader ? detailPanelStyles.accountDetailModalContent : undefined} showsVerticalScrollIndicator={false}>{selectedDetailsContent}</ScrollView>
+      {selectedRequestFooter}
+    </Pressable></Pressable></Modal>
 
-                <TouchableOpacity style={styles.menuOptionRow} activeOpacity={0.7} onPress={() => { setShowMenu(false); setShowSettingsModal(true); }}>
-                  <View style={styles.menuIconCircle}>
-                    <Ionicons name="settings-outline" size={16} color="#0284C7" />
-                  </View>
-                  <Text style={styles.menuOptionLabel}>Settings</Text>
-                  <Text style={styles.menuOptionChevron}>›</Text>
-                </TouchableOpacity>
+    <Modal visible={Boolean(offboardingId)} transparent animationType="fade" onRequestClose={() => { setOffboardingId(null); setOffboardingReason(''); }}><Pressable style={styles.overlay} onPress={() => { setOffboardingId(null); setOffboardingReason(''); }}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title={`Deactivate ${offboardingPerson?.name ?? 'Therapist'}`} subtitle={`${offboardingPatients.length} assigned student${offboardingPatients.length === 1 ? '' : 's'} must be reassigned first; deactivation then moves this account to Archive Center.`} onClose={() => { setOffboardingId(null); setOffboardingReason(''); }} /><View style={styles.requestReviewNotice}><Ionicons name="git-branch-outline" size={19} color={C.orange} /><Text style={styles.noticeText}>Choose an active replacement Therapist for every enrolled student. Their assignment history stays in the activity log.</Text></View><ScrollView style={styles.offboardingList}>{offboardingPatients.map((patient) => <View key={patient.id} style={styles.offboardingRow}><View style={styles.offboardingPatient}>{avatar(patient.name, C.green)}<View style={styles.personText}><Text style={styles.personName}>{patient.name}</Text><Text style={styles.secondaryText}>{patient.studentNumber}</Text></View></View><SelectControl label={`Replacement Therapist for ${patient.name}`} value={offboardingChoices[patient.id] ?? ''} options={['', ...eligibleReplacements(patient.id).map((person) => person.id)]} getLabel={(id) => id ? professionals.find((person) => person.id === id)?.name ?? id : 'Choose Therapist'} onChange={(id) => setOffboardingChoices((current) => ({ ...current, [patient.id]: id }))} /></View>)}</ScrollView><View style={styles.field}><Text style={styles.fieldLabel}>Reason for deactivation</Text><TextInput value={offboardingReason} onChangeText={setOffboardingReason} placeholder="Enter a reason" placeholderTextColor={C.subtle} multiline style={[styles.input, { minHeight: 58, paddingTop: 10, textAlignVertical: 'top' }]} /></View><View style={styles.dialogActions}><Button label="Cancel" onPress={() => { setOffboardingId(null); setOffboardingReason(''); }} /><Button label="Reassign & deactivate" kind="danger" onPress={finalizeOffboarding} disabled={offboardingPatients.some((patient) => !offboardingChoices[patient.id]) || !offboardingReason.trim()} /></View></Pressable></Pressable></Modal>
 
-                <View style={styles.menuSectionDivider} />
+    <Modal visible={Boolean(confirmation)} transparent animationType="fade" onRequestClose={() => { setConfirmation(null); setConfirmationReason(''); setConfirmationEvidence(''); confirmationReasonRef.current = ''; confirmationEvidenceRef.current = ''; }}><Pressable style={styles.overlay} onPress={() => { setConfirmation(null); setConfirmationReason(''); setConfirmationEvidence(''); confirmationReasonRef.current = ''; confirmationEvidenceRef.current = ''; }}><Pressable style={styles.confirmDialog} onPress={(event) => event.stopPropagation()}><View style={[styles.confirmIcon, confirmation?.danger && styles.confirmIconDanger]}><Ionicons name={confirmation?.danger ? 'warning-outline' : 'help-circle-outline'} size={22} color={confirmation?.danger ? C.red : C.blue} /></View><Text style={styles.dialogTitle}>{confirmation?.title}</Text><Text style={styles.confirmMessage}>{confirmation?.message}</Text>{confirmation?.requiresReason ? <View style={styles.field}><Text style={styles.fieldLabel}>Administrative reason</Text><TextInput value={confirmationReason} onChangeText={(value) => { setConfirmationReason(value); confirmationReasonRef.current = value; }} placeholder="Describe why this action is needed?" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View> : null}{confirmation?.requiresEvidence ? <View style={styles.field}><Text style={styles.fieldLabel}>Verified evidence reference</Text><TextInput value={confirmationEvidence} onChangeText={(value) => { setConfirmationEvidence(value); confirmationEvidenceRef.current = value; }} placeholder="School record or document reference?" placeholderTextColor={C.subtle} style={styles.input} /></View> : null}<View style={styles.dialogActions}><Button label="Cancel" onPress={() => { setConfirmation(null); setConfirmationReason(''); setConfirmationEvidence(''); confirmationReasonRef.current = ''; confirmationEvidenceRef.current = ''; }} /><Button label={confirmation?.actionLabel ?? 'Continue'} kind={confirmation?.danger ? 'danger' : 'primary'} onPress={() => { if (confirmation?.requiresReason && !confirmationReasonRef.current.trim()) { flash('Enter an administrative reason.'); return; } if (confirmation?.requiresEvidence && !confirmationEvidenceRef.current.trim()) { flash('Enter a verified evidence reference.'); return; } confirmation?.run(); }} /></View></Pressable></Pressable></Modal>
 
-                <TouchableOpacity
-                  style={styles.menuOptionRow}
-                  activeOpacity={0.7}
-                  onPress={() => triggerAlert(
-                    'Log Out',
-                    'Are you sure you want to log out of the Admin Dashboard?',
-                    'Log Out',
-                    '#EF4444',
-                    'log-out',
-                    () => { void handleLogout(); }
-                  )}
-                >
-                  <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
-                    <Ionicons name="log-out-outline" size={16} color="#EF4444" />
-                  </View>
-                  <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontFamily: 'Inter-Bold' }]}>Logout</Text>
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </Modal>
-        )}
-
-        {showNotificationsDropdown && (
-          <Modal transparent animationType="fade" visible={showNotificationsDropdown} onRequestClose={() => setShowNotificationsDropdown(false)}>
-            <Pressable style={styles.menuOverlay} onPress={() => setShowNotificationsDropdown(false)}>
-              <View style={[styles.notifDropdownContainer, isDesktop && { top: 76, right: 40 }]}>
-                <View style={styles.notifDropdownHeaderRow}>
-                  <Text style={styles.notifDropdownTitle}>Notifications</Text>
-                  <View style={{ flexDirection: 'row' }}>
-                    <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'All' && styles.notifPillActive]} onPress={() => setNotificationsFilter('All')}>
-                      <Text style={[styles.notifPillText, notificationsFilter === 'All' && styles.notifPillTextActive]}>All</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'Unread' && styles.notifPillActive]} onPress={() => setNotificationsFilter('Unread')}>
-                      <Text style={[styles.notifPillText, notificationsFilter === 'Unread' && styles.notifPillTextActive]}>Unread</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-                  {notifications.filter((item) => (notificationsFilter === 'Unread' ? item.unread : true)).map((item) => (
-                    <View key={item.id} style={styles.notifItemRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.notifItemTitle}><Text style={{ fontFamily: 'Inter-Bold' }}>{item.name} </Text>{item.action}</Text>
-                        <Text style={styles.notifItemDetail}>{item.detail}</Text>
-                      </View>
-                      <Text style={styles.notifItemTime}>{item.time}</Text>
-                    </View>
-                  ))}
-                </ScrollView>
-                <TouchableOpacity style={styles.markAllReadBtn} onPress={() => setNotifications(notifications.map(n => ({ ...n, unread: false })))}>
-                  <Text style={styles.markAllReadBtnText}>Mark All as Read</Text>
-                </TouchableOpacity>
-              </View>
-            </Pressable>
-          </Modal>
-        )}
-
-        {/* SETTINGS MODAL */}
-        <Modal visible={showSettingsModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSettingsModal(false)}>
-          <SafeAreaView style={styles.settingsModalContainer}>
-            <View style={styles.settingsTopBar}>
-              <Text style={styles.settingsNavTitle}>Admin Settings</Text>
-              <TouchableOpacity onPress={() => setShowSettingsModal(false)} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
-              <View style={styles.settingsProfileHeaderRow}>
-                <View style={styles.settingsAvatarCircle}><Text style={styles.settingsAvatarLetter}>A</Text></View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={styles.settingsDoctorName}>Admin User</Text>
-                  <Text style={styles.settingsDoctorRole}>System Administrator</Text>
-                </View>
-              </View>
-
-              <Text style={styles.settingsSectionTitle}>Notifications</Text>
-              <View style={styles.settingsCard}>
-                <View style={styles.settingsCardRow}>
-                  <View style={{ flex: 1, marginRight: 10 }}><Text style={styles.settingsRowTitle}>New Account Requests</Text><Text style={styles.settingsRowSub}>Alerts for new signups</Text></View>
-                  <Switch value={newRequestToggle} onValueChange={setNewRequestToggle} trackColor={{ false: '#CBD5E1', true: '#0284C7' }} thumbColor="#FFFFFF" />
-                </View>
-                <View style={styles.settingsRowDivider} />
-                <View style={styles.settingsCardRow}>
-                  <View style={{ flex: 1, marginRight: 10 }}><Text style={styles.settingsRowTitle}>Security Alerts</Text><Text style={styles.settingsRowSub}>Unusual login attempts</Text></View>
-                  <Switch value={securityAlertsToggle} onValueChange={setSecurityAlertsToggle} trackColor={{ false: '#CBD5E1', true: '#0284C7' }} thumbColor="#FFFFFF" />
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.settingsLogoutButton}
-                activeOpacity={0.8}
-                onPress={() => triggerAlert('Log Out', 'Are you sure you want to log out?', 'Log Out', '#EF4444', 'log-out', () => { void handleLogout(); })}
-              >
-                <Text style={styles.settingsLogoutButtonText}>Log Out</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </SafeAreaView>
-        </Modal>
-
-        {/* PROFILE MODAL */}
-        <Modal visible={showProfileModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProfileModal(false)}>
-          <SafeAreaView style={styles.settingsModalContainer}>
-            <View style={styles.settingsTopBar}>
-              <Text style={styles.settingsNavTitle}>Admin Profile</Text>
-              <TouchableOpacity onPress={() => setShowProfileModal(false)} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
-              <View style={styles.profileHeroCard}>
-                <View style={styles.profileBigAvatarCircle}><Text style={styles.profileBigAvatarLetter}>A</Text></View>
-                <Text style={styles.profileHeroName}>Admin User</Text>
-                <Text style={styles.profileHeroRole}>System Administrator</Text>
-                <View style={styles.licenseBadge}><Text style={styles.licenseBadgeText}>Master Access</Text></View>
-              </View>
-              <Text style={styles.settingsSectionTitle}>System Credentials</Text>
-              <View style={styles.settingsCard}>
-                <View style={styles.settingsCardRow}><View><Text style={styles.settingsRowSub}>Role</Text><Text style={styles.settingsRowTitle}>Global Admin</Text></View></View>
-                <View style={styles.settingsRowDivider} />
-                <View style={styles.settingsCardRow}><View><Text style={styles.settingsRowSub}>Email Address</Text><Text style={styles.settingsRowTitle}>admin@speaksteps.com</Text></View></View>
-              </View>
-            </ScrollView>
-          </SafeAreaView>
-        </Modal>
-
-        <Modal visible={alertVisible} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.alertBox}>
-
-              <View style={[styles.alertIconCircle, { backgroundColor: `${alertConfig.confirmColor}15` }]}>
-                <Ionicons
-                  name={alertConfig.iconName as any}
-                  size={36}
-                  color={alertConfig.confirmColor}
-                />
-              </View>
-
-              <Text style={styles.alertTitle}>{alertConfig.title}</Text>
-              <Text style={styles.alertMessage}>{alertConfig.message}</Text>
-
-              <View style={styles.alertActions}>
-                <TouchableOpacity
-                  style={styles.alertCancelBtn}
-                  onPress={() => setAlertVisible(false)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.alertCancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.alertConfirmBtn, { backgroundColor: alertConfig.confirmColor }]}
-                  onPress={() => {
-                    alertConfig.onConfirm();
-                    setAlertVisible(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.alertConfirmBtnText}>{alertConfig.confirmText}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-      </SafeAreaView>
-    </ImageBackground>
-  );
+    {toast ? <View style={styles.toast} accessibilityLiveRegion="polite"><Ionicons name="checkmark-circle" size={19} color={C.green} /><Text style={styles.toastText}>{toast}</Text><TouchableOpacity onPress={() => setToast('')} accessibilityLabel="Dismiss notification"><Ionicons name="close" size={17} color={C.muted} /></TouchableOpacity></View> : null}
+  </View>;
 }
 
+function ModalHeader({ title, subtitle, onClose }: { title: string; subtitle?: string; onClose: () => void }) {
+  return <View style={styles.modalHeader}><View style={styles.modalHeaderText}><Text style={styles.dialogTitle}>{title}</Text>{subtitle ? <Text style={styles.sectionSub}>{subtitle}</Text> : null}</View><TouchableOpacity onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close dialog"><Ionicons name="close" size={20} color={C.ink} /></TouchableOpacity></View>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return <View style={styles.detailCell}><Text style={[styles.detailLabel, { fontSize: 11, lineHeight: 16, marginBottom: 4 }]}>{label}</Text><Text style={[styles.detailValue, { fontSize: 14, lineHeight: 20 }]}>{value}</Text></View>;
+}
+
+function EmptyState({ title, detail, action }: { title: string; detail: string; action: React.ReactNode }) {
+  return <View style={styles.emptyState}><Ionicons name="search-outline" size={21} color={C.subtle} /><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.secondaryText}>{detail}</Text>{action}</View>;
+}
+
+function SelectControl({ label, value, options, getLabel, onChange }: { label: string; value: string; options: string[]; getLabel: (value: string) => string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  if (Platform.OS === 'web') {
+    return <View style={styles.selectFrame}>
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} style={webSelectStyle}>
+        {options.map((option) => <option key={option} value={option}>{getLabel(option)}</option>)}
+      </select>
+      <Ionicons name="chevron-down" size={14} color={C.muted} style={styles.selectIcon} />
+    </View>;
+  }
+  return <>
+    <TouchableOpacity style={styles.selectFrame} onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`${label}: ${getLabel(value)}`}><Text style={styles.selectNativeValue}>{getLabel(value)}</Text><Ionicons name="chevron-down" size={14} color={C.muted} /></TouchableOpacity>
+    <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}><Pressable style={styles.overlay} onPress={() => setOpen(false)}><View style={styles.nativeOptions}>{options.map((option) => <TouchableOpacity key={option} onPress={() => { onChange(option); setOpen(false); }} style={styles.nativeOption}><Text style={styles.personName}>{getLabel(option)}</Text>{value === option ? <Ionicons name="checkmark" size={17} color={C.blue} /> : null}</TouchableOpacity>)}</View></Pressable></Modal>
+  </>;
+}
+
+const webSelectStyle: React.CSSProperties = {
+  width: '100%', height: 38, appearance: 'none', border: 'none', backgroundColor: 'transparent',
+  color: C.ink, fontFamily: 'Geist-Regular, sans-serif', fontSize: 13, padding: '0 30px 0 11px', cursor: 'pointer',
+};
+
+const detailPanelStyles = {
+  tableWithPanel: { columnGap: 12, paddingHorizontal: 16 },
+  personColumnWithPanel: { flex: 2.6, minWidth: 180, paddingRight: 8 },
+  idColumnWithPanel: { flex: 0.9, minWidth: 88 },
+  studentDataColumnWithPanel: { flex: 0.82, minWidth: 82 },
+  enrollmentColumnWithPanel: { flex: 0.68, minWidth: 74 },
+  statusColumnWithPanel: { flex: 0.72, minWidth: 78 },
+  setupColumnWithPanel: { flex: 0.68, minWidth: 74 },
+  assignmentColumnWithPanel: { flex: 0.7, minWidth: 76 },
+  detailSection: { paddingTop: 17, paddingBottom: 14 },
+  accountDetailHeader: { paddingHorizontal: 22, paddingTop: 14 },
+  accountDetailDialog: { padding: 0, overflow: 'hidden', flexDirection: 'column' as const },
+  accountDetailModalScroll: { flex: 1, flexGrow: 1, flexShrink: 1, minHeight: 0, maxHeight: '100%' },
+  accountDetailModalContent: { paddingHorizontal: 20, paddingBottom: 20 },
+  accountDetailSectionTitle: { color: C.ink, fontFamily: 'Geist-SemiBold' as const, fontSize: 15, lineHeight: 20, marginBottom: 7 },
+  accountDetailGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, paddingTop: 2, paddingBottom: 2 },
+  studentDetailSection: { paddingTop: 18, paddingBottom: 8, borderTopWidth: 0 },
+  studentFieldLabel: { color: C.muted, fontFamily: 'Geist-Medium' as const, fontSize: 12, lineHeight: 17 },
+  studentDetailValue: { color: C.ink, fontFamily: 'Geist-Medium' as const, fontSize: 15, lineHeight: 21 },
+  studentAssignmentBlock: { paddingBottom: 6 },
+  studentAssignmentValue: { minHeight: 38, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 9 },
+  detailNameLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  activeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.green },
+  assignmentNameLine: { minHeight: 36, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
+  assignmentIconButton: { width: 34, height: 34, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 6 },
+  accountManagementActions: { borderTopWidth: 0, paddingTop: 10, marginTop: 0, justifyContent: 'flex-start' as const },
+};
+
 const styles = StyleSheet.create({
-  backgroundImage: { flex: 1, width: '100%', height: '100%' },
-  safeArea: { flex: 1, backgroundColor: 'transparent' },
-  mainWrapper: { flex: 1 },
-
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 10 : 20,
-    paddingBottom: 100,
-  },
-
-  desktopScrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    maxWidth: 1280,
-    alignSelf: 'center',
-    width: '100%',
-  },
-
-  tabContainer: { flex: 1 },
-
-  topHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    width: '100%',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 10 : 10,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  hamburgerBtn: { padding: 8, marginRight: 8 },
-  backButtonBlue: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center', marginRight: 12, elevation: 2 },
-  logoImage: { width: 44, height: 44, marginRight: 10 },
-  headerTitle: { fontFamily: 'Inter-Bold', fontSize: 24, color: '#0284C7', letterSpacing: -0.5 },
-
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  headerIconBtn: { padding: 8, marginLeft: 4, position: 'relative' },
-  notificationDot: { position: 'absolute', top: 6, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
-
-  desktopNavLinks: { flexDirection: 'row', marginLeft: 16 },
-  desktopNavLink: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginLeft: 8 },
-  desktopNavLinkActive: { backgroundColor: '#F0F9FF' },
-  desktopNavText: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#64748B' },
-  desktopNavTextActive: { fontFamily: 'Inter-Bold', color: '#0284C7' },
-
-  heroCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: '#E2E8F0' },
-  heroLabel: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#64748B', marginBottom: 4 },
-  heroNumber: { fontFamily: 'Inter-Bold', fontSize: 42, color: '#1E293B', marginBottom: 16 },
-  progressContainer: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: '#F1F5F9', marginBottom: 16 },
-  progressSegment: { height: '100%' },
-  legendContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  legendText: { fontFamily: 'Inter-Medium', fontSize: 11, color: '#475569' },
-
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    marginTop: 10,
-  },
-  solidCard: {
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
-    minHeight: 130,
-    justifyContent: 'space-between',
-    borderWidth: 1.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  solidCardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  solidCardNum: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 40,
-    lineHeight: 44,
-  },
-  solidCardIcon: {
-    width: 36,
-    height: 36,
-  },
-  solidCardTitle: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  bottomGrid: {
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  halfColumnBlock: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 20,
-    height: 380,
-  },
-  scrollableList: {
-    flex: 1,
-  },
-
-  recentBlockHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  recentBlockTitle: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 18,
-    color: '#1E3A8A',
-  },
-  viewAllText: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 13,
-    color: '#0284C7',
-  },
-  requestItemDashboard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  requestAvatar: { width: 44, height: 44, borderRadius: 22, marginRight: 14 },
-  requestDetails: { flex: 1 },
-  requestName: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#1E293B', marginBottom: 4 },
-  requestSubtext: { fontFamily: 'Inter-Regular', fontSize: 11, color: '#64748B' },
-  requestRightActions: { alignItems: 'flex-end', justifyContent: 'center' },
-  pendingBadgeDashboard: { backgroundColor: '#FCE7F3', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 8 },
-  pendingBadgeTextDashboard: { fontFamily: 'Inter-Bold', fontSize: 9, color: '#DB2777' },
-  chevronCircle: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-
-  activityItem: {
-    borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-  },
-  activityTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  activityTitle: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 12,
-    flex: 1,
-    marginRight: 10,
-  },
-  activityBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  activityRoleBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  activityRoleText: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 9,
-    textTransform: 'uppercase',
-  },
-  activityTimeBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.07)',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  activityTimeText: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 9,
-  },
-  activitySubtitle: {
-    fontFamily: 'Inter-Medium',
-    fontStyle: 'italic',
-    fontSize: 11,
-    opacity: 0.9,
-  },
-
-  bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, flexDirection: 'row', backgroundColor: '#FFFFFF', borderTopWidth: 2, borderTopColor: '#0284C7', justifyContent: 'space-around', alignItems: 'center', paddingBottom: Platform.OS === 'ios' ? 15 : 0 },
-  navItem: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  navText: { fontFamily: 'Inter-Medium', fontSize: 10, color: '#94A3B8', marginTop: 4 },
-  navTextActive: { color: '#0284C7', fontFamily: 'Inter-Bold' },
-
-  subTabsContainer: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16, paddingBottom: 4 },
-  subTabBtn: { paddingVertical: 12, paddingHorizontal: 10, marginRight: 8, position: 'relative' },
-  subTabText: { fontFamily: 'Inter-Medium', fontSize: 13, color: '#64748B' },
-  subTabTextActive: { color: '#0284C7', fontFamily: 'Inter-Bold' },
-  subTabIndicator: { position: 'absolute', bottom: -1, left: 10, right: 10, height: 3, backgroundColor: '#0284C7', borderRadius: 2 },
-
-  fullCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  cardHeaderRow: { flexDirection: 'row', alignItems: 'center' },
-  cardAvatarLarge: { width: 52, height: 52, borderRadius: 26, marginRight: 14 },
-  cardHeaderInfo: { flex: 1 },
-  cardNameLarge: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#1E293B', marginBottom: 2 },
-  cardEmailText: { fontFamily: 'Inter-Regular', fontSize: 13, color: '#64748B' },
-  roleBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
-  roleBadgeText: { fontFamily: 'Inter-Bold', fontSize: 11 },
-  cardDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 18 },
-
-  cardBody: { marginBottom: 20 },
-  detailText: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#475569', marginBottom: 8 },
-  detailLabel: { fontFamily: 'Inter-Bold', color: '#1E293B' },
-  warningBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, marginTop: 10 },
-  warningText: { fontFamily: 'Inter-Medium', fontSize: 13, color: '#D97706', marginLeft: 8, flex: 1 },
-
-  accountStatusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, marginLeft: 10 },
-  statusBadgeText: { fontFamily: 'Inter-Bold', fontSize: 11 },
-
-  cardActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-  rejectBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, backgroundColor: '#F1F5F9' },
-  rejectBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#475569' },
-  approveBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, backgroundColor: '#0284C7' },
-  approveBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#FFFFFF' },
-
-  editBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#F0F9FF', borderWidth: 1, borderColor: '#BAE6FD' },
-  editBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#0284C7', marginLeft: 6 },
-  suspendBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
-  suspendBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#DC2626', marginLeft: 6 },
-
-  menuOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.4)' },
-  menuDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, left: 16, width: 240, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 10, shadowColor: '#000', shadowOpacity: 0.12, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-  menuUserHeader: { flexDirection: 'row', alignItems: 'center', padding: 6, borderRadius: 10 },
-  menuAvatarCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' },
-  menuAvatarText: { fontSize: 16, fontFamily: 'Inter-Bold', color: '#0284C7' },
-  menuUserName: { fontSize: 13, fontFamily: 'Inter-Bold', color: '#1E293B' },
-  menuUserRole: { fontSize: 11, fontFamily: 'Inter-Medium', color: '#64748B' },
-  menuSectionDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 6 },
-  menuOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10 },
-  menuIconCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#F0F9FF', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  menuOptionLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter-Medium', color: '#1E293B' },
-  menuOptionChevron: { fontSize: 16, color: '#94A3B8', fontFamily: 'Inter-Bold' },
-
-  notifDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, right: 16, width: 320, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.14, shadowOffset: { width: 0, height: 6 }, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-  notifDropdownHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  notifDropdownTitle: { fontSize: 15, fontFamily: 'Inter-Bold', color: '#1E293B' },
-  notifPill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginLeft: 6, backgroundColor: '#FFFFFF' },
-  notifPillActive: { backgroundColor: '#0284C7', borderColor: '#0284C7' },
-  notifPillText: { fontSize: 11, color: '#64748B', fontFamily: 'Inter-Medium' },
-  notifPillTextActive: { color: '#FFFFFF', fontFamily: 'Inter-Bold' },
-  notifItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  notifItemTitle: { fontSize: 12, color: '#1E293B', marginBottom: 2, lineHeight: 16, fontFamily: 'Inter-Regular' },
-  notifItemDetail: { fontSize: 11, color: '#64748B', lineHeight: 15, fontFamily: 'Inter-Regular' },
-  notifItemTime: { fontSize: 10, color: '#94A3B8', marginLeft: 8, fontFamily: 'Inter-Medium' },
-  markAllReadBtn: { marginTop: 10, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#F8FAFC' },
-  markAllReadBtnText: { fontSize: 11, color: '#64748B', fontFamily: 'Inter-Bold' },
-
-  settingsModalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  settingsTopBar: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  closeButton: { padding: 8 },
-  settingsNavTitle: { fontFamily: 'Inter-Bold', fontSize: 18, color: '#0F172A' },
-  settingsScrollContent: { padding: 20, paddingBottom: 40 },
-  settingsProfileHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  settingsAvatarCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' },
-  settingsAvatarLetter: { fontFamily: 'Inter-Bold', fontSize: 28, color: '#0284C7' },
-  settingsDoctorName: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#0F172A', marginBottom: 2 },
-  settingsDoctorRole: { fontSize: 12, fontFamily: 'Inter-Medium', color: '#475569', marginBottom: 2 },
-  settingsLicenseText: { fontSize: 11, color: '#94A3B8', fontFamily: 'Inter-Regular' },
-  settingsSectionTitle: { fontSize: 13, fontFamily: 'Inter-Bold', color: '#475569', marginBottom: 8, marginTop: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
-  settingsCard: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden', marginBottom: 20 },
-  settingsCardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-  settingsRowDivider: { height: 1, backgroundColor: '#F1F5F9', marginHorizontal: 16 },
-  settingsRowTitle: { fontSize: 14, fontFamily: 'Inter-Bold', color: '#1E293B', marginBottom: 2 },
-  settingsRowSub: { fontSize: 12, color: '#64748B', fontFamily: 'Inter-Regular' },
-  settingsLogoutButton: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 10, marginBottom: 10, borderWidth: 1, borderColor: '#FECACA' },
-  settingsLogoutButtonText: { fontSize: 14, fontFamily: 'Inter-Bold', color: '#DC2626' },
-  profileHeroCard: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', padding: 24, alignItems: 'center', marginBottom: 20 },
-  profileBigAvatarCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  profileBigAvatarLetter: { fontFamily: 'Inter-Bold', fontSize: 34, color: '#0284C7' },
-  profileHeroName: { fontFamily: 'Inter-Bold', fontSize: 20, color: '#0F172A', marginBottom: 4 },
-  profileHeroRole: { fontSize: 14, color: '#475569', fontFamily: 'Inter-Medium', marginBottom: 10 },
-  licenseBadge: { backgroundColor: '#F0F9FF', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD' },
-  licenseBadgeText: { fontSize: 11, color: '#0284C7', fontFamily: 'Inter-Bold' },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  alertBox: {
-    backgroundColor: '#FFFFFF',
-    width: '100%',
-    maxWidth: 380,
-    borderRadius: 28,
-    paddingTop: 32,
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  alertIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  alertTitle: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 22,
-    color: '#0F172A',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  alertMessage: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 15,
-    color: '#475569',
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  alertActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    gap: 12,
-  },
-  alertCancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alertCancelBtnText: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 15,
-    color: '#475569',
-  },
-  alertConfirmBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alertConfirmBtnText: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
+  professionalDrawerOverlay: { justifyContent: 'flex-start', alignItems: 'flex-end', padding: 0 },
+  professionalDrawer: { width: '100%', maxWidth: 500, height: '100%', maxHeight: '100%', alignSelf: 'stretch', padding: 24, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
+  studentDrawer: { width: 560, maxWidth: '100%', height: '100%', maxHeight: '100%', alignSelf: 'stretch', padding: 24, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
+  studentDrawerCompact: { width: '100%', maxWidth: '100%', borderRadius: 0, padding: 17 },
+  professionalDrawerScroll: { flex: 1, flexGrow: 1, maxHeight: '100%' },
+  accountPagination: { minHeight: 58, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 }, accountPaginationCompact: { flexDirection: 'column', alignItems: 'stretch', gap: 9 }, accountPaginationSummary: { flex: 1, color: C.muted, fontSize: 11 }, accountPaginationControls: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3 }, accountPaginationControlsCompact: { flex: 0 }, accountPaginationSide: { flex: 1 }, pageArrow: { width: 32, height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 5 }, pageArrowDisabled: { opacity: 0.38 }, doubleChevronSecond: { marginLeft: -8 }, pageNumber: { minWidth: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 5 }, pageNumberActive: { backgroundColor: C.blueSoft, borderWidth: 1, borderColor: '#C9E3F4' }, pageNumberText: { color: C.ink, fontSize: 12 }, pageNumberTextActive: { color: C.blue, fontFamily: 'Geist-SemiBold' },
+  idTableCell: { flex: 1.05, minWidth: 105 }, studentDetailsCell: { flex: 1.15, minWidth: 125 }, enrollmentTableCell: { flex: 0.9, minWidth: 92 }, statusTableCell: { flex: 0.95, minWidth: 92 }, setupTableCell: { flex: 0.88, minWidth: 82 }, assignmentTableCell: { flex: 0.8, minWidth: 82 },
+  appRoot: { flex: 1, flexDirection: 'row', minHeight: '100vh' as any, backgroundColor: C.page, fontFamily: 'Geist-Regular' as any }, appRootDesktop: { padding: 16, gap: 12 }, appRootCompact: { padding: 0 },
+  sidebar: { width: 244, flexShrink: 0, backgroundColor: C.white, borderRightWidth: 1, borderRightColor: C.line, paddingTop: 26, paddingHorizontal: 16, paddingBottom: 18 },
+  sidebarRail: { width: 76, alignItems: 'center', borderWidth: 1, borderRightWidth: 1, borderColor: C.line, borderRadius: 18, paddingHorizontal: 8, paddingTop: 16, paddingBottom: 14 },
+  sidebarRailExpanded: { width: 226, alignItems: 'stretch', paddingHorizontal: 12 },
+  sidebarPinButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 8, paddingHorizontal: 11, marginTop: 'auto' as any, marginBottom: 6 },
+  sidebarDrawer: { width: 270, minHeight: '100%' as any, borderRightWidth: 0 },
+  brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, paddingBottom: 34 }, brandLockupRail: { justifyContent: 'center', paddingHorizontal: 0, paddingBottom: 28 }, navItemRail: { width: 46, justifyContent: 'center', paddingHorizontal: 0, marginBottom: 8 }, sidebarBottomRail: { width: '100%', alignItems: 'center' },
+  brandMark: { width: 42, height: 42 }, brandName: { color: C.blueDeep, fontFamily: 'SourGummy-Bold', fontSize: 21, lineHeight: 24 }, brandSub: { color: C.muted, fontFamily: 'Geist-SemiBold', fontSize: 9, letterSpacing: 1.3, marginTop: 1 },
+  navCaption: { color: C.subtle, fontFamily: 'Geist-SemiBold', fontSize: 10, letterSpacing: 1.1, marginLeft: 11, marginBottom: 9 }, navItem: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 8, paddingHorizontal: 11, marginBottom: 3 }, navItemActive: { backgroundColor: C.blueSoft }, navText: { color: C.muted, fontFamily: 'Geist-Medium', fontSize: 14, flex: 1 }, navTextActive: { color: C.blue, fontFamily: 'Geist-SemiBold' }, navBadge: { color: C.yellow, fontSize: 11, fontFamily: 'Geist-SemiBold', backgroundColor: C.yellowSoft, borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 }, sidebarBottom: { marginTop: 'auto' as any, paddingTop: 20, borderTopWidth: 1, borderTopColor: C.line }, demoPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 7, backgroundColor: C.blueSoft, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 6, marginHorizontal: 8 }, demoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.blue }, demoText: { color: C.blueDeep, fontSize: 11, fontFamily: 'Geist-SemiBold' }, sidebarNote: { color: C.subtle, fontSize: 11, marginVertical: 8, marginHorizontal: 8 },
+  workspace: { flex: 1, minWidth: 0, backgroundColor: C.white, overflow: 'hidden', borderWidth: 1, borderColor: '#D9E5EE', borderRadius: 18, ...(Platform.OS === 'web' ? { boxShadow: '0 14px 38px rgba(73, 92, 105, 0.12)' } : { elevation: 2 }) } as any, topbar: { minHeight: 62, backgroundColor: C.white, borderBottomWidth: 1, borderBottomColor: C.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, zIndex: 10 }, breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 9 }, breadcrumbRoot: { color: C.subtle, fontSize: 13 }, breadcrumbCurrent: { color: C.ink, fontFamily: 'Geist-Medium', fontSize: 13 }, topbarRight: { flexDirection: 'row', alignItems: 'center', gap: 14 }, centerName: { color: C.muted, fontSize: 12, marginRight: 4 }, iconButton: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' }, iconBadge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, backgroundColor: C.red }, iconBadgeText: { color: C.white, fontSize: 9, fontFamily: 'Geist-SemiBold' }, adminMenuAnchor: { position: 'relative', zIndex: 20 }, adminChip: { minHeight: 44, flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 7 }, adminMenuArrow: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }, adminInitial: { width: 29, height: 29, borderRadius: 15, backgroundColor: C.blueSoft, alignItems: 'center', justifyContent: 'center' }, adminInitialText: { color: C.blue, fontSize: 10, fontFamily: 'Geist-SemiBold' }, adminChipText: { color: C.ink, fontSize: 12, fontFamily: 'Geist-Medium' }, content: { flex: 1, minHeight: 0 }, contentSplit: { flexDirection: 'row' }, contentMain: { flex: 1, minWidth: 0, minHeight: 0 }, accountDetailPane: { flexShrink: 0, alignSelf: 'stretch', minHeight: 0, overflow: 'hidden', backgroundColor: C.white, borderLeftWidth: 1, borderLeftColor: C.line }, accountDetailScroll: { flex: 1, minHeight: 0 }, accountDetailContent: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 30 },
+  archiveTabs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: C.line }, archiveRecord: { paddingVertical: 15, borderTopWidth: 1, borderTopColor: C.line, gap: 5 }, archiveRecordHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 9 }, archiveRecordFields: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 2 }, archiveRecordActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }, archiveTextAction: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 8 }, archiveIdentity: { paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line, gap: 3 },
+  pageScroll: { paddingHorizontal: 32, paddingTop: 28, paddingBottom: 45, maxWidth: 1500, width: '100%', alignSelf: 'center', gap: 24 }, pageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 20, minHeight: 54 }, pageHeaderText: { flex: 1, minWidth: 0 }, pageTitle: { color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 27, letterSpacing: -0.55 }, pageSubtitle: { color: C.muted, fontSize: 13, marginTop: 5, lineHeight: 19 },
+  button: { minHeight: 44, flexDirection: 'row', gap: 7, justifyContent: 'center', alignItems: 'center', borderRadius: 7, paddingHorizontal: 13, paddingVertical: 8 }, button_primary: { backgroundColor: C.blue }, button_secondary: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line }, button_text: { backgroundColor: 'transparent', paddingHorizontal: 7 }, button_danger: { backgroundColor: C.redSoft, borderWidth: 1, borderColor: '#F3D1D4' }, buttonText: { color: C.ink, fontFamily: 'Geist-Medium', fontSize: 12 }, buttonTextPrimary: { color: C.white }, buttonTextDanger: { color: C.red }, buttonDisabled: { opacity: 0.46 }, mutedText: { color: C.muted },
+  metricStrip: { flexDirection: 'row', backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 10, overflow: 'hidden' }, metric: { flex: 1, minWidth: 0, paddingHorizontal: 18, paddingVertical: 16, borderRightWidth: 1, borderRightColor: C.line }, metricCompact: { minWidth: '48%' as any, borderBottomWidth: 1, borderBottomColor: C.line, borderRightWidth: 0 }, metricStripCompact: { flexWrap: 'wrap' }, metricLabel: { color: C.muted, fontSize: 12, fontFamily: 'Geist-Medium' }, metricValueLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }, metricValue: { color: C.ink, fontSize: 29, lineHeight: 34, fontFamily: 'Geist-SemiBold', fontVariant: ['tabular-nums'] }, metricFoot: { color: C.subtle, fontSize: 10, marginTop: 5 }, attentionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.red },
+  metricTop: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  attentionPanel: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 6 },
+  caseloadList: { gap: 0 }, caseloadRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: 1, borderTopColor: C.line, paddingVertical: 8 }, caseloadTrack: { flex: 1, height: 8, backgroundColor: '#EEF3F6', borderRadius: 4, overflow: 'hidden' }, caseloadFill: { height: '100%', backgroundColor: '#83B84A', borderRadius: 4 },
+  activityPanel: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 6 },
+  pagination: { minHeight: 58, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderTopWidth: 1, borderTopColor: C.line }, paginationActions: { flexDirection: 'row', gap: 8 },
+  profileMenu: { position: 'absolute', top: 50, right: 0, width: 220, backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 8, zIndex: 30, ...(Platform.OS === 'web' ? { boxShadow: '0 12px 34px rgba(23,54,77,0.16)' } : { elevation: 8 }) }, profileMenuItem: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 11, borderRadius: 7 }, profileMenuText: { color: C.ink, fontFamily: 'Geist-Medium', fontSize: 13 },
+  assignmentOverview: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 17 }, assignmentOverviewRows: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 18 }, assignmentOverviewRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, width: '48%' as any, borderTopWidth: 1, borderTopColor: C.line, paddingVertical: 7 }, assignmentOverviewRowCompact: { width: '100%' as any }, assignmentOverviewName: { color: C.ink, fontSize: 12, fontFamily: 'Geist-Medium', flex: 1 }, assignmentOverviewCount: { color: C.muted, fontSize: 11, fontVariant: ['tabular-nums'] },
+  dashboardColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 30 }, dashboardColumnsCompact: { flexDirection: 'column' }, attentionColumn: { flex: 1.08, minWidth: 0 }, activityColumn: { flex: 0.92, minWidth: 0 }, sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 14, marginBottom: 13 }, sectionTitle: { color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 16 }, sectionSub: { color: C.muted, fontSize: 11, marginTop: 4, lineHeight: 16 }, attentionCount: { flexDirection: 'row', alignItems: 'baseline', gap: 5, paddingHorizontal: 2 }, countText: { color: C.red, fontSize: 23, lineHeight: 27, fontFamily: 'Geist-SemiBold', fontVariant: ['tabular-nums'] }, attentionCountLabel: { color: C.red, fontSize: 11, fontFamily: 'Geist-Medium' }, countTextClear: { color: C.green }, attentionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1, borderTopColor: C.line }, attentionIcon: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, attentionCopy: { flex: 1, minWidth: 0 }, attentionTitle: { color: C.ink, fontSize: 13, fontFamily: 'Geist-SemiBold', marginBottom: 3 }, attentionTime: { color: C.subtle, fontSize: 10, marginTop: 5 }, clearState: { borderTopWidth: 1, borderTopColor: C.line, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', gap: 9 }, clearStateText: { color: C.green, fontFamily: 'Geist-Medium', fontSize: 13 }, linkText: { color: C.blue, fontSize: 12, fontFamily: 'Geist-SemiBold' },
+  activityItem: { position: 'relative', flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 22, paddingVertical: 14, borderTopWidth: 1, borderTopColor: C.line }, activityItemCompact: { paddingVertical: 12 }, activityMark: { position: 'absolute', left: 0, top: 18, width: 7, height: 7, borderRadius: 4 }, activityCopy: { flex: 1, minWidth: 0 }, activityTitle: { color: C.ink, fontSize: 12, fontFamily: 'Geist-SemiBold', marginBottom: 4 }, secondaryText: { color: C.muted, fontSize: 11, lineHeight: 16 }, activityDate: { color: C.subtle, fontSize: 10, marginTop: 3, textAlign: 'right' },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.blueSoft, borderRadius: 7, paddingVertical: 10, paddingHorizontal: 12, alignSelf: 'flex-start' }, noticeText: { color: C.blueDeep, fontSize: 11, lineHeight: 16, flexShrink: 1 }, directoryControls: { flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }, accountSearchArea: { gap: 10 }, accountSearchRow: { flexDirection: 'row', alignItems: 'center', gap: 9 }, accountFilterTagRow: { minHeight: 34, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 }, accountFilterTag: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: '#B9DCF2', borderRadius: 15, backgroundColor: '#F1F8FC' }, accountFilterTagText: { color: C.blueDeep, fontSize: 11, fontFamily: 'Geist-Medium' }, accountFilterReset: { marginLeft: 'auto' as any, minHeight: 30, justifyContent: 'center', paddingHorizontal: 6 }, accountFilterResetText: { color: C.blue, fontSize: 11, fontFamily: 'Geist-Medium' }, accountRoleTabs: { flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: C.line }, accountRoleTab: { flex: 1, minWidth: 0, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, position: 'relative' }, accountRoleTabHover: { backgroundColor: '#F7FAFC' }, accountRoleTabPressed: { backgroundColor: C.blueSoft }, accountRoleTabText: { color: C.muted, fontSize: 12, fontFamily: 'Geist-Medium' }, accountRoleTabTextSelected: { color: C.blue, fontFamily: 'Geist-SemiBold' }, accountRoleTabIndicator: { position: 'absolute', left: 0, right: 0, bottom: -1, height: 2, backgroundColor: C.blue }, searchBox: { width: 440, maxWidth: '100%' as any, height: 44, flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 7, paddingHorizontal: 11 }, searchBoxFullWidth: { width: 0, minWidth: 0, flex: 1 }, accountFiltersButton: { height: 44, minWidth: 86, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 11, borderWidth: 1, borderColor: C.line, borderRadius: 7, backgroundColor: C.white }, accountFiltersButtonText: { color: C.blueDeep, fontSize: 12, fontFamily: 'Geist-Medium' }, accountFiltersCount: { minWidth: 17, height: 17, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, backgroundColor: C.blueSoft }, accountFiltersCountText: { color: C.blue, fontSize: 10, fontFamily: 'Geist-SemiBold' }, accountFiltersDialog: { maxWidth: 440, maxHeight: '88%' }, accountFiltersDialogBody: { flexGrow: 0, maxHeight: 490 }, accountFiltersDialogContent: { gap: 13, paddingBottom: 4 }, searchInput: { flex: 1, color: C.ink, fontSize: 13, paddingVertical: 0 } as any, filterWrap: { gap: 5 }, filterLabel: { color: C.muted, fontSize: 10, fontFamily: 'Geist-Medium' }, selectFrame: { minWidth: 140, height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 7, overflow: 'hidden', paddingRight: 10 }, selectNativeValue: { color: C.ink, fontSize: 13, paddingLeft: 11, flex: 1 }, selectIcon: { position: 'absolute', right: 10, top: 12, pointerEvents: 'none' as any }, nativeOptions: { width: '88%' as any, maxWidth: 390, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: C.white }, nativeOption: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: C.line }, columnFilterWrap: { position: 'relative' }, columnFilterWrapOpen: { zIndex: 120, elevation: 12 }, columnFilterTrigger: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 5 }, columnFilterLabel: { color: C.muted, fontSize: 10, fontFamily: 'Geist-SemiBold' }, columnFilterMenu: { position: 'absolute', top: 33, left: 0, minWidth: 176, backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, zIndex: 100, ...(Platform.OS === 'web' ? { boxShadow: '0 8px 22px rgba(23,54,77,0.16)' } : { elevation: 10 }) } as any, columnFilterOption: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottomWidth: 1, borderBottomColor: '#E8EFF4' }, columnFilterOptionText: { color: C.ink, fontSize: 11 }, columnFilterOptionSelected: { color: C.blue, fontFamily: 'Geist-SemiBold' }, directoryMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, resultCount: { color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 12 },
+  table: { backgroundColor: C.white, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line }, tableHead: { height: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, backgroundColor: '#F0F7FB', borderBottomWidth: 1, borderBottomColor: C.line, position: 'relative', zIndex: 10 }, tableHeadCell: { flex: 1, minWidth: 70, color: C.muted, fontSize: 10, fontFamily: 'Geist-SemiBold' }, personHead: { flex: 2.2 }, tableRow: { minHeight: 66, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, borderBottomWidth: 1, borderBottomColor: '#E5EEF4' }, rowHover: { backgroundColor: '#F4F9FC' }, personCell: { flex: 2.2, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }, avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, avatarText: { fontFamily: 'Geist-SemiBold', fontSize: 11 }, personText: { flex: 1, minWidth: 0 }, personName: { color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 12 }, tableCell: { flex: 1, minWidth: 70, color: C.ink, fontSize: 11 }, numberCell: { textAlign: 'center', fontVariant: ['tabular-nums'] }, rowAction: { width: 22, alignItems: 'flex-end' }, status: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 5, paddingHorizontal: 8, paddingVertical: 5 }, statusDot: { width: 5, height: 5, borderRadius: 3 }, statusText: { fontSize: 10, fontFamily: 'Geist-SemiBold' }, mobileRows: { gap: 9 }, mobileRow: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 8, padding: 13, gap: 12 }, mobileRowBottom: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingLeft: 46 }, studentMobileDetails: { gap: 2, paddingLeft: 46 },
+  requestToolbar: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 9 }, requestMetaControls: { flexDirection: 'row', alignItems: 'center', gap: 10 }, requestFilterActive: { backgroundColor: C.blueSoft, borderColor: C.blueLine }, requestFilterPanel: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line }, requestList: { borderTopWidth: 1, borderColor: C.line }, requestTableHeader: { minHeight: 40, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8, backgroundColor: '#F2F7FA', borderBottomWidth: 1, borderBottomColor: C.line, position: 'relative', zIndex: 10, elevation: 2 }, requestColumnHeader: { color: C.muted, fontSize: 10, fontFamily: 'Geist-SemiBold' }, requestTableRow: { minHeight: 69, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: C.line }, requestTableCell: { flexShrink: 0, gap: 3, justifyContent: 'center' }, requestCellPrimary: { color: C.ink, fontSize: 11, lineHeight: 16, fontFamily: 'Geist-SemiBold' }, requestId: { color: C.subtle, fontSize: 9 }, requestOverdue: { color: C.yellow, fontSize: 10, fontFamily: 'Geist-SemiBold', marginTop: 3 }, requestStatusMeta: { color: C.yellow, fontSize: 9, marginTop: 3 }, requestSectionTitle: { color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 13, marginBottom: 5 }, requestWarning: { marginTop: 8, paddingVertical: 9, paddingHorizontal: 10, backgroundColor: C.yellowSoft, borderRadius: 6, gap: 3 }, requestWarningTitle: { color: C.yellow, fontFamily: 'Geist-SemiBold', fontSize: 11 }, requestActionOptions: { gap: 0, marginTop: 4 }, requestActionOption: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line }, requestActionOptionSelected: { backgroundColor: '#F4FAFE' }, radioOuter: { width: 18, height: 18, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderWidth: 1.5, borderColor: C.subtle }, radioOuterSelected: { borderColor: C.blue }, radioInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.blue }, requestDrawerFooter: { minHeight: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12, paddingHorizontal: 18, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.white }, requestCancel: { minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 }, requestCancelText: { color: C.blue, fontFamily: 'Geist-Medium', fontSize: 12 }, actionPanel: { gap: 10, marginTop: 12, padding: 13, backgroundColor: '#F6FAFC', borderRadius: 8, borderWidth: 1, borderColor: C.line }, multilineInput: { minHeight: 76, paddingTop: 10, textAlignVertical: 'top' } as any, assignmentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 }, assignmentEdit: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }, requestEvent: { flexDirection: 'row', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: C.line }, requestEventMark: { width: 8, height: 8, marginTop: 4, borderRadius: 4, backgroundColor: C.blue },
+  patientHeaderNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 10, paddingHorizontal: 13, backgroundColor: C.blueSoft, borderRadius: 7 }, patientHeaderNoteText: { color: C.blueDeep, fontSize: 11, flex: 1 }, requestSection: { borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line, paddingVertical: 16 }, requestRow: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 8, paddingHorizontal: 8, borderTopWidth: 1, borderTopColor: C.line }, requestMain: { flex: 1 },
+  logList: { borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line }, logRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 15, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line }, logDate: { width: 120 }, logDateDay: { color: C.ink, fontSize: 11, fontFamily: 'Geist-Medium' }, logActor: { width: 130, alignItems: 'flex-end' },
+  settingsPanel: { paddingVertical: 18, paddingHorizontal: 20, backgroundColor: C.white, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line }, settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 20, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line }, settingLabel: { color: C.muted, fontSize: 12 }, settingValue: { color: C.ink, fontSize: 12, fontFamily: 'Geist-Medium', textAlign: 'right', flexShrink: 1 }, settingInput: { color: C.ink, fontFamily: 'Geist-Medium', fontSize: 12, textAlign: 'right', width: '68%' as any, minHeight: 38, paddingHorizontal: 8, borderWidth: 1, borderColor: C.line, borderRadius: 6, backgroundColor: C.white } as any, settingsAction: { alignSelf: 'flex-end', marginTop: 15 }, profileSummary: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 18 },
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(14, 38, 56, 0.38)', padding: 18 }, mobileDrawer: { alignSelf: 'stretch', maxWidth: 310, width: '88%', height: '100%', marginRight: 'auto', backgroundColor: C.white, borderRadius: 9, overflow: 'hidden' }, dialog: { width: '100%', maxWidth: 610, maxHeight: '88%', backgroundColor: C.white, borderRadius: 11, padding: 23, borderWidth: 1, borderColor: C.line, ...(Platform.OS === 'web' ? { boxShadow: '0 18px 50px rgba(23,54,77,0.17)' } : { elevation: 8 }) } as any, detailDialog: { maxWidth: 650 }, detailScroll: { maxHeight: 520, flexGrow: 0 } as any, formDialog: { maxWidth: 520 }, accountDialog: { height: 520, maxHeight: '88%', overflow: 'hidden' }, confirmDialog: { width: '100%', maxWidth: 430, backgroundColor: C.white, borderRadius: 11, padding: 24, alignItems: 'flex-start', borderWidth: 1, borderColor: C.line }, notificationLayer: { flex: 1 }, notificationPopover: { position: 'absolute', width: 360, maxWidth: '92%', maxHeight: '78%', backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 11, padding: 18, ...(Platform.OS === 'web' ? { boxShadow: '0 14px 38px rgba(23,54,77,0.20)' } : { elevation: 10 }) }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 15, marginBottom: 18 }, modalHeaderText: { flex: 1 }, dialogTitle: { color: C.ink, fontSize: 19, fontFamily: 'Geist-SemiBold' }, closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#F0F6FA' }, detailIdentity: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingBottom: 18, borderBottomWidth: 1, borderBottomColor: C.line }, detailName: { color: C.ink, fontSize: 17, fontFamily: 'Geist-SemiBold' }, detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 0, paddingVertical: 12 }, detailCell: { width: '50%', paddingVertical: 10, paddingRight: 12 }, detailLabel: { color: C.subtle, fontSize: 10, marginBottom: 5 }, detailValue: { color: C.ink, fontSize: 12, fontFamily: 'Geist-Medium' }, detailSection: { paddingTop: 15, paddingBottom: 10, borderTopWidth: 1, borderTopColor: C.line }, fieldLabel: { color: C.ink, fontSize: 12, fontFamily: 'Geist-SemiBold', marginBottom: 8 }, linkedPatient: { flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 40 }, smallAvatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.blueSoft, alignItems: 'center', justifyContent: 'center' }, smallAvatarText: { color: C.blue, fontSize: 9, fontFamily: 'Geist-SemiBold' }, assignmentSummary: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 7 }, assignmentTrigger: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' }, choiceList: { borderWidth: 1, borderColor: C.line, borderRadius: 7, marginTop: 3, paddingHorizontal: 10 }, choiceRow: { minHeight: 39, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: C.line }, sourceNote: { color: C.subtle, fontSize: 10, lineHeight: 15, marginTop: 7 }, detailActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end', paddingTop: 16, marginTop: 8, borderTopWidth: 1, borderTopColor: C.line }, requestReviewNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: C.yellowSoft, padding: 12, borderRadius: 7, marginBottom: 12 }, requestReason: { flex: 1, color: C.ink, fontSize: 12, lineHeight: 18 }, confirmIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.blueSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }, confirmIconDanger: { backgroundColor: C.redSoft }, confirmMessage: { color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 9, marginBottom: 16 }, dialogActions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 9, marginTop: 15, alignSelf: 'stretch' },
+  field: { gap: 6, marginBottom: 14 }, input: { height: 42, paddingHorizontal: 11, borderRadius: 7, borderWidth: 1, borderColor: C.line, backgroundColor: C.white, color: C.ink, fontSize: 13 } as any, roleChoices: { flexDirection: 'row', gap: 9, marginBottom: 14 }, roleChoice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flex: 1, height: 44, borderWidth: 1, borderColor: C.line, borderRadius: 7 }, roleChoiceActive: { borderColor: C.blue, backgroundColor: C.blueSoft }, roleChoiceText: { color: C.muted, fontSize: 12 }, roleChoiceTextActive: { color: C.blue, fontFamily: 'Geist-SemiBold' }, formHint: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: C.blueSoft, borderRadius: 7, padding: 10 }, errorText: { color: C.red, fontSize: 11, marginTop: 10 },
+  segmentRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 }, segment: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 6, backgroundColor: '#F0F6FA' }, segmentActive: { backgroundColor: C.blueSoft }, segmentText: { color: C.muted, fontSize: 11 }, segmentTextActive: { color: C.blue, fontFamily: 'Geist-SemiBold' }, markAll: { marginLeft: 'auto' as any, padding: 6 }, notificationList: { maxHeight: 400 }, notificationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, paddingVertical: 13, borderTopWidth: 1, borderTopColor: C.line }, unreadMark: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.blue, marginTop: 5 }, readMark: { backgroundColor: C.line },
+  offboardingList: { maxHeight: 360 }, offboardingRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line, gap: 9 }, offboardingPatient: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  emptyState: { alignItems: 'center', gap: 10, paddingVertical: 40, paddingHorizontal: 18, backgroundColor: C.white, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line }, emptyTitle: { color: C.ink, fontSize: 14, fontFamily: 'Geist-SemiBold' }, toast: { position: 'absolute', bottom: 22, right: 24, maxWidth: '90%' as any, minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 8, ...(Platform.OS === 'web' ? { boxShadow: '0 9px 24px rgba(23,54,77,0.14)' } : { elevation: 5 }) } as any, toastText: { color: C.ink, fontSize: 12, flexShrink: 1, maxWidth: 480 },
 });

@@ -35,11 +35,9 @@ export default function SpeechCheckinResult() {
     : [];
   const mainGoal = responses.find((item) => item.question?.toLowerCase().includes('main goal'))?.answer;
 
-  // Responsive Hooks
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
-  // FIXED FONT PATHS (3 levels up)
   const [fontsLoaded] = useFonts({
     SourGummy: require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
@@ -62,10 +60,8 @@ export default function SpeechCheckinResult() {
   return (
     <SafeAreaView style={styles.screenContainer}>
       <StatusBar barStyle="dark-content" />
-
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* FIXED IMAGE PATH (3 levels up) */}
       <ImageBackground
         source={require('../../../assets/images/landing-bg-pattern.png')}
         style={styles.background}
@@ -75,14 +71,13 @@ export default function SpeechCheckinResult() {
         <View style={[styles.container, isTablet && styles.containerTablet]}>
           <View style={styles.card}>
 
-            {/* Header */}
+            {/* HEADER */}
             <View style={styles.headerRow}>
               <TouchableOpacity
                 style={styles.backButton}
                 onPress={() => router.back()}
                 activeOpacity={0.7}
               >
-                {/* FIXED IMAGE PATH (3 levels up) */}
                 <Image
                   source={require('../../../assets/images/back.png')}
                   style={styles.backIcon}
@@ -90,26 +85,27 @@ export default function SpeechCheckinResult() {
                 />
               </TouchableOpacity>
 
-              <Text style={styles.headerTitle}>Check-in Result</Text>
+              <Text style={styles.headerTitle}>
+                Check-in Result
+              </Text>
             </View>
 
-            {/* Recommended Starting Point */}
+            {/* RECOMMENDED STARTING POINT */}
             <View style={styles.levelCardWrapper}>
-              <View style={styles.birdWrapper}>
-                {/* FIXED IMAGE PATH (3 levels up) */}
-                <Image
-                  source={require('../../../assets/images/bird-logo.gif')}
-                  style={styles.birdImage}
-                  contentFit="contain"
-                />
-              </View>
-
               <LinearGradient
                 colors={['#0C66AD', '#4FB5EA']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.levelCard}
               >
+                <View style={styles.birdWrapper}>
+                  <Image
+                    source={require('../../../assets/images/bird-logo.gif')}
+                    style={styles.birdImage}
+                    contentFit="contain"
+                  />
+                </View>
+
                 <Text style={styles.recommendedSub}>
                   Check-in saved
                 </Text>
@@ -124,10 +120,10 @@ export default function SpeechCheckinResult() {
               </LinearGradient>
             </View>
 
-            {/* Speech Development */}
+            {/* SPEECH DEVELOPMENT */}
             <View style={styles.developmentCard}>
               <Text style={styles.sectionTitle}>
-                🌟 Check-in Status
+                Speech Development
               </Text>
 
               <View style={styles.ageBadge}>
@@ -142,10 +138,10 @@ export default function SpeechCheckinResult() {
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
 
-            {/* What We Noticed */}
+            {/* WHAT WE NOTICED */}
             <View style={styles.noticedCard}>
               <Text style={styles.noticedTitle}>
-                👀 What We Noticed
+                What We Noticed
               </Text>
 
               {responses.length > 0
@@ -158,10 +154,10 @@ export default function SpeechCheckinResult() {
                 : <Text style={styles.description}>Saved answers will appear here when available.</Text>}
             </View>
 
-            {/* Main Goal */}
+            {/* MINIMAL MAIN GOAL */}
             <View style={styles.goalCard}>
               <Text style={styles.goalTitle}>
-                🎯 Your Main Goal
+                Your Main Goal
               </Text>
 
               <Text style={styles.goalHighlight}>
@@ -169,19 +165,20 @@ export default function SpeechCheckinResult() {
               </Text>
 
               <Text style={styles.goalDescription}>
-                This check-in is a friendly guide, not a diagnosis.
-                Your therapist will review it and help you practice.
+                A friendly guide, not a diagnosis — your therapist will review and support practice.
               </Text>
             </View>
 
-            {/* Bottom Buttons - Only Done button remaining */}
+            {/* BUTTONS */}
             <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={styles.doneButton}
                 activeOpacity={0.85}
-                onPress={handleContinueToSetup}
+                onPress={() => router.replace('/sentences' as any)}
               >
-                <Text style={styles.doneButtonText}>Done ✓</Text>
+                <Text style={styles.doneButtonText}>
+                  Start Practicing
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -232,7 +229,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 
-  // Container
+  // CONTAINER
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -241,15 +238,14 @@ const styles = StyleSheet.create({
     paddingTop: 30,
     paddingBottom: 5,
   },
-  
-  // Tablet Responsive Constraint
+
   containerTablet: {
     maxWidth: 600,
     alignSelf: 'center',
     width: '100%',
   },
 
-  // Main White Card
+  // WHITE CARD
   card: {
     width: '100%',
     height: '90%',
@@ -258,33 +254,34 @@ const styles = StyleSheet.create({
     borderColor: '#B0D5EC',
     borderRadius: 28,
     paddingHorizontal: 16,
-    paddingTop: 5,
+    paddingTop: 8,
     paddingBottom: 12,
     justifyContent: 'flex-start',
   },
 
-  // Header
+  // HEADER
   headerRow: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 0,
+    marginTop: 8,
+    marginBottom: 4,
     flexShrink: 0,
   },
 
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EAF6FC',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0C66AD',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
 
   backIcon: {
-    width: 24,
-    height: 24,
+    width: 50,
+    height: 40,
   },
 
   headerTitle: {
@@ -293,7 +290,7 @@ const styles = StyleSheet.create({
     color: '#0C66AD',
   },
 
-  // Blue Card Wrapper
+  // BLUE CARD
   levelCardWrapper: {
     width: '100%',
     alignItems: 'center',
@@ -301,7 +298,19 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  // Overlapping Bird
+  levelCard: {
+    width: '100%',
+    minHeight: 145,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 58,
+    paddingBottom: 16,
+    paddingHorizontal: 14,
+    position: 'relative',
+  },
+
+  // BIRD INSIDE BLUE CARD
   birdWrapper: {
     width: 110,
     height: 110,
@@ -316,18 +325,6 @@ const styles = StyleSheet.create({
   birdImage: {
     width: '100%',
     height: '100%',
-  },
-
-  // Blue Gradient Card
-  levelCard: {
-    width: '100%',
-    minHeight: 145,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 58,
-    paddingBottom: 16,
-    paddingHorizontal: 14,
   },
 
   recommendedSub: {
@@ -352,15 +349,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Speech Development
+  // SPEECH DEVELOPMENT
   developmentCard: {
     width: '100%',
-    backgroundColor: '#FFFAED',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#FEB723',
+    borderColor: '#B0D5EC',
     borderRadius: 16,
     padding: 12,
     marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
   },
 
   sectionTitle: {
@@ -392,15 +394,20 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  // What We Noticed
+  // WHAT WE NOTICED
   noticedCard: {
     width: '100%',
-    backgroundColor: '#F2F9FF',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: '#B0D5EC',
     borderRadius: 16,
     padding: 12,
     marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
   },
 
   noticedTitle: {
@@ -413,12 +420,15 @@ const styles = StyleSheet.create({
   noticedItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 6,
   },
 
-  itemEmoji: {
-    fontSize: 23,
-    width: 36,
+  itemDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#4FB5EA',
+    marginRight: 12,
   },
 
   itemText: {
@@ -429,18 +439,20 @@ const styles = StyleSheet.create({
   },
 
   clearBadge: {
-    backgroundColor: '#D7F2C5',
-    borderRadius: 15,
+    backgroundColor: '#E6F4EA',
+    borderWidth: 1,
+    borderColor: '#B7DFC2',
+    borderRadius: 12,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    minWidth: 68,
+    paddingVertical: 3,
+    minWidth: 60,
     alignItems: 'center',
   },
 
   clearText: {
-    fontFamily: 'SourGummy-Bold',
+    fontFamily: 'SourGummy-Medium',
     fontSize: 12,
-    color: '#356B28',
+    color: '#2E6F40',
   },
   responseItem: {
     paddingVertical: 8,
@@ -459,38 +471,39 @@ const styles = StyleSheet.create({
     color: '#B91C1C',
   },
 
-  // Main Goal
+  // MINIMAL MAIN GOAL
   goalCard: {
     width: '100%',
-    backgroundColor: '#FFE9B8',
+    backgroundColor: '#FFFDF7',
     borderWidth: 1,
-    borderColor: '#FEB723',
+    borderColor: '#F3D58D',
     borderRadius: 16,
-    padding: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
   },
 
   goalTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 17,
-    color: '#A66A00',
-    marginBottom: 3,
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 12.5,
+    color: '#9A6B13',
+    marginBottom: 2,
   },
 
   goalHighlight: {
     fontFamily: 'SourGummy-Bold',
-    fontSize: 21,
+    fontSize: 17.5,
     color: '#0C66AD',
-    marginBottom: 4,
+    marginBottom: 3,
   },
 
   goalDescription: {
     fontFamily: 'SourGummy-Medium',
     fontSize: 12,
-    lineHeight: 17,
-    color: '#51452F',
+    lineHeight: 16.5,
+    color: '#6B7280',
   },
 
-  // Bottom Buttons
+  // BUTTONS
   buttonContainer: {
     width: '100%',
     flexDirection: 'row',
@@ -507,6 +520,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: '#D99508',
   },
 
   doneButtonText: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import {
@@ -39,111 +39,185 @@ const questionsData = [
   {
     step: 6,
     question: "Have you noticed any of these concerns?",
-    options: ["No concerns", "Hearing worries or infections", "Lost words or skills", "Both of these"],
+    options: [
+      "No concerns",
+      "Hearing worries or infections",
+      "Lost words or skills",
+      "Both of these",
+    ],
   },
   {
     step: 7,
     question: "What is your main goal for your child?",
-    options: ["Say first words", "Say more words", "Join words together", "Speak more clearly"],
+    options: [
+      "Say first words",
+      "Say more words",
+      "Join words together",
+      "Speak more clearly",
+    ],
   },
 ];
 
 export default function SpeechCheckInQuestionsScreen() {
   const router = useRouter();
-  
-  // Responsive Hooks
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+
   const isTablet = width > 600;
 
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Record<string, { question: string; answer: string }>>({});
+  const [isNavigating, setIsNavigating] = useState(false);
 
-  // FIXED FONT PATHS: Removed the /fonts/ folder segment
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
+  useEffect(() => {
+    return () => {
+      if (stepTimerRef.current) {
+        clearTimeout(stepTimerRef.current);
+      }
+    };
+  }, []);
+
   if (!fontsLoaded) return null;
 
   const activeData = questionsData[currentStep - 1];
+  const isLastStep = currentStep === questionsData.length;
+
+  // Larger responsive card
+  const cardHeight = Math.min(580, height * 0.75);
+
+  const goToSoundCheck = (responses: Record<string, { question: string; answer: string }>) => {
+    if (stepTimerRef.current) {
+      clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = null;
+    }
+    setIsNavigating(true);
+    router.push({
+      pathname: '/sound-check',
+      params: { responses: JSON.stringify(responses) },
+    } as any);
+  };
+
+  const handleBack = () => {
+    if (stepTimerRef.current) {
+      clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = null;
+    }
+    setIsNavigating(false);
+
+    if (currentStep > 1) {
+      const prevStep = currentStep - 1;
+      setCurrentStep(prevStep);
+      setSelectedOption(
+        questionsData[prevStep - 1].options.indexOf(answers[String(prevStep)]?.answer ?? ''),
+      );
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/speech-checkin' as any);
+    }
+  };
 
   const handleSelect = (index: number) => {
+    if (isNavigating) return;
+
     setSelectedOption(index);
-    setTimeout(() => {
-      const nextAnswers = {
-        ...answers,
-        [String(currentStep)]: {
-          question: activeData.question,
-          answer: activeData.options[index],
-        },
-      };
-      setAnswers(nextAnswers);
-      if (currentStep < 7) {
-        setCurrentStep(currentStep + 1);
+    const nextAnswers = {
+      ...answers,
+      [String(currentStep)]: {
+        question: activeData.question,
+        answer: activeData.options[index],
+      },
+    };
+    setAnswers(nextAnswers);
+
+    if (stepTimerRef.current) {
+      clearTimeout(stepTimerRef.current);
+    }
+
+    if (!isLastStep) {
+      stepTimerRef.current = setTimeout(() => {
+        const nextStep = currentStep + 1;
+        setCurrentStep(nextStep);
         setSelectedOption(null);
-      } else {
-        router.push({
-          pathname: '/sound-check',
-          params: { responses: JSON.stringify(nextAnswers) },
-        } as any);
-      }
-    }, 250);
+        stepTimerRef.current = null;
+      }, 250);
+    } else {
+      stepTimerRef.current = setTimeout(() => {
+        goToSoundCheck(nextAnswers);
+      }, 250);
+    }
   };
 
   return (
     <View style={styles.screenContainer}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* FIXED IMAGE PATH: 3 levels up */}
       <ImageBackground
         source={require('../../../assets/images/landing-bg-pattern.png')}
         style={styles.background}
         imageStyle={{ opacity: 0.05 }}
         resizeMode="cover"
       >
-        <View style={[styles.container, isTablet && styles.containerTablet]}>
-          
-          {/* Top Header Bar */}
+        <View
+          style={[
+            styles.container,
+            isTablet && styles.containerTablet,
+          ]}
+        >
+          {/* HEADER */}
           <View style={styles.headerRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.backButton}
-              onPress={() => {
-                if (currentStep > 1) {
-                  setCurrentStep(currentStep - 1);
-                  setSelectedOption(null);
-                } else {
-                  router.back();
-                }
-              }}
+              onPress={handleBack}
             >
               <Text style={styles.backIcon}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Speech check-in</Text>
+
+            <Text style={styles.headerTitle}>
+              Speech check-in
+            </Text>
           </View>
 
-          {/* 7-Step Progress Indicator Bars */}
-          <View style={styles.progressContainer}>
-            {[1, 2, 3, 4, 5, 6, 7].map((step) => (
-              <View
-                key={step}
-                style={[
-                  styles.progressBar,
-                  step <= currentStep ? styles.progressActive : styles.progressInactive,
-                ]}
-              />
-            ))}
-          </View>
+          {/* MINIMAL QUESTION CARD */}
+          <View
+            style={[
+              styles.questionCard,
+              { height: cardHeight },
+            ]}
+          >
+            {/* PROGRESS LINES */}
+            <View style={styles.progressContainer}>
+              {[1, 2, 3, 4, 5, 6, 7].map((step) => (
+                <View
+                  key={step}
+                  style={[
+                    styles.progressBar,
+                    step <= currentStep
+                      ? styles.progressActive
+                      : styles.progressInactive,
+                  ]}
+                />
+              ))}
+            </View>
 
-          {/* Question Card Container */}
-          <View style={styles.questionCard}>
-            <Text style={styles.questionText}>{activeData.question}</Text>
+            {/* QUESTION */}
+            <Text style={styles.questionText}>
+              {activeData.question}
+            </Text>
 
+            {/* ANSWER OPTIONS */}
             <View style={styles.optionsContainer}>
               {activeData.options.map((option, index) => {
                 const isSelected = selectedOption === index;
+
                 return (
                   <TouchableOpacity
                     key={index}
@@ -153,8 +227,14 @@ export default function SpeechCheckInQuestionsScreen() {
                     ]}
                     activeOpacity={0.8}
                     onPress={() => handleSelect(index)}
+                    disabled={isNavigating}
                   >
-                    <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                    <Text
+                      style={[
+                        styles.optionText,
+                        isSelected && styles.optionTextSelected,
+                      ]}
+                    >
                       {option}
                     </Text>
                   </TouchableOpacity>
@@ -162,12 +242,11 @@ export default function SpeechCheckInQuestionsScreen() {
               })}
             </View>
 
-            {/* Question Counter Footer */}
+            {/* QUESTION COUNTER */}
             <Text style={styles.footerInfo}>
               Question {currentStep} of 7 • no right or wrong answers
             </Text>
           </View>
-
         </View>
       </ImageBackground>
     </View>
@@ -179,34 +258,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#C4E1F0',
   },
+
   background: {
     flex: 1,
     width: '100%',
     height: '100%',
   },
+
+  // MAIN CONTAINER
   container: {
     flex: 1,
-    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingHorizontal: 25,
+    paddingHorizontal: 18,
     paddingTop: 80,
+    paddingBottom: 12,
   },
-  // Added Tablet MaxWidth Constraint
+
   containerTablet: {
-    maxWidth: 600,
+    maxWidth: 640,
     alignSelf: 'center',
     width: '100%',
   },
+
+  // HEADER
   headerRow: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
+
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -217,93 +302,115 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginRight: 12,
   },
+
   backIcon: {
-    fontSize: 20,
+    fontSize: 23,
     color: '#0C66AD',
     fontWeight: 'bold',
   },
+
   headerTitle: {
     fontFamily: 'SourGummy-Bold',
-    fontSize: 22,
+    fontSize: 25,
     color: '#0C66AD',
   },
+
+  // QUESTION CARD (MINIMAL)
+  questionCard: {
+    width: '100%',
+    maxWidth: 560,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C8DFEE',
+    borderRadius: 24,
+    paddingVertical: 30,
+    paddingHorizontal: 26,
+    justifyContent: 'space-between',
+    alignSelf: 'center',
+    marginTop: -5,
+    marginBottom: 'auto',
+  },
+
+  // PROGRESS LINES
   progressContainer: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
+    marginBottom: 18,
   },
+
   progressBar: {
     flex: 1,
-    height: 7,
-    borderRadius: 4,
+    height: 11,
+    borderRadius: 6,
     marginHorizontal: 3,
   },
+
   progressActive: {
     backgroundColor: '#FEB723',
   },
+
   progressInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: '#DCEBF5',
   },
-  questionCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#B0D5EC',
-    width: '100%',
-    borderRadius: 30,
-    paddingVertical: 30,
-    paddingHorizontal: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 6,
-  },
+
+  // QUESTION
   questionText: {
     fontFamily: 'SourGummy-Bold',
-    fontSize: 20,
+    fontSize: 22,
     color: '#0C66AD',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 28,
+    marginTop: 12,
+    lineHeight: 37,
   },
+
+  // ANSWER OPTIONS
   optionsContainer: {
     width: '100%',
-    marginBottom: 18,
+    marginVertical: 10,
   },
+
   optionButton: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
+    borderWidth: 1.8,
     borderColor: '#D0E6F5',
-    borderRadius: 22,
-    paddingVertical: 17,
-    paddingHorizontal: 20,
-    marginBottom: 14,
+    borderRadius: 26,
+    paddingVertical: 21,
+    paddingHorizontal: 22,
+    marginBottom: 15,
     alignItems: 'center',
+
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
+
   optionButtonSelected: {
     backgroundColor: '#EAF4FC',
     borderColor: '#0C66AD',
   },
+
   optionText: {
     fontFamily: 'SourGummy-Medium',
-    fontSize: 15.5,
+    fontSize: 18,
     color: '#0C66AD',
+    textAlign: 'center',
   },
+
   optionTextSelected: {
     fontFamily: 'SourGummy-Bold',
     color: '#0C66AD',
   },
+
+  // FOOTER
   footerInfo: {
     fontFamily: 'SourGummy-Medium',
-    fontSize: 12.5,
+    fontSize: 16,
     color: '#657786',
     textAlign: 'center',
+    marginBottom: 4,
   },
 });

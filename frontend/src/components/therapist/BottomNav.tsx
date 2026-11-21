@@ -30,7 +30,7 @@ export function BottomNav({ active }: { active: TherapistTab }) {
     >
       {therapistTabs.map((tab) => {
         const selected = tab.key === active;
-        const color = selected ? palette.primary : palette.navInactive;
+        const color = selected ? '#0284C7' : '#63778A';
         const Icon = icons[tab.key];
         return (
           <Pressable
@@ -42,9 +42,11 @@ export function BottomNav({ active }: { active: TherapistTab }) {
             }}
             style={styles.item}
           >
-            <View style={[styles.dash, { backgroundColor: selected ? palette.primary : 'transparent' }]} />
-            <Icon color={color} />
-            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+            {selected && <View style={styles.topIndicator} />}
+            <View style={styles.iconContainer}>
+              <Icon color={color} size={24} />
+            </View>
+            <Text style={[styles.label, { color, fontWeight: selected ? '700' : '600' }]}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -56,20 +58,32 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    paddingTop: 6,
+    backgroundColor: '#FFFFFF',
   },
   item: {
     flex: 1,
     alignItems: 'center',
-    gap: 3,
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+    position: 'relative',
+    gap: 4,
   },
-  dash: {
-    width: 16,
+  topIndicator: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     height: 3,
-    borderRadius: 2,
+    backgroundColor: '#0284C7',
+  },
+  iconContainer: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   label: {
     fontSize: 11,
-    fontWeight: '600',
   },
 });

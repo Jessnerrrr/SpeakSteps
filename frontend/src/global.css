@@ -16,3 +16,119 @@ input::-ms-clear {
   height: 0 !important;
   pointer-events: none !important;
 }
+
+#admin-auth-root input {
+  font-family: 'Geist-Regular', sans-serif;
+  caret-color: #0f69af;
+}
+
+#admin-auth-root input:focus {
+  outline: none;
+}
+
+#admin-auth-root input:-webkit-autofill,
+#admin-auth-root input:-webkit-autofill:hover,
+#admin-auth-root input:-webkit-autofill:focus,
+#admin-auth-root input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  -webkit-text-fill-color: #102a43 !important;
+  caret-color: #0f69af;
+}
+
+#admin-auth-root :focus-visible {
+  outline: 2px solid #0f69af;
+  outline-offset: 2px;
+}
+
+#admin-auth-root input:focus-visible {
+  outline: none;
+}
+
+#admin-auth-root [role='button'],
+#admin-auth-root [role='link'] {
+  cursor: pointer;
+  transition: filter 140ms ease, opacity 140ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #admin-auth-root [role='button']:hover,
+  #admin-auth-root [role='link']:hover {
+    filter: brightness(1.05);
+  }
+}
+
+#admin-auth-root [role='button']:active,
+#admin-auth-root [role='link']:active {
+  opacity: 0.82;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #admin-auth-root [role='button'],
+  #admin-auth-root [role='link'] {
+    transition-duration: 0.01ms;
+  }
+}
+
+#admin-portal-root {
+  color-scheme: light;
+}
+
+#center-admin-sidebar {
+  transition: width 240ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+#admin-portal-root input {
+  font-family: 'Geist-Regular', sans-serif;
+  caret-color: #0f69af;
+}
+
+#admin-portal-root select {
+  font-family: 'Geist-Regular', sans-serif;
+  color: #17364d;
+  color-scheme: light;
+}
+
+#admin-portal-root ::selection {
+  color: #0f172a;
+  background: #dbeafe;
+}
+
+#admin-portal-root :focus-visible {
+  outline: 2px solid #0f69af;
+  outline-offset: 2px;
+}
+
+#admin-portal-root input:focus-visible {
+  outline-offset: 1px;
+}
+
+#admin-portal-root [role='button'],
+#admin-portal-root [role='link'] {
+  cursor: pointer;
+  transition: filter 140ms ease, opacity 140ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #admin-portal-root [role='button']:hover,
+  #admin-portal-root [role='link']:hover {
+    filter: brightness(1.04);
+  }
+}
+
+#admin-portal-root [role='button']:active,
+#admin-portal-root [role='link']:active {
+  opacity: 0.82;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #center-admin-sidebar {
+    transition-duration: 0.01ms;
+  }
+
+  #admin-portal-root [role='button'],
+  #admin-portal-root [role='link'] {
+    transition-duration: 0.01ms;
+  }
+}

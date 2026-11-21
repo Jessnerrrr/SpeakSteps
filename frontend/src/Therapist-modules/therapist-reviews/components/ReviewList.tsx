@@ -70,8 +70,8 @@ export function ReviewList() {
 function StatusPill({ status }: { status: ReviewStatus }) {
   const reviewed = status === 'Reviewed';
   return (
-    <View style={[styles.pill, { backgroundColor: reviewed ? '#E7F0DC' : '#F8E7DC' }]}>
-      <Text style={[styles.pillText, { color: reviewed ? '#6A8F55' : '#C48B5A' }]}>{status}</Text>
+    <View style={[styles.pill, { backgroundColor: reviewed ? '#E6EED9' : '#F8E7DC' }]}>
+      <Text style={[styles.pillText, { color: reviewed ? '#5E8246' : '#B87A46' }]}>{status}</Text>
     </View>
   );
 }
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   copy: { flex: 1 },
   name: { fontSize: 14, fontWeight: '700' },
   meta: { fontSize: 12, marginTop: 2 },
-  pill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  pillText: { fontSize: 12, fontWeight: '700' },
+  pill: { width: 76, height: 26, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  pillText: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
   empty: { textAlign: 'center', marginTop: 12 },
 });
