@@ -35,8 +35,8 @@ export default function TeacherLoginScreen() {
     }
     
     if (email.trim().toLowerCase() === 'teacher@speaksteps.com' && password === 'Teacher@123') {
-      // Connects the login screen to the teacher dashboard
-      router.replace('/teacher/teacher-dashboard' as any);
+      // Sends them to Auth Selection, dynamically telling it they are a teacher
+      router.push({ pathname: '/auth-selection', params: { role: 'teacher' } } as any);
     } else {
       setLoginError('Invalid email or password');
     }

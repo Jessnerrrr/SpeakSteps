@@ -23,6 +23,51 @@ const RECENT_REQUESTS_DASHBOARD = [
   { id: '1', name: 'Khyl Shervin Sude', role: 'Therapist', time: 'Today AT 11:12 AM', status: 'Pending', avatar: require('../../../assets/images/person1.jpg') },
   { id: '2', name: 'Angelica Vega', role: 'Teacher', time: 'Today AT 11:12 AM', status: 'Pending', avatar: require('../../../assets/images/person2.jpg') },
   { id: '3', name: 'Jhonas Elsisura', role: 'Therapist', time: 'Today AT 11:12 AM', status: 'Pending', avatar: require('../../../assets/images/person3.jpg') },
+  { id: '4', name: 'Lian Cruz', role: 'Patient', time: 'Yesterday AT 2:30 PM', status: 'Pending', avatar: require('../../../assets/images/person4.png') },
+];
+
+// EXACT COLORS EXTRACTED FROM YOUR UPLOADED PNGs
+const RECENT_ACTIVITIES_DASHBOARD = [
+  {
+    id: '1',
+    role: 'Teacher',
+    title: 'ANA REYES - ACCOUNT APPROVED',
+    subtitle: 'Status updated from PENDING to ACTIVE • Edited by Admin',
+    time: '2M AGO',
+    color: '#49A11B', // Exact Green Logo
+    bgColor: '#E2F7CE', // Exact Green Bg
+    borderColor: '#C6ECA7',
+  },
+  {
+    id: '2',
+    role: 'Therapist',
+    title: 'MARK DIZON - ROLE UPDATED',
+    subtitle: 'Assigned to Teacher • Edited by Super Admin',
+    time: '1H AGO',
+    color: '#1173BA', // Exact Blue Logo
+    bgColor: '#DDF0F9', // Exact Blue Bg
+    borderColor: '#B9DFEE',
+  },
+  {
+    id: '3',
+    role: 'Patient',
+    title: 'S-2026-003 - PROFILE EDITED',
+    subtitle: 'Updated contact information • Edited by Admin',
+    time: '2H AGO',
+    color: '#C78800', // Exact Yellow Logo
+    bgColor: '#FDE9AD', // Exact Yellow Bg
+    borderColor: '#F3D47B',
+  },
+  {
+    id: '4',
+    role: 'Pending',
+    title: 'JOHN DOE - ACCOUNT SUSPENDED',
+    subtitle: 'Status updated to SUSPENDED • Edited by Admin',
+    time: '1D AGO',
+    color: '#C81015', // Exact Red Logo
+    bgColor: '#FBD7D7', // Exact Red Bg
+    borderColor: '#F2B9B9',
+  },
 ];
 
 const MOCK_REQUESTS = [
@@ -46,32 +91,21 @@ export default function AdminDashboardScreen() {
   const [requestSubTab, setRequestSubTab] = useState('All');
   const [accountSubTab, setAccountSubTab] = useState('All');
 
-  // Custom Alert State
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertConfig, setAlertConfig] = useState({
-    title: '',
-    message: '',
-    confirmText: '',
-    confirmColor: '#0284C7',
-    iconName: 'warning',
-    onConfirm: () => {},
+    title: '', message: '', confirmText: '', confirmColor: '#0284C7', iconName: 'warning', onConfirm: () => {},
   });
 
-  // ==========================================
-  // --- MENU & SETTINGS MODAL STATES ---
-  // ==========================================
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
-  
-  // Settings Toggles
+
   const [newRequestToggle, setNewRequestToggle] = useState(true);
   const [securityAlertsToggle, setSecurityAlertsToggle] = useState(true);
-  
-  // Desktop check
+
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
 
@@ -83,26 +117,22 @@ export default function AdminDashboardScreen() {
 
   if (!fontsLoaded) return null;
 
-  // Helper to trigger custom warning alerts
   const triggerAlert = (title: string, message: string, confirmText: string, confirmColor: string, iconName: any, onConfirm: () => void) => {
-    setShowMenu(false); 
+    setShowMenu(false);
     setShowSettingsModal(false);
     setAlertConfig({ title, message, confirmText, confirmColor, iconName, onConfirm });
     setAlertVisible(true);
   };
 
-  // ==========================================
-  // --- UNIFIED TOP HEADER FOR ALL TABS ---
-  // ==========================================
   const renderTopHeader = (title: string, showBackButton = false) => (
-    <View style={styles.topHeader}>
+    <View style={[styles.topHeader, isDesktop && { paddingHorizontal: 40 }]}>
       <View style={styles.headerLeft}>
         {showBackButton ? (
           <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={styles.backButtonBlue}>
             <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.hamburgerBtn}
             onPress={() => {
               setShowNotificationsDropdown(false);
@@ -112,13 +142,13 @@ export default function AdminDashboardScreen() {
             <Ionicons name="menu" size={28} color="#0284C7" />
           </TouchableOpacity>
         )}
-        {!showBackButton && <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.logoImage} contentFit="contain" />}
+        {!showBackButton && <Image source={require('../../../assets/images/landing-logo.gif')} style={styles.logoImage} contentFit="contain" />}
         <Text style={styles.headerTitle}>{title}</Text>
       </View>
 
       <View style={styles.headerRight}>
-        <TouchableOpacity 
-          style={styles.headerIconBtn} 
+        <TouchableOpacity
+          style={styles.headerIconBtn}
           onPress={() => {
             setShowMenu(false);
             setShowNotificationsDropdown(!showNotificationsDropdown);
@@ -127,8 +157,7 @@ export default function AdminDashboardScreen() {
           <Ionicons name="notifications-outline" size={24} color="#0284C7" />
           {notifications.some((n) => n.unread) && <View style={styles.notificationDot} />}
         </TouchableOpacity>
-        
-        {/* Desktop Navbar Links */}
+
         {isDesktop && (
           <View style={styles.desktopNavLinks}>
             <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={[styles.desktopNavLink, activeTab === 'dashboard' && styles.desktopNavLinkActive]}>
@@ -148,101 +177,169 @@ export default function AdminDashboardScreen() {
 
   const renderDashboard = () => (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
-      {renderTopHeader('Welcome, Admin')}
 
       <View style={styles.heroCard}>
         <Text style={styles.heroLabel}>Active Accounts</Text>
         <Text style={styles.heroNumber}>4</Text>
         <View style={styles.progressContainer}>
-          <View style={[styles.progressSegment, { flex: 2, backgroundColor: '#0284C7' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#16A34A' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#F59E0B' }]} />
-          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#DC2626' }]} />
+          <View style={[styles.progressSegment, { flex: 2, backgroundColor: '#1173BA' }]} />
+          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#49A11B' }]} />
+          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#C78800' }]} />
+          <View style={[styles.progressSegment, { flex: 1, backgroundColor: '#C81015' }]} />
         </View>
         <View style={styles.legendContainer}>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#0284C7' }]} /><Text style={styles.legendText}>Therapist</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#16A34A' }]} /><Text style={styles.legendText}>Teachers</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} /><Text style={styles.legendText}>Patient</Text></View>
-          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#DC2626' }]} /><Text style={styles.legendText}>Pending</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#1173BA' }]} /><Text style={styles.legendText}>Therapist</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#49A11B' }]} /><Text style={styles.legendText}>Teachers</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C78800' }]} /><Text style={styles.legendText}>Patient</Text></View>
+          <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#C81015' }]} /><Text style={styles.legendText}>Pending</Text></View>
         </View>
       </View>
 
       <View style={styles.statsGrid}>
-        <TouchableOpacity style={[styles.statCard, { width: isDesktop ? '23%' : '48%' }]} activeOpacity={0.7} onPress={() => setActiveTab('accounts')}>
-          <View style={styles.statCardTopRow}>
-            <View style={styles.iconWrapper}><Image source={require('../../../assets/images/admin-therapist.png')} style={styles.statIconImage} contentFit="contain" /></View>
-            <Text style={styles.statNumber}>2</Text>
+
+        {/* Therapist Accounts Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#DDF0F9', borderColor: '#B9DFEE', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
+          <View style={styles.solidCardTopRow}>
+            <Text style={[styles.solidCardNum, { color: '#1173BA' }]}>2</Text>
+            <Image
+              source={require('../../../assets/images/admin-therapist.png')}
+              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
+              contentFit="contain"
+            />
           </View>
-          <View style={styles.statCardBottomRow}>
-            <View><Text style={styles.statLabel}>Therapist</Text><Text style={styles.statSubLabel}>accounts</Text></View>
-            <View style={[styles.chevronCircle, { backgroundColor: '#0284C7' }]}><Ionicons name="chevron-forward" size={14} color="#FFFFFF" /></View>
-          </View>
+          <Text style={[styles.solidCardTitle, { color: '#1173BA' }]}>Therapist Accounts</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.statCard, { width: isDesktop ? '23%' : '48%' }]} activeOpacity={0.7} onPress={() => setActiveTab('accounts')}>
-          <View style={styles.statCardTopRow}>
-            <View style={styles.iconWrapper}><Image source={require('../../../assets/images/admin-teacher.png')} style={styles.statIconImage} contentFit="contain" /></View>
-            <Text style={styles.statNumber}>1</Text>
+        {/* Teacher Accounts Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#E2F7CE', borderColor: '#C6ECA7', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
+          <View style={styles.solidCardTopRow}>
+            <Text style={[styles.solidCardNum, { color: '#49A11B' }]}>1</Text>
+            <Image
+              source={require('../../../assets/images/admin-teacher.png')}
+              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
+              contentFit="contain"
+            />
           </View>
-          <View style={styles.statCardBottomRow}>
-            <View><Text style={styles.statLabel}>Teachers</Text><Text style={styles.statSubLabel}>accounts</Text></View>
-            <View style={[styles.chevronCircle, { backgroundColor: '#0284C7' }]}><Ionicons name="chevron-forward" size={14} color="#FFFFFF" /></View>
-          </View>
+          <Text style={[styles.solidCardTitle, { color: '#49A11B' }]}>Teacher Accounts</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.statCard, { width: isDesktop ? '23%' : '48%' }]} activeOpacity={0.7} onPress={() => setActiveTab('accounts')}>
-          <View style={styles.statCardTopRow}>
-            <View style={styles.iconWrapper}><Image source={require('../../../assets/images/admin-patient.png')} style={styles.statIconImage} contentFit="contain" /></View>
-            <Text style={styles.statNumber}>1</Text>
+        {/* Patient Accounts Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FDE9AD', borderColor: '#F3D47B', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('accounts')}>
+          <View style={styles.solidCardTopRow}>
+            <Text style={[styles.solidCardNum, { color: '#C78800' }]}>1</Text>
+            <Image
+              source={require('../../../assets/images/admin-patient.png')}
+              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
+              contentFit="contain"
+            />
           </View>
-          <View style={styles.statCardBottomRow}>
-            <View><Text style={styles.statLabel}>Patient</Text><Text style={styles.statSubLabel}>accounts</Text></View>
-            <View style={[styles.chevronCircle, { backgroundColor: '#0284C7' }]}><Ionicons name="chevron-forward" size={14} color="#FFFFFF" /></View>
-          </View>
+          <Text style={[styles.solidCardTitle, { color: '#C78800' }]}>Patient Accounts</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.statCard, { width: isDesktop ? '23%' : '48%' }]} activeOpacity={0.7} onPress={() => setActiveTab('request')}>
-          <View style={styles.statCardTopRow}>
-            <View style={styles.iconWrapper}><Image source={require('../../../assets/images/admin-pending.png')} style={styles.statIconImage} contentFit="contain" /></View>
-            <Text style={styles.statNumber}>1</Text>
+        {/* Pending Requests Card */}
+        <TouchableOpacity style={[styles.solidCard, { backgroundColor: '#FBD7D7', borderColor: '#F2B9B9', width: isDesktop ? '23.5%' : '48%' }]} activeOpacity={0.8} onPress={() => setActiveTab('request')}>
+          <View style={styles.solidCardTopRow}>
+            <Text style={[styles.solidCardNum, { color: '#C81015' }]}>1</Text>
+            <Image
+              source={require('../../../assets/images/admin-pending.png')}
+              style={[styles.solidCardIcon, Platform.OS === 'web' && { mixBlendMode: 'darken' as any }]}
+              contentFit="contain"
+            />
           </View>
-          <View style={styles.statCardBottomRow}>
-            <View><Text style={styles.statLabel}>Pending request</Text><Text style={styles.statSubLabel}>accounts</Text></View>
-            <View style={[styles.chevronCircle, { backgroundColor: '#0284C7' }]}><Ionicons name="chevron-forward" size={14} color="#FFFFFF" /></View>
-          </View>
+          <Text style={[styles.solidCardTitle, { color: '#C81015' }]}>Pending Requests</Text>
         </TouchableOpacity>
+
       </View>
 
-      <View style={styles.recentSectionHeader}>
-        <Text style={styles.recentTitle}>Recent Requests</Text>
-        <TouchableOpacity onPress={() => setActiveTab('request')}><Text style={styles.viewAllText}>View All</Text></TouchableOpacity>
-      </View>
+      <View style={[styles.bottomGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
 
-      <View style={styles.recentListContainer}>
-        {RECENT_REQUESTS_DASHBOARD.map((request) => (
-          <TouchableOpacity key={request.id} style={styles.requestItemDashboard} activeOpacity={0.7}>
-            <Image source={request.avatar} style={styles.requestAvatar} contentFit="cover" />
-            <View style={styles.requestDetails}>
-              <Text style={styles.requestName}>{request.name}</Text>
-              <Text style={styles.requestSubtext}>{request.role}   {request.time}</Text>
+        {/* LEFT COLUMN: RECENT REQUESTS */}
+        <View style={[styles.halfColumnBlock, { width: isDesktop ? '48.5%' : '100%' }]}>
+          <View style={styles.recentBlockHeader}>
+            <Text style={styles.recentBlockTitle}>Recent Requests</Text>
+            <TouchableOpacity onPress={() => setActiveTab('request')}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollableList}>
+            {RECENT_REQUESTS_DASHBOARD.map((request, index) => (
+              <TouchableOpacity
+                key={request.id}
+                style={[styles.requestItemDashboard, index === RECENT_REQUESTS_DASHBOARD.length - 1 && { borderBottomWidth: 0 }]}
+                activeOpacity={0.7}
+              >
+                <Image source={request.avatar} style={styles.requestAvatar} contentFit="cover" />
+                <View style={styles.requestDetails}>
+                  <Text style={styles.requestName} numberOfLines={1}>{request.name}</Text>
+                  <Text style={styles.requestSubtext} numberOfLines={1}>{request.role}   {request.time}</Text>
+                </View>
+                <View style={styles.requestRightActions}>
+                  <View style={styles.pendingBadgeDashboard}><Text style={styles.pendingBadgeTextDashboard}>{request.status}</Text></View>
+                  <View style={[styles.chevronCircle, { backgroundColor: '#0284C7', marginLeft: 8 }]}><Ionicons name="chevron-forward" size={14} color="#FFFFFF" /></View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* RIGHT COLUMN: RECENT ACTIVITIES */}
+        <View style={[styles.halfColumnBlock, { width: isDesktop ? '48.5%' : '100%' }]}>
+          <View style={styles.recentBlockHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.recentBlockTitle}>Recent Activities</Text>
+              <Ionicons name="person-outline" size={18} color="#1E3A8A" style={{ marginLeft: 8 }} />
             </View>
-            <View style={styles.requestRightActions}>
-              <View style={styles.pendingBadgeDashboard}><Text style={styles.pendingBadgeTextDashboard}>{request.status}</Text></View>
-              <View style={[styles.chevronCircle, { backgroundColor: '#0284C7', marginLeft: 8 }]}><Ionicons name="chevron-forward" size={14} color="#FFFFFF" /></View>
-            </View>
-          </TouchableOpacity>
-        ))}
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollableList}>
+            {RECENT_ACTIVITIES_DASHBOARD.map((activity) => (
+              <View
+                key={activity.id}
+                style={[
+                  styles.activityItem,
+                  {
+                    backgroundColor: activity.bgColor,
+                    borderColor: activity.borderColor,
+                  },
+                ]}
+              >
+                <View style={styles.activityTopRow}>
+                  <Text style={[styles.activityTitle, { color: activity.color }]} numberOfLines={1}>
+                    {activity.title}
+                  </Text>
+
+                  <View style={styles.activityBadgeRow}>
+                    <View style={styles.activityRoleBadge}>
+                      <Text style={[styles.activityRoleText, { color: activity.color }]}>
+                        {activity.role}
+                      </Text>
+                    </View>
+                    <View style={styles.activityTimeBadge}>
+                      <Text style={[styles.activityTimeText, { color: activity.color }]}>
+                        {activity.time}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <Text style={[styles.activitySubtitle, { color: activity.color }]} numberOfLines={1}>
+                  {activity.subtitle}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
       </View>
+
     </ScrollView>
   );
 
   const renderRequests = () => (
     <View style={styles.tabContainer}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
-        
-        {/* Header and Sub-tabs moved inside the constrained scroll view */}
-        {renderTopHeader('Requests', true)}
-        
+
         <View style={styles.subTabsContainer}>
           {['All', 'Pending (3)', 'Approved (4)', 'Rejected (0)'].map((tab) => (
             <TouchableOpacity key={tab} onPress={() => setRequestSubTab(tab)} style={styles.subTabBtn}>
@@ -251,7 +348,7 @@ export default function AdminDashboardScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        
+
         {MOCK_REQUESTS.map((req, i) => (
           <View key={i} style={styles.fullCard}>
             <View style={styles.cardHeaderRow}>
@@ -272,7 +369,7 @@ export default function AdminDashboardScreen() {
               <Text style={styles.detailText}><Text style={styles.detailLabel}>Level:</Text> {req.level}</Text>
               <Text style={styles.detailText}><Text style={styles.detailLabel}>Student ID:</Text> {req.studentId}</Text>
               <Text style={styles.detailText}><Text style={styles.detailLabel}>Contact:</Text> {req.contact}</Text>
-              
+
               <View style={styles.warningBox}>
                 <Ionicons name="warning-outline" size={16} color="#D97706" />
                 <Text style={styles.warningText}>{req.verification}</Text>
@@ -280,7 +377,7 @@ export default function AdminDashboardScreen() {
             </View>
 
             <View style={styles.cardActionsRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.rejectBtn}
                 onPress={() => triggerAlert(
                   'Reject Request',
@@ -306,10 +403,7 @@ export default function AdminDashboardScreen() {
   const renderAccounts = () => (
     <View style={styles.tabContainer}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, isDesktop && styles.desktopScrollContent]}>
-        
-        {/* Header and Sub-tabs moved inside the constrained scroll view */}
-        {renderTopHeader('Accounts', true)}
-        
+
         <View style={styles.subTabsContainer}>
           {['All', 'Therapist', 'Teacher', 'Patient'].map((tab) => (
             <TouchableOpacity key={tab} onPress={() => setAccountSubTab(tab)} style={styles.subTabBtn}>
@@ -342,7 +436,7 @@ export default function AdminDashboardScreen() {
             </View>
 
             <View style={styles.cardActionsRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editBtn}
                 onPress={() => triggerAlert(
                   'Edit Account',
@@ -356,8 +450,8 @@ export default function AdminDashboardScreen() {
                 <Ionicons name="create-outline" size={16} color="#0284C7" />
                 <Text style={styles.editBtnText}>Edit</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.suspendBtn}
                 onPress={() => triggerAlert(
                   'Suspend Account',
@@ -379,8 +473,8 @@ export default function AdminDashboardScreen() {
   );
 
   return (
-    <ImageBackground 
-      source={require('../../../assets/images/admin-bg.png')} 
+    <ImageBackground
+      source={require('../../../assets/images/admin-bg.png')}
       style={styles.backgroundImage}
       resizeMode="cover"
     >
@@ -389,14 +483,18 @@ export default function AdminDashboardScreen() {
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.mainWrapper}>
-          
+
+          {renderTopHeader(
+            activeTab === 'dashboard' ? 'Welcome, Admin' : (activeTab === 'request' ? 'Requests' : 'Accounts'),
+            activeTab !== 'dashboard'
+          )}
+
           <View style={{ flex: 1, backgroundColor: 'transparent' }}>
             {activeTab === 'dashboard' && renderDashboard()}
             {activeTab === 'request' && renderRequests()}
             {activeTab === 'accounts' && renderAccounts()}
           </View>
 
-          {/* MOBILE BOTTOM NAVIGATION */}
           {!isDesktop && (
             <View style={styles.bottomNav}>
               <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('dashboard')}>
@@ -416,13 +514,10 @@ export default function AdminDashboardScreen() {
 
         </View>
 
-        {/* ==========================================
-            --- HAMBURGER DROPDOWN MENU ---
-            ========================================== */}
         {showMenu && (
           <Modal transparent animationType="fade" visible={showMenu} onRequestClose={() => setShowMenu(false)}>
             <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-              <View style={[styles.menuDropdownContainer, isDesktop && { top: 76, left: 16 }]}>
+              <View style={[styles.menuDropdownContainer, isDesktop && { top: 76, left: 24 }]}>
                 <TouchableOpacity
                   style={styles.menuUserHeader}
                   activeOpacity={0.8}
@@ -479,13 +574,10 @@ export default function AdminDashboardScreen() {
           </Modal>
         )}
 
-        {/* ==========================================
-            --- NOTIFICATIONS POPOVER ---
-            ========================================== */}
         {showNotificationsDropdown && (
           <Modal transparent animationType="fade" visible={showNotificationsDropdown} onRequestClose={() => setShowNotificationsDropdown(false)}>
             <Pressable style={styles.menuOverlay} onPress={() => setShowNotificationsDropdown(false)}>
-              <View style={styles.notifDropdownContainer}>
+              <View style={[styles.notifDropdownContainer, isDesktop && { top: 76, right: 40 }]}>
                 <View style={styles.notifDropdownHeaderRow}>
                   <Text style={styles.notifDropdownTitle}>Notifications</Text>
                   <View style={{ flexDirection: 'row' }}>
@@ -516,9 +608,7 @@ export default function AdminDashboardScreen() {
           </Modal>
         )}
 
-        {/* ==========================================
-            --- SETTINGS MODAL ---
-            ========================================== */}
+        {/* SETTINGS MODAL */}
         <Modal visible={showSettingsModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSettingsModal(false)}>
           <SafeAreaView style={styles.settingsModalContainer}>
             <View style={styles.settingsTopBar}>
@@ -549,9 +639,9 @@ export default function AdminDashboardScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity 
-                style={styles.settingsLogoutButton} 
-                activeOpacity={0.8} 
+              <TouchableOpacity
+                style={styles.settingsLogoutButton}
+                activeOpacity={0.8}
                 onPress={() => triggerAlert('Log Out', 'Are you sure you want to log out?', 'Log Out', '#EF4444', 'log-out', () => router.replace('/(admin)/admin-login' as any))}
               >
                 <Text style={styles.settingsLogoutButtonText}>Log Out</Text>
@@ -560,9 +650,7 @@ export default function AdminDashboardScreen() {
           </SafeAreaView>
         </Modal>
 
-        {/* ==========================================
-            --- PROFILE MODAL ---
-            ========================================== */}
+        {/* PROFILE MODAL */}
         <Modal visible={showProfileModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowProfileModal(false)}>
           <SafeAreaView style={styles.settingsModalContainer}>
             <View style={styles.settingsTopBar}>
@@ -588,35 +676,32 @@ export default function AdminDashboardScreen() {
           </SafeAreaView>
         </Modal>
 
-        {/* ==========================================
-            --- PREMIUM CUSTOM WARNING MODAL ---
-            ========================================== */}
         <Modal visible={alertVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.alertBox}>
-              
+
               <View style={[styles.alertIconCircle, { backgroundColor: `${alertConfig.confirmColor}15` }]}>
-                <Ionicons 
-                  name={alertConfig.iconName as any} 
-                  size={36} 
-                  color={alertConfig.confirmColor} 
+                <Ionicons
+                  name={alertConfig.iconName as any}
+                  size={36}
+                  color={alertConfig.confirmColor}
                 />
               </View>
 
               <Text style={styles.alertTitle}>{alertConfig.title}</Text>
               <Text style={styles.alertMessage}>{alertConfig.message}</Text>
-              
+
               <View style={styles.alertActions}>
-                <TouchableOpacity 
-                  style={styles.alertCancelBtn} 
+                <TouchableOpacity
+                  style={styles.alertCancelBtn}
                   onPress={() => setAlertVisible(false)}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.alertCancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.alertConfirmBtn, { backgroundColor: alertConfig.confirmColor }]} 
+
+                <TouchableOpacity
+                  style={[styles.alertConfirmBtn, { backgroundColor: alertConfig.confirmColor }]}
                   onPress={() => {
                     alertConfig.onConfirm();
                     setAlertVisible(false);
@@ -637,134 +722,249 @@ export default function AdminDashboardScreen() {
 
 const styles = StyleSheet.create({
   backgroundImage: { flex: 1, width: '100%', height: '100%' },
-  safeArea: { flex: 1, backgroundColor: 'transparent' }, 
+  safeArea: { flex: 1, backgroundColor: 'transparent' },
   mainWrapper: { flex: 1 },
-  
+
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'android' ? 10 : 20,
-    paddingBottom: 100, 
+    paddingBottom: 100,
   },
+
   desktopScrollContent: {
-    paddingHorizontal: 40,
-    paddingBottom: 40, 
-    maxWidth: 1200, 
-    alignSelf: 'center', 
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxWidth: 1280,
+    alignSelf: 'center',
     width: '100%',
   },
-  
+
   tabContainer: { flex: 1 },
 
-  // ==========================================
-  // --- TOP HEADER (REPLACES DESKTOP SIDEBAR) ---
-  // ==========================================
-  topHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 24,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 10 : 0 
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    width: '100%',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 10 : 10,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   hamburgerBtn: { padding: 8, marginRight: 8 },
   backButtonBlue: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0284C7', justifyContent: 'center', alignItems: 'center', marginRight: 12, elevation: 2 },
   logoImage: { width: 44, height: 44, marginRight: 10 },
   headerTitle: { fontFamily: 'Inter-Bold', fontSize: 24, color: '#0284C7', letterSpacing: -0.5 },
-  
+
   headerRight: { flexDirection: 'row', alignItems: 'center' },
   headerIconBtn: { padding: 8, marginLeft: 4, position: 'relative' },
   notificationDot: { position: 'absolute', top: 6, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
-  
-  // Desktop Nav Links in Header
+
   desktopNavLinks: { flexDirection: 'row', marginLeft: 16 },
   desktopNavLink: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginLeft: 8 },
   desktopNavLinkActive: { backgroundColor: '#F0F9FF' },
   desktopNavText: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#64748B' },
   desktopNavTextActive: { fontFamily: 'Inter-Bold', color: '#0284C7' },
-  
-  // Dashboard Metrics
-  heroCard: { backgroundColor: '#0284C7', borderRadius: 16, padding: 20, marginBottom: 20, shadowColor: '#0284C7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 5 },
-  heroLabel: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#E0F2FE', marginBottom: 4 },
-  heroNumber: { fontFamily: 'Inter-Bold', fontSize: 42, color: '#FFFFFF', marginBottom: 16 },
-  progressContainer: { flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: '#FFFFFF', marginBottom: 16 },
+
+  heroCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 24, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: '#E2E8F0' },
+  heroLabel: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#64748B', marginBottom: 4 },
+  heroNumber: { fontFamily: 'Inter-Bold', fontSize: 42, color: '#1E293B', marginBottom: 16 },
+  progressContainer: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: '#F1F5F9', marginBottom: 16 },
   progressSegment: { height: '100%' },
   legendContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
-  legendText: { fontFamily: 'Inter-Medium', fontSize: 9, color: '#E0F2FE' },
-  
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
-  statCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
-  statCardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  iconWrapper: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  statIconImage: { width: 36, height: 36, borderRadius: 8 }, 
-  statNumber: { fontFamily: 'Inter-Bold', fontSize: 28, color: '#1E293B', lineHeight: 32 },
-  statCardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  statLabel: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#334155' },
-  statSubLabel: { fontFamily: 'Inter-Regular', fontSize: 10, color: '#94A3B8' },
-  chevronCircle: { width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  
-  recentSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  recentTitle: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#0284C7' },
-  viewAllText: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#0284C7' },
-  recentListContainer: { backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', padding: 8 },
-  requestItemDashboard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  requestAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 }, 
-  requestDetails: { flex: 1 },
-  requestName: { fontFamily: 'Inter-Medium', fontSize: 13, color: '#1E293B', marginBottom: 4 },
-  requestSubtext: { fontFamily: 'Inter-Regular', fontSize: 10, color: '#64748B' },
-  requestRightActions: { alignItems: 'flex-end', justifyContent: 'center' },
-  pendingBadgeDashboard: { backgroundColor: '#FCE7F3', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, marginBottom: 6 },
-  pendingBadgeTextDashboard: { fontFamily: 'Inter-Bold', fontSize: 9, color: '#DB2777' },
+  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  legendText: { fontFamily: 'Inter-Medium', fontSize: 11, color: '#475569' },
 
-  // Mobile Bottom Nav
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  solidCard: {
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    minHeight: 130,
+    justifyContent: 'space-between',
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  solidCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  solidCardNum: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 40,
+    lineHeight: 44,
+  },
+  solidCardIcon: {
+    width: 36,
+    height: 36,
+  },
+  solidCardTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  bottomGrid: {
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  halfColumnBlock: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+    height: 380,
+  },
+  scrollableList: {
+    flex: 1,
+  },
+
+  recentBlockHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  recentBlockTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 18,
+    color: '#1E3A8A',
+  },
+  viewAllText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 13,
+    color: '#0284C7',
+  },
+  requestItemDashboard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  requestAvatar: { width: 44, height: 44, borderRadius: 22, marginRight: 14 },
+  requestDetails: { flex: 1 },
+  requestName: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#1E293B', marginBottom: 4 },
+  requestSubtext: { fontFamily: 'Inter-Regular', fontSize: 11, color: '#64748B' },
+  requestRightActions: { alignItems: 'flex-end', justifyContent: 'center' },
+  pendingBadgeDashboard: { backgroundColor: '#FCE7F3', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 8 },
+  pendingBadgeTextDashboard: { fontFamily: 'Inter-Bold', fontSize: 9, color: '#DB2777' },
+  chevronCircle: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
+
+  activityItem: {
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  activityTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  activityTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 12,
+    flex: 1,
+    marginRight: 10,
+  },
+  activityBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activityRoleBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  activityRoleText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 9,
+    textTransform: 'uppercase',
+  },
+  activityTimeBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.07)',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  activityTimeText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 9,
+  },
+  activitySubtitle: {
+    fontFamily: 'Inter-Medium',
+    fontStyle: 'italic',
+    fontSize: 11,
+    opacity: 0.9,
+  },
+
   bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 70, flexDirection: 'row', backgroundColor: '#FFFFFF', borderTopWidth: 2, borderTopColor: '#0284C7', justifyContent: 'space-around', alignItems: 'center', paddingBottom: Platform.OS === 'ios' ? 15 : 0 },
   navItem: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   navText: { fontFamily: 'Inter-Medium', fontSize: 10, color: '#94A3B8', marginTop: 4 },
   navTextActive: { color: '#0284C7', fontFamily: 'Inter-Bold' },
 
-  // Tab Styles
   subTabsContainer: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 16, paddingBottom: 4 },
   subTabBtn: { paddingVertical: 12, paddingHorizontal: 10, marginRight: 8, position: 'relative' },
-  subTabText: { fontFamily: 'Inter-Medium', fontSize: 12, color: '#64748B' },
+  subTabText: { fontFamily: 'Inter-Medium', fontSize: 13, color: '#64748B' },
   subTabTextActive: { color: '#0284C7', fontFamily: 'Inter-Bold' },
   subTabIndicator: { position: 'absolute', bottom: -1, left: 10, right: 10, height: 3, backgroundColor: '#0284C7', borderRadius: 2 },
-  
-  // Fully Detailed Cards (Requests & Accounts)
-  fullCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+
+  fullCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center' },
-  cardAvatarLarge: { width: 48, height: 48, borderRadius: 24, marginRight: 12 },
+  cardAvatarLarge: { width: 52, height: 52, borderRadius: 26, marginRight: 14 },
   cardHeaderInfo: { flex: 1 },
-  cardNameLarge: { fontFamily: 'Inter-Bold', fontSize: 15, color: '#1E293B', marginBottom: 2 },
-  cardEmailText: { fontFamily: 'Inter-Regular', fontSize: 12, color: '#64748B' },
-  roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  cardNameLarge: { fontFamily: 'Inter-Bold', fontSize: 16, color: '#1E293B', marginBottom: 2 },
+  cardEmailText: { fontFamily: 'Inter-Regular', fontSize: 13, color: '#64748B' },
+  roleBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
   roleBadgeText: { fontFamily: 'Inter-Bold', fontSize: 11 },
-  cardDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 16 },
-  
-  cardBody: { marginBottom: 16 },
-  detailText: { fontFamily: 'Inter-Medium', fontSize: 13, color: '#475569', marginBottom: 6 },
+  cardDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 18 },
+
+  cardBody: { marginBottom: 20 },
+  detailText: { fontFamily: 'Inter-Medium', fontSize: 14, color: '#475569', marginBottom: 8 },
   detailLabel: { fontFamily: 'Inter-Bold', color: '#1E293B' },
-  warningBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', padding: 10, borderRadius: 8, marginTop: 8 },
-  warningText: { fontFamily: 'Inter-Medium', fontSize: 12, color: '#D97706', marginLeft: 8, flex: 1 },
-  
-  accountStatusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 8 },
+  warningBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, marginTop: 10 },
+  warningText: { fontFamily: 'Inter-Medium', fontSize: 13, color: '#D97706', marginLeft: 8, flex: 1 },
+
+  accountStatusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, marginLeft: 10 },
   statusBadgeText: { fontFamily: 'Inter-Bold', fontSize: 11 },
 
-  cardActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  rejectBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#F1F5F9' },
+  cardActionsRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  rejectBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, backgroundColor: '#F1F5F9' },
   rejectBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#475569' },
-  approveBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#0284C7' },
+  approveBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, backgroundColor: '#0284C7' },
   approveBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#FFFFFF' },
-  
-  editBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#F0F9FF', borderWidth: 1, borderColor: '#BAE6FD' },
+
+  editBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#F0F9FF', borderWidth: 1, borderColor: '#BAE6FD' },
   editBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#0284C7', marginLeft: 6 },
-  suspendBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
+  suspendBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
   suspendBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#DC2626', marginLeft: 6 },
 
-  // ==========================================
-  // --- DROP DOWN MENU STYLES ---
-  // ==========================================
   menuOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.4)' },
   menuDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, left: 16, width: 240, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 10, shadowColor: '#000', shadowOpacity: 0.12, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: '#E2E8F0' },
   menuUserHeader: { flexDirection: 'row', alignItems: 'center', padding: 6, borderRadius: 10 },
@@ -778,9 +978,6 @@ const styles = StyleSheet.create({
   menuOptionLabel: { flex: 1, fontSize: 14, fontFamily: 'Inter-Medium', color: '#1E293B' },
   menuOptionChevron: { fontSize: 16, color: '#94A3B8', fontFamily: 'Inter-Bold' },
 
-  // ==========================================
-  // --- NOTIFICATIONS STYLES ---
-  // ==========================================
   notifDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, right: 16, width: 320, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.14, shadowOffset: { width: 0, height: 6 }, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: '#E2E8F0' },
   notifDropdownHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   notifDropdownTitle: { fontSize: 15, fontFamily: 'Inter-Bold', color: '#1E293B' },
@@ -795,9 +992,6 @@ const styles = StyleSheet.create({
   markAllReadBtn: { marginTop: 10, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', backgroundColor: '#F8FAFC' },
   markAllReadBtnText: { fontSize: 11, color: '#64748B', fontFamily: 'Inter-Bold' },
 
-  // ==========================================
-  // --- SETTINGS/PROFILE MODAL STYLES ---
-  // ==========================================
   settingsModalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   settingsTopBar: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   closeButton: { padding: 8 },
@@ -825,30 +1019,27 @@ const styles = StyleSheet.create({
   licenseBadge: { backgroundColor: '#F0F9FF', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD' },
   licenseBadgeText: { fontSize: 11, color: '#0284C7', fontFamily: 'Inter-Bold' },
 
-  // ==========================================
-  // --- CUSTOM ALERT MODAL STYLES (PREMIUM)---
-  // ==========================================
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(15, 23, 42, 0.65)', 
-    justifyContent: 'center', 
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  alertBox: { 
-    backgroundColor: '#FFFFFF', 
-    width: '100%', 
-    maxWidth: 380, 
-    borderRadius: 28, 
+  alertBox: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 28,
     paddingTop: 32,
     paddingBottom: 24,
-    paddingHorizontal: 24, 
-    alignItems: 'center', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 12 }, 
-    shadowOpacity: 0.15, 
-    shadowRadius: 24, 
-    elevation: 10 
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
   },
   alertIconCircle: {
     width: 72,
@@ -858,50 +1049,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  alertTitle: { 
-    fontFamily: 'Inter-Bold', 
-    fontSize: 22, 
-    color: '#0F172A', 
-    marginBottom: 12, 
-    textAlign: 'center' 
+  alertTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 22,
+    color: '#0F172A',
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  alertMessage: { 
-    fontFamily: 'Inter-Regular', 
-    fontSize: 15, 
-    color: '#475569', 
-    textAlign: 'center', 
-    marginBottom: 32, 
-    lineHeight: 22 
+  alertMessage: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 15,
+    color: '#475569',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
   },
-  alertActions: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    width: '100%', 
-    gap: 12 
+  alertActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
   },
-  alertCancelBtn: { 
-    flex: 1, 
-    paddingVertical: 14, 
-    borderRadius: 14, 
-    backgroundColor: '#F1F5F9', 
+  alertCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
-  alertCancelBtnText: { 
-    fontFamily: 'Inter-Bold', 
-    fontSize: 15, 
-    color: '#475569' 
+  alertCancelBtnText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 15,
+    color: '#475569',
   },
-  alertConfirmBtn: { 
-    flex: 1, 
-    paddingVertical: 14, 
-    borderRadius: 14, 
+  alertConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
-  alertConfirmBtnText: { 
-    fontFamily: 'Inter-Bold', 
-    fontSize: 15, 
-    color: '#FFFFFF' 
+  alertConfirmBtnText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 });
