@@ -5,11 +5,26 @@
 
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import {
+  Award,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Info,
+  Lock,
+  MessageSquare,
+  Pause,
+  Play,
+  Save,
+  Star,
+  Volume2,
+} from 'lucide-react-native';
 
 import { TherapistShell } from '@/components/therapist/TherapistShell';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
-import { ChevronLeftIcon, ChevronRightIcon } from '@/components/therapist/icons';
 import { useReviews } from '@/Therapist-modules/therapist-reviews/state/ReviewsProvider';
 import type { ReviewRecord, ReviewStatus, ReviewTarget, WordPosition } from '@/Therapist-modules/therapist-reviews/data/reviewData';
 import {
@@ -20,36 +35,44 @@ import {
   scoredTargets,
 } from '@/Therapist-modules/therapist-reviews/data/reviewData';
 
-// ─── Simple Audio Demo Card ──────────────────────────────────────────────────
+// ─── Modern Audio Demo Card ──────────────────────────────────────────────────
 
 function AudioCard({ title, meta }: { title: string; meta: string }) {
   const [playing, setPlaying] = useState(false);
-  const bars = [8, 14, 10, 18, 12, 16, 9, 15];
+  const bars = [8, 14, 10, 18, 12, 16, 9, 15, 11, 17];
   return (
     <Pressable accessibilityRole="button" onPress={() => setPlaying((c) => !c)} style={reviewStyles.audioCard}>
       <View style={reviewStyles.audioPlay}>
-        <Text style={reviewStyles.audioPlayIcon}>{playing ? '❚❚' : '▶'}</Text>
+        {playing ? <Pause size={14} color="#FFFFFF" /> : <Play size={14} color="#FFFFFF" style={{ marginLeft: 2 }} />}
       </View>
       <View style={{ flex: 1 }}>
         <Text style={reviewStyles.audioTitle}>{title}</Text>
-        <Text style={reviewStyles.audioMeta}>{playing ? 'Playing demo…' : meta}</Text>
+        <Text style={reviewStyles.audioMeta}>{playing ? 'Playing take…' : meta}</Text>
       </View>
       <View style={reviewStyles.audioBars}>
         {bars.map((height, i) => (
-          <View key={i} style={[reviewStyles.audioBar, { height: playing ? height + 4 : height }]} />
+          <View key={i} style={[reviewStyles.audioBar, { height: playing ? Math.min(22, height + 4) : height }]} />
         ))}
       </View>
     </Pressable>
   );
 }
 
-// ─── Status Pill Component (Exact same size & centered) ───────────────────────
+// ─── Status Pill Component ───────────────────────────────────────────────────
 
 function StatusPill({ status }: { status: ReviewStatus }) {
   const reviewed = status === 'Reviewed';
   return (
-    <View style={[reviewStyles.pill, { backgroundColor: reviewed ? '#E6EED9' : '#F8E7DC' }]}>
-      <Text style={[reviewStyles.pillText, { color: reviewed ? '#5E8246' : '#B87A46' }]}>{status}</Text>
+    <View
+      style={[
+        reviewStyles.pill,
+        {
+          backgroundColor: reviewed ? '#DCFCE7' : '#FEF3C7',
+          borderColor: reviewed ? '#BBF7D0' : '#FDE68A',
+        },
+      ]}
+    >
+      <Text style={[reviewStyles.pillText, { color: reviewed ? '#16A34A' : '#D97706' }]}>{status}</Text>
     </View>
   );
 }
@@ -59,7 +82,7 @@ function StatusPill({ status }: { status: ReviewStatus }) {
 const filters = ['All', 'Pending', 'Reviewed'] as const;
 
 export function ReviewList() {
-  const { palette } = useTherapist();
+  const { palette, isDark } = useTherapist();
   const { reviews } = useReviews();
   const [filter, setFilter] = useState<(typeof filters)[number]>('All');
 
@@ -103,7 +126,7 @@ export function ReviewList() {
             onPress={() => router.push(`/therapist/reviews/${review.id}` as never)}
             style={[reviewStyles.card, { borderColor: palette.line, backgroundColor: palette.card }]}
           >
-            <View style={[reviewStyles.avatar, { backgroundColor: review.avatar }]}>
+            <View style={[reviewStyles.avatar, { backgroundColor: review.avatar || '#E0F2FE' }]}>
               <Text style={reviewStyles.initial}>{review.initial}</Text>
             </View>
             <View style={reviewStyles.copy}>
@@ -113,7 +136,7 @@ export function ReviewList() {
               </Text>
             </View>
             <StatusPill status={review.status} />
-            <ChevronRightIcon color={palette.faint} size={16} />
+            <ChevronRight color={palette.faint} size={16} />
           </Pressable>
         ))}
         {visible.length === 0 ? (
@@ -127,11 +150,20 @@ export function ReviewList() {
 // ─── 2. Recording Review Detail Screen ───────────────────────────────────────
 
 export function RecordingReview({ reviewId }: { reviewId: string }) {
-  const { palette } = useTherapist();
+  const navigation = useNavigation();
+  const { palette, isDark } = useTherapist();
   const { reviews, updateReview, updateTarget, saveEvaluation } = useReviews();
   const review = reviews.find((item) => item.id === reviewId);
-  const [guideOpen, setGuideOpen] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [notice, setNotice] = useState('');
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      router.replace('/therapist/reviews' as never);
+    }
+  };
 
   if (!review) {
     return (
@@ -146,12 +178,12 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
   const positionSummary = (pos: WordPosition) => {
     const group = review.targets.filter((target) => target.position === pos);
     const done = group.filter((target) => target.score !== null);
-    if (group.length === 0) return '0/0 scored';
+    if (group.length === 0) return '0/0 rated';
     const avg =
       done.length === 0
         ? '0'
         : (done.reduce((sum, target) => sum + (target.score || 0), 0) / done.length).toFixed(1);
-    return `${done.length}/${group.length} · ${avg} scored`;
+    return `${done.length}/${group.length} rated · ${avg} avg`;
   };
 
   return (
@@ -160,128 +192,272 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
       contentContainerStyle={reviewStyles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <Pressable
-        accessibilityLabel="Back to reviews"
-        onPress={() => router.push('/therapist/reviews' as never)}
-        style={[reviewStyles.back, { borderColor: palette.line, backgroundColor: palette.card }]}
-      >
-        <ChevronLeftIcon color={palette.text} size={18} />
-      </Pressable>
-
-      <Text style={[reviewStyles.kicker, { color: palette.faint }]}>RECORDING REVIEW</Text>
-      <Text style={reviewStyles.detailName}>{review.student}</Text>
-      <Text style={[reviewStyles.activity, { color: palette.muted }]}>
-        {review.activity} · {review.level}
-      </Text>
-
-      <View style={reviewStyles.stats}>
-        <Stat value={`${scored.length}/${review.targets.length}`} label="rated" />
-        <Stat value={formatAverage(average)} label="Average" />
-        <Stat value={`${review.targets.length - scored.length}`} label="unscored" />
+      {/* ── Top Navigation Row ── */}
+      <View style={reviewStyles.topNavRow}>
+        <Pressable
+          accessibilityLabel="Back to reviews"
+          onPress={handleBack}
+          style={[reviewStyles.back, { borderColor: palette.line, backgroundColor: palette.card }]}
+        >
+          <ChevronLeft color={palette.text} size={18} />
+        </Pressable>
+        <Text style={[reviewStyles.topNavTitle, { color: palette.text }]}>Recording Review</Text>
+        <View style={{ width: 36 }} />
       </View>
 
-      <Text style={[reviewStyles.disclaimer, { color: palette.faint }]}>
-        Hold the recording on any placeholder and record SLP observations before clinical use. Scores are practice
-        observations, not diagnostic results.
-      </Text>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setGuideOpen((c) => !c)}
-        style={reviewStyles.guideToggle}
-      >
-        <View style={{ transform: [{ rotate: guideOpen ? '90deg' : '0deg' }] }}>
-          <ChevronRightIcon color="#C48B5A" size={14} />
+      {/* ── Hero Student Summary Card ── */}
+      <View style={[reviewStyles.heroCard, { backgroundColor: palette.card, borderColor: palette.line }]}>
+        <View style={reviewStyles.heroTopRow}>
+          <View style={[reviewStyles.heroAvatar, { backgroundColor: review.avatar || '#E0F2FE' }]}>
+            <Text style={reviewStyles.heroInitial}>{review.initial}</Text>
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[reviewStyles.heroStudentName, { color: palette.text }]}>{review.student}</Text>
+              <StatusPill status={review.status} />
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <View style={[reviewStyles.pillTag, { backgroundColor: isDark ? '#082F49' : '#E0F2FE' }]}>
+                <Text style={[reviewStyles.pillTagText, { color: '#0284C7' }]}>{review.activity}</Text>
+              </View>
+              <View style={[reviewStyles.pillTag, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}>
+                <Text style={[reviewStyles.pillTagText, { color: palette.muted }]}>{review.level}</Text>
+              </View>
+            </View>
+          </View>
         </View>
-        <Text style={reviewStyles.guideTitle}>View 1-5 rating guide</Text>
-      </Pressable>
-      {guideOpen ? (
-        <View style={reviewStyles.guide}>
-          {ratingGuide.map((item, index) => (
-            <Text key={item} style={[reviewStyles.guideLine, { color: palette.muted }]}>
-              {index + 1} {item}
+
+        <View style={[reviewStyles.heroDivider, { backgroundColor: palette.line }]} />
+
+        {/* 3-column Clinical Metrics */}
+        <View style={[reviewStyles.metricsContainer, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: palette.line }]}>
+          <View style={reviewStyles.metricCol}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <CheckCircle2 size={13} color="#10B981" />
+              <Text style={[reviewStyles.metricLabel, { color: palette.faint }]}>Rated</Text>
+            </View>
+            <Text style={[reviewStyles.metricVal, { color: palette.text }]}>
+              {scored.length}/{review.targets.length}
             </Text>
-          ))}
+          </View>
+          <View style={[reviewStyles.metricDivider, { backgroundColor: palette.line }]} />
+          <View style={reviewStyles.metricCol}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Star size={13} color="#F59E0B" />
+              <Text style={[reviewStyles.metricLabel, { color: palette.faint }]}>Average</Text>
+            </View>
+            <Text style={[reviewStyles.metricVal, { color: '#0284C7' }]}>
+              {formatAverage(average)} <Text style={{ fontSize: 11, color: palette.faint }}>/ 5</Text>
+            </Text>
+          </View>
+          <View style={[reviewStyles.metricDivider, { backgroundColor: palette.line }]} />
+          <View style={reviewStyles.metricCol}>
+            <Text style={[reviewStyles.metricLabel, { color: palette.faint }]}>Unscored</Text>
+            <Text style={[reviewStyles.metricVal, { color: review.targets.length - scored.length > 0 ? '#F59E0B' : '#10B981' }]}>
+              {review.targets.length - scored.length}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── Clinical Guidance Callout ── */}
+      <View style={[reviewStyles.noticeCallout, { backgroundColor: isDark ? '#082F49' : '#F0F9FF', borderColor: isDark ? '#0369A1' : '#BAE6FD' }]}>
+        <Info size={16} color="#0284C7" />
+        <Text style={[reviewStyles.noticeCalloutText, { color: isDark ? '#BAE6FD' : '#0369A1' }]}>
+          Hold the recording on any placeholder and record SLP observations before clinical use. Scores are practice observations, not diagnostic results.
+        </Text>
+      </View>
+
+      {/* ── Rating Scale Accordion Card ── */}
+      <View style={[reviewStyles.guideCard, { backgroundColor: palette.card, borderColor: palette.line }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setGuideOpen((c) => !c)}
+          style={reviewStyles.guideHeader}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[reviewStyles.guideIconWrap, { backgroundColor: isDark ? '#082F49' : '#E0F2FE' }]}>
+              <Award size={15} color="#0284C7" />
+            </View>
+            <Text style={[reviewStyles.guideTitle, { color: palette.text }]}>Clinical 1-5 Rating Guide</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={[reviewStyles.guideBadge, { backgroundColor: isDark ? '#334155' : '#F1F5F9' }]}>
+              <Text style={[reviewStyles.guideBadgeText, { color: palette.muted }]}>Standard</Text>
+            </View>
+            {guideOpen ? <ChevronUp size={16} color={palette.faint} /> : <ChevronDown size={16} color={palette.faint} />}
+          </View>
+        </Pressable>
+
+        {guideOpen ? (
+          <View style={[reviewStyles.guideBody, { borderTopColor: palette.line }]}>
+            {ratingGuide.map((item, index) => {
+              const scoreNum = index + 1;
+              const scoreColors: Record<number, { bg: string; text: string }> = {
+                1: { bg: '#FEE2E2', text: '#DC2626' },
+                2: { bg: '#FFEDD5', text: '#EA580C' },
+                3: { bg: '#FEF3C7', text: '#D97706' },
+                4: { bg: '#E0F2FE', text: '#0284C7' },
+                5: { bg: '#DCFCE7', text: '#16A34A' },
+              };
+              const c = scoreColors[scoreNum] || { bg: '#E2E8F0', text: '#475569' };
+              return (
+                <View key={item} style={reviewStyles.guideRow}>
+                  <View style={[reviewStyles.guideScorePill, { backgroundColor: c.bg }]}>
+                    <Text style={[reviewStyles.guideScorePillText, { color: c.text }]}>{scoreNum}</Text>
+                  </View>
+                  <Text style={[reviewStyles.guideRowText, { color: palette.text }]}>{item}</Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
+
+      {/* ── Targets by Word Position ── */}
+      {positions.map((pos) => {
+        const group = review.targets.filter((target) => target.position === pos);
+        if (group.length === 0) return null;
+        return (
+          <View key={pos} style={reviewStyles.positionSection}>
+            <View style={reviewStyles.positionHeaderRow}>
+              <Text style={[reviewStyles.positionSectionTitle, { color: palette.text }]}>{pos} Position</Text>
+              <View style={[reviewStyles.posSummaryBadge, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: palette.line }]}>
+                <Text style={[reviewStyles.posSummaryText, { color: palette.muted }]}>{positionSummary(pos)}</Text>
+              </View>
+            </View>
+
+            <View style={{ gap: 12 }}>
+              {group.map((target) => (
+                <TargetCard
+                  key={target.id}
+                  reviewId={review.id}
+                  target={target}
+                  onChange={(patch) => updateTarget(review.id, target.id, patch)}
+                />
+              ))}
+            </View>
+          </View>
+        );
+      })}
+
+      {/* ── Evaluation Summary Card ── */}
+      <View style={[reviewStyles.summaryCard, { backgroundColor: palette.card, borderColor: palette.line }]}>
+        <View style={reviewStyles.summaryCardHeader}>
+          <View style={[reviewStyles.summaryIconWrap, { backgroundColor: isDark ? '#082F49' : '#E0F2FE' }]}>
+            <MessageSquare size={16} color="#0284C7" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[reviewStyles.summaryCardTitle, { color: palette.text }]}>Evaluation Summary</Text>
+            <Text style={[reviewStyles.summaryCardSubtitle, { color: palette.faint }]}>
+              {scored.length} of {review.targets.length} targets evaluated
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ gap: 14 }}>
+          <View style={{ gap: 6 }}>
+            <Text style={[reviewStyles.inputLabel, { color: palette.text }]}>Overall Observations</Text>
+            <TextInput
+              value={review.observations}
+              placeholder="What clinical patterns or sound substitutions did you notice?"
+              placeholderTextColor={palette.faint}
+              multiline
+              onChangeText={(observations) => updateReview(review.id, { observations })}
+              style={[
+                reviewStyles.fieldInput,
+                {
+                  minHeight: 68,
+                  paddingVertical: 10,
+                  textAlignVertical: 'top',
+                  borderColor: palette.line,
+                  color: palette.text,
+                  backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                },
+              ]}
+            />
+          </View>
+
+          <View style={{ gap: 6 }}>
+            <Text style={[reviewStyles.inputLabel, { color: palette.text }]}>Parent Approved Feedback</Text>
+            <TextInput
+              value={review.parentFeedback}
+              placeholder="A constructive update for the student's guardian..."
+              placeholderTextColor={palette.faint}
+              multiline
+              onChangeText={(parentFeedback) => updateReview(review.id, { parentFeedback })}
+              style={[
+                reviewStyles.fieldInput,
+                {
+                  minHeight: 68,
+                  paddingVertical: 10,
+                  textAlignVertical: 'top',
+                  borderColor: palette.line,
+                  color: palette.text,
+                  backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                },
+              ]}
+            />
+          </View>
+
+          <View style={{ gap: 6 }}>
+            <Text style={[reviewStyles.inputLabel, { color: palette.text }]}>Recommended Home Practice</Text>
+            <TextInput
+              value={review.homePractice}
+              placeholder="e.g. Practice initial /r/ with mirror 5 mins daily."
+              placeholderTextColor={palette.faint}
+              multiline
+              onChangeText={(homePractice) => updateReview(review.id, { homePractice })}
+              style={[
+                reviewStyles.fieldInput,
+                {
+                  minHeight: 68,
+                  paddingVertical: 10,
+                  textAlignVertical: 'top',
+                  borderColor: palette.line,
+                  color: palette.text,
+                  backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                },
+              ]}
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* ── Status Toast ── */}
+      {notice ? (
+        <View style={reviewStyles.toastNotice}>
+          <CheckCircle2 size={16} color="#10B981" />
+          <Text style={reviewStyles.toastNoticeText}>{notice}</Text>
         </View>
       ) : null}
 
-      {positions.map((pos) => (
-        <View key={pos} style={reviewStyles.positionBlock}>
-          <View style={reviewStyles.positionHeader}>
-            <Text style={[reviewStyles.position, { color: palette.text }]}>{pos}</Text>
-            <Text style={[reviewStyles.positionMeta, { color: palette.faint }]}>{positionSummary(pos)}</Text>
-          </View>
-          {review.targets
-            .filter((target) => target.position === pos)
-            .map((target) => (
-              <TargetCard
-                key={target.id}
-                reviewId={review.id}
-                target={target}
-                onChange={(patch) => updateTarget(review.id, target.id, patch)}
-              />
-            ))}
-        </View>
-      ))}
-
-      <View style={[reviewStyles.summary, { borderColor: palette.line }]}>
-        <View style={reviewStyles.positionHeader}>
-          <Text style={[reviewStyles.position, { color: palette.text }]}>Evaluation Summary</Text>
-          <Text style={[reviewStyles.positionMeta, { color: palette.faint }]}>
-            {scored.length} rated · {review.targets.length - scored.length} unscored
-          </Text>
-        </View>
-        <Field
-          label="Overall Observations"
-          value={review.observations}
-          placeholder="What did you notice?"
-          onChangeText={(observations) => updateReview(review.id, { observations })}
-        />
-        <Field
-          label="Parent Approved Feedback"
-          value={review.parentFeedback}
-          placeholder="A short update for the student's guardian"
-          onChangeText={(parentFeedback) => updateReview(review.id, { parentFeedback })}
-        />
-        <Field
-          label="Recommended Home Practice"
-          value={review.homePractice}
-          placeholder="e.g. Practice initial /r/ slowly."
-          onChangeText={(homePractice) => updateReview(review.id, { homePractice })}
-        />
-      </View>
-
-      {notice ? <Text style={reviewStyles.notice}>{notice}</Text> : null}
-      <View style={reviewStyles.actions}>
+      {/* ── Bottom Actions ── */}
+      <View style={reviewStyles.bottomActions}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => setNotice('Draft saved')}
-          style={[reviewStyles.draft, { borderColor: palette.line, backgroundColor: palette.card }]}
+          onPress={() => setNotice('Draft saved successfully.')}
+          style={[reviewStyles.draftBtn, { borderColor: palette.line, backgroundColor: palette.card }]}
         >
-          <Text style={[reviewStyles.draftText, { color: palette.text }]}>Save Draft</Text>
+          <Text style={[reviewStyles.draftBtnText, { color: palette.text }]}>Save Draft</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           onPress={() => {
-            saveEvaluation(review.id);
-            router.push('/therapist/reviews' as never);
+            try {
+              saveEvaluation(review.id);
+              router.push('/therapist/reviews' as never);
+            } catch (err: any) {
+              setNotice(err?.message || 'Failed to save evaluation. Please try again.');
+            }
           }}
-          style={reviewStyles.save}
+          style={reviewStyles.saveBtn}
         >
-          <Text style={reviewStyles.saveText}>Save Evaluation</Text>
+          <Save size={16} color="#FFFFFF" />
+          <Text style={reviewStyles.saveBtnText}>Save Evaluation</Text>
         </Pressable>
       </View>
     </ScrollView>
-  );
-}
-
-function Stat({ value, label }: { value: string; label: string }) {
-  const { palette } = useTherapist();
-  return (
-    <Text style={reviewStyles.stat}>
-      <Text style={[reviewStyles.statValue, { color: palette.text }]}>{value} </Text>
-      <Text style={[reviewStyles.statLabel, { color: palette.faint }]}>{label}</Text>
-    </Text>
   );
 }
 
@@ -294,86 +470,125 @@ function TargetCard({
   target: ReviewTarget;
   onChange: (patch: Partial<ReviewTarget>) => void;
 }) {
-  const { palette } = useTherapist();
+  const { palette, isDark } = useTherapist();
   return (
-    <View style={reviewStyles.target}>
-      <Text style={[reviewStyles.word, { color: palette.text }]}>{target.text}</Text>
-      <Text style={[reviewStyles.targetMeta, { color: palette.faint }]}>target</Text>
-      <View style={reviewStyles.scores}>
-        {[1, 2, 3, 4, 5].map((score) => {
-          const selected = target.score === score;
-          return (
-            <Pressable
-              key={`${reviewId}-${target.id}-${score}`}
-              accessibilityRole="button"
-              accessibilityLabel={`${target.text} score ${score}`}
-              onPress={() => onChange({ score })}
-              style={[
-                reviewStyles.score,
-                selected ? reviewStyles.scoreOn : { borderColor: palette.line, backgroundColor: palette.card },
-              ]}
-            >
-              <Text style={[reviewStyles.scoreText, { color: selected ? '#FFFFFF' : palette.muted }]}>{score}</Text>
-            </Pressable>
-          );
-        })}
+    <View style={[reviewStyles.targetCard, { backgroundColor: palette.card, borderColor: palette.line }]}>
+      {/* Top Header */}
+      <View style={reviewStyles.targetCardHeader}>
+        <View style={{ gap: 2 }}>
+          <Text style={[reviewStyles.targetWord, { color: palette.text }]}>{target.text}</Text>
+          <Text style={[reviewStyles.targetSublabel, { color: palette.faint }]}>Target Phoneme Practice</Text>
+        </View>
+        <View
+          style={[
+            reviewStyles.scoreStatusBadge,
+            target.score !== null
+              ? { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }
+              : { backgroundColor: isDark ? '#334155' : '#F1F5F9', borderColor: palette.line },
+          ]}
+        >
+          <Text
+            style={[
+              reviewStyles.scoreStatusText,
+              { color: target.score !== null ? '#16A34A' : palette.muted },
+            ]}
+          >
+            {target.score !== null ? `Score: ${target.score} / 5` : 'Not Rated'}
+          </Text>
+        </View>
       </View>
+
+      {/* Production Rating Selector */}
+      <View style={reviewStyles.ratingSection}>
+        <Text style={[reviewStyles.ratingSectionLabel, { color: palette.faint }]}>
+          PRODUCTION RATING (1-5)
+        </Text>
+        <View style={reviewStyles.scoresRow}>
+          {[1, 2, 3, 4, 5].map((score) => {
+            const selected = target.score === score;
+            return (
+              <Pressable
+                key={`${reviewId}-${target.id}-${score}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${target.text} score ${score}`}
+                onPress={() => onChange({ score })}
+                style={[
+                  reviewStyles.scoreBtn,
+                  selected
+                    ? reviewStyles.scoreBtnSelected
+                    : { borderColor: palette.line, backgroundColor: isDark ? '#1E293B' : '#F8FAFC' },
+                ]}
+              >
+                <Text
+                  style={[
+                    reviewStyles.scoreBtnText,
+                    { color: selected ? '#FFFFFF' : palette.text },
+                  ]}
+                >
+                  {score}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Recording and Notes Collapsible */}
       <Pressable
         accessibilityRole="button"
         onPress={() => onChange({ notesOpen: !target.notesOpen })}
-        style={reviewStyles.notesToggle}
+        style={[reviewStyles.notesToggleBtn, { borderTopColor: palette.line }]}
       >
-        <View style={{ transform: [{ rotate: target.notesOpen ? '90deg' : '0deg' }] }}>
-          <ChevronRightIcon color="#C48B5A" size={14} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Volume2 size={15} color="#0284C7" />
+          <Text style={reviewStyles.notesToggleText}>Student Recording & Notes</Text>
         </View>
-        <Text style={reviewStyles.notesLabel}>Recording and notes</Text>
+        {target.notesOpen ? (
+          <ChevronUp size={16} color={palette.faint} />
+        ) : (
+          <ChevronDown size={16} color={palette.faint} />
+        )}
       </Pressable>
+
       {target.notesOpen ? (
-        <View style={reviewStyles.notes}>
-          <AudioCard title="Student Final Take" meta="Demo Playback · 0:08" />
-          <Field
-            label="Short Feedback"
-            value={target.feedback}
-            placeholder=""
-            onChangeText={(feedback) => onChange({ feedback })}
-          />
-          <Field
-            label="Private Therapist Remarks"
-            value={target.remarks}
-            placeholder=""
-            onChangeText={(remarks) => onChange({ remarks })}
-          />
-          <Text style={[reviewStyles.privateNote, { color: palette.faint }]}>
-            Private remarks are only visible to you and not shared with guardians.
-          </Text>
+        <View style={reviewStyles.notesBody}>
+          <AudioCard title="Student Final Take" meta="Demo Playback • 0:08" />
+
+          <View style={{ gap: 4 }}>
+            <Text style={[reviewStyles.inputLabel, { color: palette.text }]}>Short Feedback (Student / Parent)</Text>
+            <TextInput
+              value={target.feedback}
+              placeholder="e.g. Good tongue positioning, work on vowel release..."
+              placeholderTextColor={palette.faint}
+              onChangeText={(feedback) => onChange({ feedback })}
+              style={[
+                reviewStyles.fieldInput,
+                { borderColor: palette.line, color: palette.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC' },
+              ]}
+            />
+          </View>
+
+          <View style={{ gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Lock size={12} color={palette.faint} />
+              <Text style={[reviewStyles.inputLabel, { color: palette.text }]}>Private Therapist Remarks</Text>
+            </View>
+            <TextInput
+              value={target.remarks}
+              placeholder="Internal clinical notes, articulatory distortions, flags..."
+              placeholderTextColor={palette.faint}
+              onChangeText={(remarks) => onChange({ remarks })}
+              style={[
+                reviewStyles.fieldInput,
+                { borderColor: palette.line, color: palette.text, backgroundColor: isDark ? '#1E293B' : '#F8FAFC' },
+              ]}
+            />
+            <Text style={[reviewStyles.privateNotice, { color: palette.faint }]}>
+              Private remarks are only visible to you and not shared with guardians.
+            </Text>
+          </View>
         </View>
       ) : null}
-    </View>
-  );
-}
-
-function Field({
-  label,
-  value,
-  placeholder,
-  onChangeText,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onChangeText: (value: string) => void;
-}) {
-  const { palette } = useTherapist();
-  return (
-    <View style={reviewStyles.field}>
-      <Text style={[reviewStyles.fieldLabel, { color: palette.text }]}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={palette.faint}
-        style={[reviewStyles.input, { borderColor: palette.line, color: palette.text, backgroundColor: palette.card }]}
-      />
     </View>
   );
 }
@@ -407,62 +622,110 @@ const reviewStyles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 18, borderBottomWidth: 1, marginBottom: 14 },
   tab: { fontSize: 14, fontWeight: '700', paddingBottom: 8, borderBottomWidth: 2, marginBottom: -1 },
   list: { gap: 10 },
-  card: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  initial: { fontSize: 16, fontWeight: '700', color: '#607086' },
+  card: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 10, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  initial: { fontSize: 16, fontWeight: '700', color: '#0284C7' },
   copy: { flex: 1 },
-  name: { fontSize: 14, fontWeight: '700' },
+  name: { fontSize: 15, fontWeight: '700' },
   meta: { fontSize: 12, marginTop: 2 },
-  pill: { width: 76, height: 26, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  pillText: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  pill: { minWidth: 76, height: 26, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  pillText: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
   empty: { textAlign: 'center', marginTop: 12 },
 
   // Detail Screen Styles
   missing: { padding: 24 },
-  back: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  detailName: { fontSize: 26, fontWeight: '700', color: '#C48B5A', marginTop: 4 },
-  activity: { fontSize: 13, marginTop: 2, marginBottom: 14 },
-  stats: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 10 },
-  stat: { flex: 1 },
-  statValue: { fontSize: 14, fontWeight: '700' },
-  statLabel: { fontSize: 13 },
-  disclaimer: { fontSize: 12, lineHeight: 17, marginBottom: 12 },
-  guideToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  guideTitle: { color: '#C48B5A', fontSize: 13, fontWeight: '700' },
-  guide: { gap: 2, marginBottom: 14, paddingLeft: 20 },
-  guideLine: { fontSize: 13 },
-  positionBlock: { marginBottom: 8 },
-  positionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 },
-  position: { fontSize: 16, fontWeight: '700' },
-  positionMeta: { fontSize: 12 },
-  target: { marginBottom: 12 },
-  word: { fontSize: 15, fontWeight: '700' },
-  targetMeta: { fontSize: 12, marginTop: 1, marginBottom: 8 },
-  scores: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  score: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  scoreOn: { backgroundColor: '#C48B5A', borderColor: '#C48B5A' },
-  scoreText: { fontSize: 14, fontWeight: '700' },
-  notesToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  notesLabel: { color: '#C48B5A', fontSize: 13, fontWeight: '700' },
-  notes: { gap: 10, marginBottom: 4 },
-  privateNote: { fontSize: 11, lineHeight: 15, marginTop: -4 },
-  summary: { borderTopWidth: 1, paddingTop: 14, marginTop: 6, gap: 4 },
-  field: { marginBottom: 10 },
-  fieldLabel: { fontSize: 13, fontWeight: '700', marginBottom: 6 },
-  input: { minHeight: 42, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, fontSize: 13 },
-  notice: { color: '#6A8F55', fontSize: 13, fontWeight: '700', marginBottom: 8 },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 6 },
-  draft: { flex: 1, borderWidth: 1, borderRadius: 12, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  draftText: { fontSize: 14, fontWeight: '700' },
-  save: { flex: 1, borderRadius: 12, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#C48B5A' },
-  saveText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  topNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, marginBottom: 14 },
+  topNavTitle: { fontSize: 15, fontWeight: '700' },
+  back: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+
+  // Hero Student Card
+  heroCard: { borderRadius: 20, borderWidth: 1, padding: 18, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroAvatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
+  heroInitial: { fontSize: 20, fontWeight: '800', color: '#0284C7' },
+  heroStudentName: { fontSize: 18, fontWeight: '800' },
+  pillTag: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
+  pillTagText: { fontSize: 11, fontWeight: '700' },
+  heroDivider: { height: 1, marginVertical: 14 },
+
+  // Clinical Metrics Row
+  metricsContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12 },
+  metricCol: { flex: 1, alignItems: 'center', gap: 2 },
+  metricLabel: { fontSize: 11, fontWeight: '600' },
+  metricVal: { fontSize: 14, fontWeight: '800' },
+  metricDivider: { width: 1, height: 26 },
+
+  // Notice Callout
+  noticeCallout: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1, padding: 12, marginBottom: 12 },
+  noticeCalloutText: { flex: 1, fontSize: 12, lineHeight: 17, fontWeight: '500' },
+
+  // Rating Guide Card
+  guideCard: { borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 14 },
+  guideHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  guideIconWrap: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  guideTitle: { fontSize: 14, fontWeight: '700' },
+  guideBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  guideBadgeText: { fontSize: 10, fontWeight: '700' },
+  guideBody: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, gap: 8 },
+  guideRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  guideScorePill: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  guideScorePillText: { fontSize: 12, fontWeight: '800' },
+  guideRowText: { fontSize: 13, fontWeight: '500' },
+
+  // Position Section & Header
+  positionSection: { marginBottom: 14 },
+  positionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  positionSectionTitle: { fontSize: 16, fontWeight: '800' },
+  posSummaryBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
+  posSummaryText: { fontSize: 11, fontWeight: '700' },
+
+  // Target Card
+  targetCard: { borderRadius: 18, borderWidth: 1, padding: 16, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+  targetCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  targetWord: { fontSize: 18, fontWeight: '800' },
+  targetSublabel: { fontSize: 11, fontWeight: '600' },
+  scoreStatusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  scoreStatusText: { fontSize: 11, fontWeight: '700' },
+
+  // Score Selector
+  ratingSection: { marginBottom: 12 },
+  ratingSectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, marginBottom: 8 },
+  scoresRow: { flexDirection: 'row', gap: 8 },
+  scoreBtn: { flex: 1, height: 42, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  scoreBtnSelected: { backgroundColor: '#0284C7', borderColor: '#0284C7', shadowColor: '#0284C7', shadowOpacity: 0.3, shadowRadius: 6, elevation: 2 },
+  scoreBtnText: { fontSize: 15, fontWeight: '800' },
+
+  // Notes Collapsible
+  notesToggleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTopWidth: 1 },
+  notesToggleText: { color: '#0284C7', fontSize: 13, fontWeight: '700' },
+  notesBody: { marginTop: 12, gap: 12 },
+  inputLabel: { fontSize: 12, fontWeight: '700' },
+  fieldInput: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, fontSize: 13 },
+  privateNotice: { fontSize: 11, lineHeight: 15, marginTop: 2 },
+
+  // Summary Card
+  summaryCard: { borderRadius: 18, borderWidth: 1, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+  summaryCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  summaryIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  summaryCardTitle: { fontSize: 16, fontWeight: '800' },
+  summaryCardSubtitle: { fontSize: 11, marginTop: 1 },
+
+  // Toast Notice
+  toastNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#DCFCE7', borderWidth: 1, borderColor: '#BBF7D0', borderRadius: 12, padding: 12, marginBottom: 12 },
+  toastNoticeText: { color: '#16A34A', fontSize: 13, fontWeight: '700' },
+
+  // Bottom Actions
+  bottomActions: { flexDirection: 'row', gap: 12, marginBottom: 36 },
+  draftBtn: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  draftBtnText: { fontSize: 14, fontWeight: '700' },
+  saveBtn: { flex: 1.4, height: 48, borderRadius: 14, backgroundColor: '#0284C7', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: '#0284C7', shadowOpacity: 0.35, shadowRadius: 8, elevation: 3 },
+  saveBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
   // Audio Demo Card
-  audioCard: { borderWidth: 1, borderColor: '#F0D2BC', backgroundColor: '#FFF8F3', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  audioPlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F97316', alignItems: 'center', justifyContent: 'center' },
-  audioPlayIcon: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  audioTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
-  audioMeta: { fontSize: 12, color: '#8B9AAB', marginTop: 2 },
+  audioCard: { borderWidth: 1, borderColor: '#BAE6FD', backgroundColor: '#F0F9FF', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  audioPlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#0284C7', alignItems: 'center', justifyContent: 'center' },
+  audioTitle: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+  audioMeta: { fontSize: 11, color: '#64748B', marginTop: 2 },
   audioBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 22 },
-  audioBar: { width: 4, borderRadius: 2, backgroundColor: '#F97316' },
+  audioBar: { width: 3.5, borderRadius: 2, backgroundColor: '#0284C7' },
 });

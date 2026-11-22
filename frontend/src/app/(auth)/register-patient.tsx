@@ -58,22 +58,92 @@ export default function PatientRegistrationScreen() {
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_]/.test(password);
   const isPasswordValid = isLengthValid && hasLowercase && hasUppercase && hasNumber && hasSpecial;
 
+  const handleFullNameInput = (text: string) => {
+    const filtered = text.replace(/[^a-zA-Z\s.'-]/g, '');
+    setFullName(filtered);
+  };
+
+  const handleChildNameInput = (text: string) => {
+    const filtered = text.replace(/[^a-zA-Z\s.'-]/g, '');
+    setChildName(filtered);
+  };
+
+  const handleChildAgeInput = (text: string) => {
+    const numericOnly = text.replace(/[^0-9]/g, '');
+    setChildAge(numericOnly);
+  };
+
+  const getFullNameError = () => {
+    if (!fullName.trim()) return 'Please fill in this field. Full name is required.';
+    if (!/^[a-zA-Z\s.'-]+$/.test(fullName.trim())) return 'Name should only contain letters and spaces (no numbers).';
+    return '';
+  };
+
+  const getEmailError = () => {
+    if (!email.trim()) return 'Please fill in this field. Email address is required.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Please enter a valid email address (e.g. parents@gmail.com).';
+    return '';
+  };
+
+  const getContactError = () => {
+    if (!contactNo.trim()) return 'Please fill in this field. Contact number is required.';
+    if (!/^09\d{9}$/.test(contactNo.trim())) return 'Must be an 11-digit mobile number starting with 09 (e.g. 09123456789).';
+    return '';
+  };
+
+  const getPasswordError = () => {
+    if (!password) return 'Please fill in this field. Password is required.';
+    if (!isPasswordValid) return 'Password does not meet all security requirements below.';
+    return '';
+  };
+
+  const getChildNameError = () => {
+    if (!childName.trim()) return "Please fill in this field. Child's name is required.";
+    if (!/^[a-zA-Z\s.'-]+$/.test(childName.trim())) return "Child's name should only contain letters and spaces.";
+    return '';
+  };
+
+  const getChildAgeError = () => {
+    if (!childAge.trim()) return "Please fill in this field. Child's age is required.";
+    const ageNum = parseInt(childAge, 10);
+    if (isNaN(ageNum) || ageNum < 1 || ageNum > 18) return 'Please enter a valid age between 1 and 18.';
+    return '';
+  };
+
+  const getStartingLevelError = () => {
+    if (!startingLevel) return 'Please select a starting level.';
+    return '';
+  };
+
+  const getStudentIdError = () => {
+    if (!studentId.trim()) return 'Please fill in this field. Student ID is required.';
+    return '';
+  };
+
+  const getIdImageError = () => {
+    if (!idImage) return 'Please upload a photo of valid ID or Therapy ID.';
+    return '';
+  };
+
   const handleSubmit = () => {
     setHasSubmitted(true);
-    if (!fullName || !email || !contactNo || !password || !childName || !childAge || !startingLevel || !studentId || !idImage) {
-      setAlertTitle("Missing Details");
-      setAlertMessage("Please fill in all the required fields and upload the necessary photos before submitting.");
+    const fullNameErr = getFullNameError();
+    const emailErr = getEmailError();
+    const contactErr = getContactError();
+    const passwordErr = getPasswordError();
+    const childNameErr = getChildNameError();
+    const childAgeErr = getChildAgeError();
+    const levelErr = getStartingLevelError();
+    const studentIdErr = getStudentIdError();
+    const idImageErr = getIdImageError();
+
+    const firstErr = fullNameErr || emailErr || contactErr || passwordErr || childNameErr || childAgeErr || levelErr || studentIdErr || idImageErr;
+    if (firstErr) {
+      setAlertTitle("Validation Error");
+      setAlertMessage(firstErr);
       setAlertType('error');
       setAlertVisible(true);
       return; 
-    }
-
-    if (!isPasswordValid) {
-      setAlertTitle("Weak Password");
-      setAlertMessage("Please ensure your password meets all the security requirements.");
-      setAlertType('error');
-      setAlertVisible(true);
-      return;
     }
     
     setAlertTitle("Success!");
@@ -147,22 +217,25 @@ export default function PatientRegistrationScreen() {
                   
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Full name <Text style={styles.asterisk}>*</Text></Text>
-                    <TextInput style={[styles.input, hasSubmitted && !fullName && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={setFullName} />
+                    <TextInput style={[styles.input, hasSubmitted && !!getFullNameError() && styles.errorBorder]} placeholder="last name, first name, middle initial" placeholderTextColor="#999" value={fullName} onChangeText={handleFullNameInput} />
+                    {hasSubmitted && !!getFullNameError() && <Text style={styles.fieldErrorText}>⚠ {getFullNameError()}</Text>}
                   </View>
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Email <Text style={styles.asterisk}>*</Text></Text>
-                    <TextInput style={[styles.input, hasSubmitted && !email && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+                    <TextInput style={[styles.input, hasSubmitted && !!getEmailError() && styles.errorBorder]} placeholder="parents@gmail.com" placeholderTextColor="#999" keyboardType="email-address" autoCapitalize="none" value={email} onChangeText={setEmail} />
+                    {hasSubmitted && !!getEmailError() && <Text style={styles.fieldErrorText}>⚠ {getEmailError()}</Text>}
                   </View>
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Contact No. <Text style={styles.asterisk}>*</Text></Text>
-                    <TextInput style={[styles.input, hasSubmitted && !contactNo && styles.errorBorder]} placeholder="09**********" placeholderTextColor="#999" keyboardType="numeric" value={contactNo} onChangeText={handleContactInput} />
+                    <TextInput style={[styles.input, hasSubmitted && !!getContactError() && styles.errorBorder]} placeholder="09**********" placeholderTextColor="#999" keyboardType="numeric" maxLength={11} value={contactNo} onChangeText={handleContactInput} />
+                    {hasSubmitted && !!getContactError() && <Text style={styles.fieldErrorText}>⚠ {getContactError()}</Text>}
                   </View>
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Password <Text style={styles.asterisk}>*</Text></Text>
-                    <View style={[styles.passwordWrapper, hasSubmitted && !password && styles.errorBorder]}>
+                    <View style={[styles.passwordWrapper, hasSubmitted && !!getPasswordError() && styles.errorBorder]}>
                       <TextInput 
                         style={styles.passwordInput} 
                         placeholder="••••••••" 
@@ -177,6 +250,7 @@ export default function PatientRegistrationScreen() {
                         <Text style={styles.eyeText}>{showPassword ? 'Hide' : 'Show'}</Text>
                       </TouchableOpacity>
                     </View>
+                    {hasSubmitted && !!getPasswordError() && <Text style={styles.fieldErrorText}>⚠ {getPasswordError()}</Text>}
                   </View>
 
                   {isPasswordFocused && (
@@ -212,30 +286,34 @@ export default function PatientRegistrationScreen() {
                   <Text style={styles.sectionTitle}>2 - Child's profile</Text>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Child's name</Text>
-                    <TextInput style={[styles.input, hasSubmitted && !childName && styles.errorBorder]} placeholder="" placeholderTextColor="#999" value={childName} onChangeText={setChildName} />
+                    <Text style={styles.inputLabel}>Child's name <Text style={styles.asterisk}>*</Text></Text>
+                    <TextInput style={[styles.input, hasSubmitted && !!getChildNameError() && styles.errorBorder]} placeholder="Enter child's full name" placeholderTextColor="#999" value={childName} onChangeText={handleChildNameInput} />
+                    {hasSubmitted && !!getChildNameError() && <Text style={styles.fieldErrorText}>⚠ {getChildNameError()}</Text>}
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Age</Text>
+                    <Text style={styles.inputLabel}>Age <Text style={styles.asterisk}>*</Text></Text>
                     <TextInput 
-                      style={[styles.input, hasSubmitted && !childAge && styles.errorBorder]} 
-                      placeholder="" 
+                      style={[styles.input, hasSubmitted && !!getChildAgeError() && styles.errorBorder]} 
+                      placeholder="e.g. 5" 
                       placeholderTextColor="#999" 
                       keyboardType="numeric"
+                      maxLength={2}
                       value={childAge} 
-                      onChangeText={setChildAge} 
+                      onChangeText={handleChildAgeInput} 
                     />
+                    {hasSubmitted && !!getChildAgeError() && <Text style={styles.fieldErrorText}>⚠ {getChildAgeError()}</Text>}
                   </View>
 
                   <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Starting Level</Text>
-                    <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !startingLevel && styles.errorBorder]} onPress={() => setShowLevelDropdown(true)}>
+                    <Text style={styles.inputLabel}>Starting Level <Text style={styles.asterisk}>*</Text></Text>
+                    <TouchableOpacity style={[styles.dropdownInput, hasSubmitted && !!getStartingLevelError() && styles.errorBorder]} onPress={() => setShowLevelDropdown(true)}>
                       <Text style={styles.dropdownPlaceholder}>
                         {startingLevel || ''}
                       </Text>
                       <Text style={styles.dropdownArrow}>▼</Text>
                     </TouchableOpacity>
+                    {hasSubmitted && !!getStartingLevelError() && <Text style={styles.fieldErrorText}>⚠ {getStartingLevelError()}</Text>}
                   </View>
                 </View>
 
@@ -245,19 +323,20 @@ export default function PatientRegistrationScreen() {
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Student ID no. <Text style={styles.asterisk}>*</Text></Text>
                     <TextInput 
-                      style={[styles.input, hasSubmitted && !studentId && styles.errorBorder]} 
-                      placeholder="" 
+                      style={[styles.input, hasSubmitted && !!getStudentIdError() && styles.errorBorder]} 
+                      placeholder="e.g. 202600123" 
                       placeholderTextColor="#999" 
                       keyboardType="numeric"
                       value={studentId} 
                       onChangeText={handleStudentIdInput} 
                     />
+                    {hasSubmitted && !!getStudentIdError() && <Text style={styles.fieldErrorText}>⚠ {getStudentIdError()}</Text>}
                   </View>
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Photo of valid ID or Therapy ID <Text style={styles.asterisk}>*</Text></Text>
                     <TouchableOpacity 
-                      style={[styles.uploadButton, idImage ? styles.uploadButtonWithImage : null, hasSubmitted && !idImage && styles.errorBorder]} 
+                      style={[styles.uploadButton, idImage ? styles.uploadButtonWithImage : null, hasSubmitted && !!getIdImageError() && styles.errorBorder]} 
                       onPress={() => pickImage(setIdImage)}
                     >
                       {idImage ? (
@@ -266,6 +345,7 @@ export default function PatientRegistrationScreen() {
                         <Image source={require('../../../assets/images/upload-icon.png')} style={styles.uploadIconImage} contentFit="contain" />
                       )}
                     </TouchableOpacity>
+                    {hasSubmitted && !!getIdImageError() && <Text style={styles.fieldErrorText}>⚠ {getIdImageError()}</Text>}
                   </View>
                 </View>
 
@@ -393,4 +473,5 @@ const styles = StyleSheet.create({
   submitText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
   loginLink: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD', textAlign: 'center', textDecorationLine: 'underline' },
   errorBorder: { borderColor: '#E74C3C', borderWidth: 1.5 },
+  fieldErrorText: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#E74C3C', marginTop: 4, marginLeft: 2 },
 });

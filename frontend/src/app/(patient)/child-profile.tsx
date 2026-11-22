@@ -70,7 +70,11 @@ export default function ChildProfileScreen() {
   const handleSaveName = () => {
     const trimmed = tempName.trim();
     if (!trimmed) {
-      setNameError('Please enter a valid name');
+      setNameError('Child’s name is required. Please fill in this field.');
+      return;
+    }
+    if (!/^[a-zA-Z\s.'-]+$/.test(trimmed)) {
+      setNameError('Child’s name should only contain letters and spaces (no numbers or special characters).');
       return;
     }
     ChildProfileStore.updateProfile({ fullName: trimmed });
@@ -251,7 +255,8 @@ export default function ChildProfileScreen() {
               <TextInput
                 value={tempName}
                 onChangeText={(val) => {
-                  setTempName(val);
+                  const filtered = val.replace(/[^a-zA-Z\s.'-]/g, '');
+                  setTempName(filtered);
                   if (nameError) setNameError('');
                 }}
                 placeholder="Enter child's full name"

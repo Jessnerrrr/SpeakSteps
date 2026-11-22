@@ -14,7 +14,7 @@ const toneColors: Record<AccuracyTone, { background: string; text: string }> = {
 };
 
 export function PatientDirectory() {
-  const { palette, patients, setAddPatientOpen } = useTherapist();
+  const { palette, patients } = useTherapist();
   const [query, setQuery] = useState('');
   const [target, setTarget] = useState('All Targets');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -42,13 +42,6 @@ export function PatientDirectory() {
           <Text style={[styles.title, { color: palette.primary }]}>Patients</Text>
           <Text style={[styles.subtitle, { color: palette.muted }]}>Track sound targets & case histories</Text>
         </View>
-        <Pressable
-          accessibilityLabel="Add patient"
-          onPress={() => setAddPatientOpen(true)}
-          style={[styles.plus, { backgroundColor: palette.primarySoft }]}
-        >
-          <Text style={[styles.plusText, { color: palette.primary }]}>+</Text>
-        </Pressable>
       </View>
 
       <View style={styles.tools}>

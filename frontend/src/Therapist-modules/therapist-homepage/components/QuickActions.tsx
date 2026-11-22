@@ -1,14 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTherapist } from '@/components/therapist/TherapistProvider';
-import { PeopleIcon, PersonIcon } from '@/components/therapist/icons';
+import { PersonIcon } from '@/components/therapist/icons';
 
 type QuickActionsProps = {
   onAssign: () => void;
-  onAddPatient: () => void;
 };
 
-export function QuickActions({ onAssign, onAddPatient }: QuickActionsProps) {
+export function QuickActions({ onAssign }: QuickActionsProps) {
   const { palette } = useTherapist();
 
   return (
@@ -23,17 +22,6 @@ export function QuickActions({ onAssign, onAddPatient }: QuickActionsProps) {
       >
         <PersonIcon color={palette.primaryText} size={18} />
         <Text style={[styles.label, { color: palette.primaryText }]}>Assign Activity</Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onAddPatient}
-        style={({ pressed }) => [
-          styles.button,
-          { backgroundColor: palette.greenSoft, opacity: pressed ? 0.8 : 1 },
-        ]}
-      >
-        <PeopleIcon color={palette.greenText} />
-        <Text style={[styles.label, { color: palette.greenText }]}>Add Patient</Text>
       </Pressable>
     </View>
   );

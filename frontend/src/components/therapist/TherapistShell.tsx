@@ -34,7 +34,6 @@ import {
 import { BottomNav } from '@/components/therapist/BottomNav';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
 import { BellIcon } from '@/components/therapist/icons';
-import { AddPatientModal } from '@/Therapist-modules/therapist-patients/components/AddPatientModal';
 import type { TherapistTab } from '@/navigation/therapistTabs';
 import type { ReactNode } from 'react';
 
@@ -91,7 +90,7 @@ const getThemeColors = (isDark: boolean) => ({
 // ==========================================
 export function TherapistShell({ active, children }: { active: TherapistTab; children: ReactNode }) {
   // Grab global theme state directly from Provider
-  const { isDark, themeMode, setThemeMode, addPatientOpen } = useTherapist();
+  const { isDark, themeMode, setThemeMode } = useTherapist();
   const { width } = useWindowDimensions();
   const wide = width >= 760;
   const columnWidth = Math.min(width, wide ? 520 : width);
@@ -210,7 +209,24 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
   };
 
   const handleSaveProfile = () => {
-    setTherapistProfile({ ...editProfileForm });
+    if (!editProfileForm.fullName.trim()) {
+      triggerToast('Full name is required.');
+      return;
+    }
+    if (!editProfileForm.email.trim() || !editProfileForm.email.includes('@')) {
+      triggerToast('Please provide a valid email address.');
+      return;
+    }
+    if (!editProfileForm.contact.trim()) {
+      triggerToast('Please provide a contact number.');
+      return;
+    }
+    // License number and clinic/school name are read-only and cannot be edited
+    setTherapistProfile((prev) => ({
+      ...editProfileForm,
+      license: prev.license,
+      clinic: prev.clinic,
+    }));
     setShowProfileModal(false);
     triggerToast('Credentials saved successfully!');
     if (profileOpenedFromSettings) {
@@ -276,87 +292,89 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
             ========================================== */}
         {showMenu && (
           <Modal transparent animationType="fade" visible={showMenu} onRequestClose={() => setShowMenu(false)}>
-            <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-              <View style={styles.menuDropdownContainer}>
-                <TouchableOpacity
-                  style={styles.menuUserHeader}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setProfileOpenedFromSettings(false);
-                    setEditProfileForm({ ...therapistProfile });
-                    setShowMenu(false);
-                    setShowProfileModal(true);
-                  }}
-                >
-                  <View style={styles.menuAvatarCircle}>
-                    {therapistProfile.photoUri ? (
-                      <Image source={{ uri: therapistProfile.photoUri }} style={{ width: 38, height: 38, borderRadius: 19 }} />
-                    ) : (
-                      <Text style={styles.menuAvatarText}>{therapistProfile.name.charAt(0)}</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.menuUserName} numberOfLines={1}>{therapistProfile.fullName}</Text>
-                    <Text style={styles.menuUserRole} numberOfLines={1}>{therapistProfile.title}</Text>
-                  </View>
-                </TouchableOpacity>
+            <Pressable style={[styles.menuOverlay, { alignItems: 'center' }]} onPress={() => setShowMenu(false)}>
+              <View style={{ width: columnWidth, position: 'relative' }}>
+                <Pressable style={styles.menuDropdownContainer} onPress={(e) => e?.stopPropagation?.()}>
+                  <TouchableOpacity
+                    style={styles.menuUserHeader}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setProfileOpenedFromSettings(false);
+                      setEditProfileForm({ ...therapistProfile });
+                      setShowMenu(false);
+                      setShowProfileModal(true);
+                    }}
+                  >
+                    <View style={styles.menuAvatarCircle}>
+                      {therapistProfile.photoUri ? (
+                        <Image source={{ uri: therapistProfile.photoUri }} style={{ width: 38, height: 38, borderRadius: 19 }} />
+                      ) : (
+                        <Text style={styles.menuAvatarText}>{therapistProfile.name.charAt(0)}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.menuUserName} numberOfLines={1}>{therapistProfile.fullName}</Text>
+                      <Text style={styles.menuUserRole} numberOfLines={1}>{therapistProfile.title}</Text>
+                    </View>
+                  </TouchableOpacity>
 
-                <View style={styles.menuSectionDivider} />
+                  <View style={styles.menuSectionDivider} />
 
-                <TouchableOpacity
-                  style={styles.menuOptionRow}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    setProfileOpenedFromSettings(false);
-                    setEditProfileForm({ ...therapistProfile });
-                    setShowMenu(false);
-                    setShowProfileModal(true);
-                  }}
-                >
-                  <View style={styles.menuIconCircle}>
-                    <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <Circle cx="12" cy="8" r="4" stroke="#0284C7" strokeWidth="2" />
-                      <Path d="M4 20C4 16.6863 7.58172 14 12 14C16.4183 14 20 16.6863 20 20" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" />
-                    </Svg>
-                  </View>
-                  <Text style={styles.menuOptionLabel}>Profile</Text>
-                  <Text style={styles.menuOptionChevron}>›</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.menuOptionRow}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setProfileOpenedFromSettings(false);
+                      setEditProfileForm({ ...therapistProfile });
+                      setShowMenu(false);
+                      setShowProfileModal(true);
+                    }}
+                  >
+                    <View style={styles.menuIconCircle}>
+                      <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <Circle cx="12" cy="8" r="4" stroke="#0284C7" strokeWidth="2" />
+                        <Path d="M4 20C4 16.6863 7.58172 14 12 14C16.4183 14 20 16.6863 20 20" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.menuOptionLabel}>Profile</Text>
+                    <Text style={styles.menuOptionChevron}>›</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.menuOptionRow}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    setShowMenu(false);
-                    setShowSettingsModal(true);
-                  }}
-                >
-                  <View style={styles.menuIconCircle}>
-                    <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <Circle cx="12" cy="12" r="3" stroke="#0284C7" strokeWidth="2" />
-                      <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="#0284C7" strokeWidth="2" />
-                    </Svg>
-                  </View>
-                  <Text style={styles.menuOptionLabel}>Settings</Text>
-                  <Text style={styles.menuOptionChevron}>›</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.menuOptionRow}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setShowMenu(false);
+                      setShowSettingsModal(true);
+                    }}
+                  >
+                    <View style={styles.menuIconCircle}>
+                      <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <Circle cx="12" cy="12" r="3" stroke="#0284C7" strokeWidth="2" />
+                        <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="#0284C7" strokeWidth="2" />
+                      </Svg>
+                    </View>
+                    <Text style={styles.menuOptionLabel}>Settings</Text>
+                    <Text style={styles.menuOptionChevron}>›</Text>
+                  </TouchableOpacity>
 
-                <View style={styles.menuSectionDivider} />
+                  <View style={styles.menuSectionDivider} />
 
-                <TouchableOpacity
-                  style={styles.menuOptionRow}
-                  activeOpacity={0.7}
-                  onPress={() => { setShowMenu(false); setShowLogoutConfirm(true); }}
-                >
-                  <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
-                    <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M16 17l5-5-5-5" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      <Path d="M21 12H9" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
-                  </View>
-                  <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontWeight: '700' }]}>Logout</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.menuOptionRow}
+                    activeOpacity={0.7}
+                    onPress={() => { setShowMenu(false); setShowLogoutConfirm(true); }}
+                  >
+                    <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                      <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M16 17l5-5-5-5" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M21 12H9" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                    <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontWeight: '700' }]}>Logout</Text>
+                  </TouchableOpacity>
+                </Pressable>
               </View>
             </Pressable>
           </Modal>
@@ -367,36 +385,38 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
             ========================================== */}
         {showNotificationsDropdown && (
           <Modal transparent animationType="fade" visible={showNotificationsDropdown} onRequestClose={() => setShowNotificationsDropdown(false)}>
-            <Pressable style={styles.menuOverlay} onPress={() => setShowNotificationsDropdown(false)}>
-              <View style={styles.notifDropdownContainer}>
-                <View style={styles.notifDropdownHeaderRow}>
-                  <Text style={styles.notifDropdownTitle}>Notifications</Text>
-                  <View style={{ flexDirection: 'row' }}>
-                    <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'All' && styles.notifPillActive]} onPress={() => setNotificationsFilter('All')}>
-                      <Text style={[styles.notifPillText, notificationsFilter === 'All' && styles.notifPillTextActive]}>All</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'Unread' && styles.notifPillActive]} onPress={() => setNotificationsFilter('Unread')}>
-                      <Text style={[styles.notifPillText, notificationsFilter === 'Unread' && styles.notifPillTextActive]}>Unread</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-                  {notifications.filter((item) => (notificationsFilter === 'Unread' ? item.unread : true)).map((item) => (
-                    <View key={item.id} style={styles.notifItemRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.notifItemTitle}><Text style={{ fontWeight: '700' }}>{item.name} </Text>{item.action}</Text>
-                        <Text style={styles.notifItemDetail}>{item.detail}</Text>
-                      </View>
-                      <Text style={styles.notifItemTime}>{item.time}</Text>
+            <Pressable style={[styles.menuOverlay, { alignItems: 'center' }]} onPress={() => setShowNotificationsDropdown(false)}>
+              <View style={{ width: columnWidth, position: 'relative' }}>
+                <Pressable style={styles.notifDropdownContainer} onPress={(e) => e?.stopPropagation?.()}>
+                  <View style={styles.notifDropdownHeaderRow}>
+                    <Text style={styles.notifDropdownTitle}>Notifications</Text>
+                    <View style={{ flexDirection: 'row' }}>
+                      <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'All' && styles.notifPillActive]} onPress={() => setNotificationsFilter('All')}>
+                        <Text style={[styles.notifPillText, notificationsFilter === 'All' && styles.notifPillTextActive]}>All</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.notifPill, notificationsFilter === 'Unread' && styles.notifPillActive]} onPress={() => setNotificationsFilter('Unread')}>
+                        <Text style={[styles.notifPillText, notificationsFilter === 'Unread' && styles.notifPillTextActive]}>Unread</Text>
+                      </TouchableOpacity>
                     </View>
-                  ))}
-                </ScrollView>
-                <TouchableOpacity style={styles.markAllReadBtn} onPress={() => {
-                  setNotifications(notifications.map(n => ({ ...n, unread: false })));
-                  triggerToast('Marked as read');
-                }}>
-                  <Text style={styles.markAllReadBtnText}>Mark All as Read</Text>
-                </TouchableOpacity>
+                  </View>
+                  <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                    {notifications.filter((item) => (notificationsFilter === 'Unread' ? item.unread : true)).map((item) => (
+                      <View key={item.id} style={styles.notifItemRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.notifItemTitle}><Text style={{ fontWeight: '700' }}>{item.name} </Text>{item.action}</Text>
+                          <Text style={styles.notifItemDetail}>{item.detail}</Text>
+                        </View>
+                        <Text style={styles.notifItemTime}>{item.time}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                  <TouchableOpacity style={styles.markAllReadBtn} onPress={() => {
+                    setNotifications(notifications.map(n => ({ ...n, unread: false })));
+                    triggerToast('Marked as read');
+                  }}>
+                    <Text style={styles.markAllReadBtnText}>Mark All as Read</Text>
+                  </TouchableOpacity>
+                </Pressable>
               </View>
             </Pressable>
           </Modal>
@@ -411,7 +431,9 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
           presentationStyle="pageSheet"
           onRequestClose={() => setShowSettingsModal(false)}
         >
-          <SafeAreaView style={[styles.settingsModalContainer, { backgroundColor: colors.bgSecondary }]} edges={['top']}>
+          <View style={{ flex: 1, backgroundColor: wide ? '#E2E8F0' : colors.bgSecondary, alignItems: 'center' }}>
+            <View style={{ flex: 1, width: columnWidth, backgroundColor: colors.bgSecondary }}>
+              <SafeAreaView style={[styles.settingsModalContainer, { backgroundColor: colors.bgSecondary }]} edges={['top']}>
             {/* Header Row */}
             <View style={styles.newHeaderRow}>
               <TouchableOpacity
@@ -485,7 +507,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 <View style={styles.newToggleRow}>
                   <View style={styles.newToggleRowCopy}>
                     <Text style={styles.newRowTitle}>Follow-Up Alerts</Text>
-                    <Text style={styles.newRowSubtitle}>Patients who need practice follow-up</Text>
+                    <Text style={styles.newRowSubtitle}>Students who need practice follow-up</Text>
                   </View>
                   <Switch
                     value={followUpAlertsToggle}
@@ -546,7 +568,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                     <Text style={styles.newRowTitle}>Theme</Text>
                   </View>
                   <View style={styles.newThemeSegmentControl}>
-                    {(['auto', 'light', 'dark'] as const).map((mode) => (
+                    {(['light', 'dark'] as const).map((mode) => (
                       <TouchableOpacity
                         key={mode}
                         style={[
@@ -556,9 +578,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                         onPress={() => {
                           setThemeMode(mode);
                           triggerToast(
-                            mode === 'auto'
-                              ? `Auto theme enabled`
-                              : `${mode.charAt(0).toUpperCase() + mode.slice(1)} theme enabled`
+                            `${mode.charAt(0).toUpperCase() + mode.slice(1)} theme enabled`
                           );
                         }}
                       >
@@ -667,6 +687,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
               </TouchableOpacity>
             </ScrollView>
           </SafeAreaView>
+            </View>
+          </View>
         </Modal>
 
         {/* ==========================================
@@ -684,7 +706,9 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
             }
           }}
         >
-          <SafeAreaView style={[styles.settingsModalContainer, { backgroundColor: colors.bgSecondary }]} edges={['top']}>
+          <View style={{ flex: 1, backgroundColor: wide ? '#E2E8F0' : colors.bgSecondary, alignItems: 'center' }}>
+            <View style={{ flex: 1, width: columnWidth, backgroundColor: colors.bgSecondary }}>
+              <SafeAreaView style={[styles.settingsModalContainer, { backgroundColor: colors.bgSecondary }]} edges={['top']}>
             {/* Top User Summary Card (Screenshot 1 Top Header) */}
             <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
               <View style={[styles.newProfileCard, { paddingVertical: 10 }]}>
@@ -791,26 +815,38 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 <View style={styles.newDivider} />
 
                 <View style={styles.newProfileFieldRow}>
-                  <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
-                  <TextInput
-                    style={styles.newFieldInput}
-                    value={editProfileForm.license}
-                    onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, license: text }))}
-                    placeholder="PRC #0048291"
-                    placeholderTextColor={colors.textMuted}
-                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
+                    <TextInput
+                      style={[styles.newFieldInput, { opacity: 0.6 }]}
+                      value={therapistProfile.license}
+                      editable={false}
+                      placeholder="PRC #0048291"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.isDark ? '#1E293B' : '#F1F5F9' }}>
+                    <Lock size={12} color={colors.textMuted} />
+                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Locked</Text>
+                  </View>
                 </View>
                 <View style={styles.newDivider} />
 
                 <View style={styles.newProfileFieldRow}>
-                  <Text style={styles.newFieldLabel}>Clinic/School</Text>
-                  <TextInput
-                    style={styles.newFieldInput}
-                    value={editProfileForm.clinic}
-                    onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, clinic: text }))}
-                    placeholder="LittleVoices Pediatric Speech Center"
-                    placeholderTextColor={colors.textMuted}
-                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.newFieldLabel}>Clinic/School</Text>
+                    <TextInput
+                      style={[styles.newFieldInput, { opacity: 0.6 }]}
+                      value={therapistProfile.clinic}
+                      editable={false}
+                      placeholder="LittleVoices Pediatric Speech Center"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.isDark ? '#1E293B' : '#F1F5F9' }}>
+                    <Lock size={12} color={colors.textMuted} />
+                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Locked</Text>
+                  </View>
                 </View>
               </View>
 
@@ -876,6 +912,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
               </View>
             </ScrollView>
           </SafeAreaView>
+            </View>
+          </View>
         </Modal>
 
         {/* ==========================================
@@ -904,9 +942,6 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
           </View>
         )}
 
-        {/* Add Patient Modal */}
-        {addPatientOpen ? <AddPatientModal /> : null}
-
       </View>
     </View>
   );
@@ -923,7 +958,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     notificationDot: { position: 'absolute', top: 0, right: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
     
     menuOverlay: { flex: 1, backgroundColor: colors.menuOverlay },
-    menuDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, left: 14, width: 250, backgroundColor: colors.card, borderRadius: 16, padding: 10, shadowColor: '#000', shadowOpacity: 0.12, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: colors.border },
+    menuDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 56, left: 14, width: 250, backgroundColor: colors.card, borderRadius: 16, padding: 10, shadowColor: '#000', shadowOpacity: 0.12, shadowOffset: { width: 0, height: 4 }, shadowRadius: 10, elevation: 8, borderWidth: 1, borderColor: colors.border },
     menuUserHeader: { flexDirection: 'row', alignItems: 'center', padding: 6, borderRadius: 10 },
     menuAvatarCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
     menuAvatarText: { fontSize: 16, fontWeight: '800', color: colors.isDark ? '#38BDF8' : '#0284C7' },
@@ -935,7 +970,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     menuOptionLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text },
     menuOptionChevron: { fontSize: 16, color: colors.textMuted, fontWeight: '700' },
 
-    notifDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 52, right: 14, width: 320, backgroundColor: colors.card, borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.14, shadowOffset: { width: 0, height: 6 }, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: colors.border },
+    notifDropdownContainer: { position: 'absolute', top: Platform.OS === 'android' ? 76 : 56, right: 14, width: 320, backgroundColor: colors.card, borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.14, shadowOffset: { width: 0, height: 6 }, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: colors.border },
     notifDropdownHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     notifDropdownTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
     notifPill: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginLeft: 6, backgroundColor: colors.card },

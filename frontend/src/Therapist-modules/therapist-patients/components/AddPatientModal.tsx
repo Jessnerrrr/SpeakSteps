@@ -70,12 +70,16 @@ export function AddPatientModal() {
   };
 
   const save = () => {
-    const nextErrors = validatePatient(form);
-    setErrors(nextErrors);
-    if (nextErrors.length > 0) return;
-    addPatient(form);
-    setForm(emptyForm());
-    setAddPatientOpen(false);
+    try {
+      const nextErrors = validatePatient(form);
+      setErrors(nextErrors);
+      if (nextErrors.length > 0) return;
+      addPatient(form);
+      setForm(emptyForm());
+      setAddPatientOpen(false);
+    } catch (err: any) {
+      setErrors([err?.message || 'Failed to save student profile. Please try again.']);
+    }
   };
 
   const close = () => setAddPatientOpen(false);
@@ -86,8 +90,8 @@ export function AddPatientModal() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.sheetWrap}>
         <View style={[styles.sheet, { backgroundColor: palette.card }]}>
           <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: palette.text }]}>Add Patient Profile</Text>
-            <Pressable accessibilityLabel="Close add patient" onPress={close} hitSlop={8}>
+            <Text style={[styles.sheetTitle, { color: palette.text }]}>Add Student Profile</Text>
+            <Pressable accessibilityLabel="Close add student" onPress={close} hitSlop={8}>
               <Text style={[styles.close, { color: palette.muted }]}>×</Text>
             </Pressable>
           </View>
@@ -96,11 +100,11 @@ export function AddPatientModal() {
 
             <Text style={[styles.section, { color: palette.primary }]}>1. PERSONAL INFORMATION</Text>
             <View style={styles.row}>
-              <Field label="First Name" required value={form.firstName} onChangeText={(value) => set('firstName', value)} placeholder="Enter first name" />
-              <Field label="Middle Name" value={form.middleName} onChangeText={(value) => set('middleName', value)} placeholder="Optional" />
+              <Field label="First Name" required value={form.firstName} onChangeText={(value) => set('firstName', value.replace(/[^a-zA-Z\s.'-]/g, ''))} placeholder="Enter first name" />
+              <Field label="Middle Name" value={form.middleName} onChangeText={(value) => set('middleName', value.replace(/[^a-zA-Z\s.'-]/g, ''))} placeholder="Optional" />
             </View>
             <View style={styles.row}>
-              <Field label="Last Name" required value={form.lastName} onChangeText={(value) => set('lastName', value)} placeholder="Enter last name" />
+              <Field label="Last Name" required value={form.lastName} onChangeText={(value) => set('lastName', value.replace(/[^a-zA-Z\s.'-]/g, ''))} placeholder="Enter last name" />
               <SelectField label="Suffix" value={form.suffix} placeholder="Suffix" options={patientSuffixes} onChange={(value) => set('suffix', value)} />
             </View>
             <View style={styles.row}>
@@ -124,9 +128,9 @@ export function AddPatientModal() {
             />
 
             <Text style={[styles.section, { color: palette.primary }]}>2. GUARDIAN & EMERGENCY CONTACT</Text>
-            <Field label="Guardian Full Name" required value={form.guardianName} onChangeText={(value) => set('guardianName', value)} placeholder="Enter guardian name" />
+            <Field label="Guardian Full Name" required value={form.guardianName} onChangeText={(value) => set('guardianName', value.replace(/[^a-zA-Z\s.'-]/g, ''))} placeholder="Enter guardian name" />
             <View style={styles.row}>
-              <Field label="Relationship" required value={form.relationship} onChangeText={(value) => set('relationship', value)} placeholder="Parent" />
+              <Field label="Relationship" required value={form.relationship} onChangeText={(value) => set('relationship', value.replace(/[^a-zA-Z\s.'-]/g, ''))} placeholder="Parent" />
               <Field label="Contact Number" required value={form.contactNumber} onChangeText={(value) => set('contactNumber', value)} placeholder="+63" keyboardType="phone-pad" />
             </View>
             <Field
@@ -192,8 +196,8 @@ export function AddPatientModal() {
             <Pressable accessibilityRole="button" onPress={close} style={styles.cancel}>
               <Text style={[styles.cancelText, { color: palette.muted }]}>Cancel</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={save} style={[styles.save, { backgroundColor: palette.primary }]}>
-              <Text style={styles.saveText}>Save Patient</Text>
+            <Pressable accessibilityRole="button" onPress={save} style={[styles.save, { backgroundColor: '#0284C7' }]}>
+              <Text style={styles.saveText}>Save Student</Text>
             </Pressable>
           </View>
         </View>
@@ -240,30 +244,93 @@ function Field({
 function ageFromDob(value: string) {
   const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!match) return '';
-  const date = new Date(Number(match[3]), Number(match[1]) - 1, Number(match[2]));
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
   if (Number.isNaN(date.getTime())) return '';
   const today = new Date();
+  if (date > today) return '';
   let age = today.getFullYear() - date.getFullYear();
-  const month = today.getMonth() - date.getMonth();
-  if (month < 0 || (month === 0 && today.getDate() < date.getDate())) age -= 1;
+  const monthDiff = today.getMonth() - date.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) age -= 1;
   return age >= 0 && age < 120 ? String(age) : '';
 }
 
 function validatePatient(form: NewPatientInput) {
-  if (!form.firstName.trim() || !form.lastName.trim()) return ['Enter the patient’s first and last name.'];
-  if (!form.dateOfBirth.trim() || !form.age.trim()) return ['Enter the date of birth and age.'];
-  if (!form.languageProfile) return ['Select a language profile.'];
-  if (!form.diagnosis.trim()) return ['Enter the primary diagnosis.'];
-  if (!form.guardianName.trim() || !form.relationship.trim()) return ['Enter the guardian name and relationship.'];
-  if (form.contactNumber.replace(/\D/g, '').length < 7) return ['Enter a valid contact number.'];
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.guardianEmail.trim())) return ['Enter a valid guardian email address.'];
-  if (!form.targetSound) return ['Select a target sound error.'];
-  if (!form.hierarchyLevel) return ['Select a hierarchy level.'];
-  if (form.phonemePositions.length === 0) return ['Select at least one phoneme error position.'];
-  if (!form.secondaryTargets.trim()) return ['Enter the secondary phoneme targets.'];
-  if (!form.dominantErrorPattern) return ['Select a dominant error pattern.'];
-  if (form.dominantErrorPattern === 'Others:' && !form.dominantErrorOther.trim()) return ['Describe the other error pattern.'];
-  if (!form.errorPatternTaxonomy.trim() || !form.clinicalNotation.trim()) return ['Enter the error pattern taxonomy and clinical notation.'];
+  const nameRegex = /^[a-zA-Z\s.'-]+$/;
+
+  // 1. Text Fields (Names) & Required Fields
+  if (!form.firstName.trim()) return ['First name is required. Please fill in this field.'];
+  if (!nameRegex.test(form.firstName.trim())) return ['First name should only contain letters, spaces, and hyphens (no numbers or special characters).'];
+
+  if (form.middleName.trim() && !nameRegex.test(form.middleName.trim())) {
+    return ['Middle name should only contain letters, spaces, and hyphens.'];
+  }
+
+  if (!form.lastName.trim()) return ['Last name is required. Please fill in this field.'];
+  if (!nameRegex.test(form.lastName.trim())) return ['Last name should only contain letters, spaces, and hyphens (no numbers or special characters).'];
+
+  // 2. Birthday Field (Required, Format, and No Future Dates)
+  if (!form.dateOfBirth.trim()) return ['Date of birth is required. Please fill in this field.'];
+  const dobMatch = form.dateOfBirth.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!dobMatch) {
+    return ['Please enter a valid Date of Birth format (mm/dd/yyyy, e.g. 05/14/2018).'];
+  }
+  const m = Number(dobMatch[1]);
+  const d = Number(dobMatch[2]);
+  const y = Number(dobMatch[3]);
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) {
+    return ['Please enter a valid calendar date for Date of Birth.'];
+  }
+  const birthDate = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (birthDate > today) {
+    return ['Date of birth cannot be later than today (future dates are not allowed).'];
+  }
+
+  // 3. Age validation
+  if (!form.age.trim()) return ['Age is required. Please fill in this field.'];
+  const ageNum = parseInt(form.age, 10);
+  if (isNaN(ageNum) || ageNum < 0 || ageNum > 120) {
+    return ['Please enter a valid age between 0 and 120.'];
+  }
+
+  // 4. Language & Diagnosis
+  if (!form.languageProfile) return ['Language profile is required. Please select an option.'];
+  if (!form.diagnosis.trim()) return ['Primary diagnosis is required. Please fill in this field.'];
+
+  // 5. Guardian Name & Relationship (Text Only & Required)
+  if (!form.guardianName.trim()) return ['Guardian full name is required. Please fill in this field.'];
+  if (!nameRegex.test(form.guardianName.trim())) return ['Guardian name should only contain letters and spaces (no numbers).'];
+
+  if (!form.relationship.trim()) return ['Relationship is required. Please fill in this field.'];
+  if (!nameRegex.test(form.relationship.trim())) return ['Relationship should only contain letters (no numbers).'];
+
+  // 6. Contact Number & Email Format Validation
+  if (!form.contactNumber.trim()) return ['Contact number is required. Please fill in this field.'];
+  const cleanContact = form.contactNumber.replace(/\D/g, '');
+  if (cleanContact.length < 10 || cleanContact.length > 12) {
+    return ['Contact number must follow the correct format (10 to 12 digits, e.g. 09123456789).'];
+  }
+
+  if (!form.guardianEmail.trim()) return ['Guardian email address is required. Please fill in this field.'];
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.guardianEmail.trim())) {
+    return ['Please enter a valid guardian email address format (e.g. name@email.com).'];
+  }
+
+  // 7. Clinical & Speech Sound Baseline
+  if (!form.targetSound) return ['Target sound error is required. Please select an option.'];
+  if (!form.hierarchyLevel) return ['Hierarchy level is required. Please select an option.'];
+  if (form.phonemePositions.length === 0) return ['Please select at least one phoneme error position.'];
+  if (!form.secondaryTargets.trim()) return ['Secondary phoneme targets are required. Please fill in this field.'];
+  if (!form.dominantErrorPattern) return ['Dominant error pattern is required. Please select an option.'];
+  if (form.dominantErrorPattern === 'Others:' && !form.dominantErrorOther.trim()) {
+    return ['Please describe the other error pattern. This field is required.'];
+  }
+  if (!form.errorPatternTaxonomy.trim()) return ['Error pattern taxonomy is required. Please fill in this field.'];
+  if (!form.clinicalNotation.trim()) return ['Clinical notation is required. Please fill in this field.'];
   return [];
 }
 
