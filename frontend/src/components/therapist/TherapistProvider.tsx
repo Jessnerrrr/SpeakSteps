@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
 
 import {
   sampleNotifications,
@@ -41,8 +40,7 @@ type TherapistContextValue = {
 const TherapistContext = createContext<TherapistContextValue | null>(null);
 
 export function TherapistProvider({ children }: { children: ReactNode }) {
-  const systemScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [profile, setProfile] = useState<TherapistProfile>(sampleProfile);
   const [notifications, setNotifications] = useState<TherapistNotification[]>(sampleNotifications);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -63,7 +61,7 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const isDark = themeMode === 'auto' ? systemScheme === 'dark' : themeMode === 'dark';
+  const isDark = themeMode === 'dark';
   const palette = isDark ? darkPalette : lightPalette;
 
   const updateProfile = useCallback((patch: Pick<TherapistProfile, 'fullName' | 'clinic' | 'contact'>) => {

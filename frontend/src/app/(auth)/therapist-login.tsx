@@ -29,8 +29,20 @@ export default function TherapistLoginScreen() {
     setHasSubmitted(true);
     setLoginError(''); // Reset error on new attempt
     
-    if (!email.trim() || !password.trim()) {
+    if (!email.trim() && !password.trim()) {
       setLoginError('Please enter both Email and Password.');
+      return;
+    }
+    if (!email.trim()) {
+      setLoginError('Email is required. Please fill in this field.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setLoginError('Please enter a valid email address format (e.g. therapist@speaksteps.com).');
+      return;
+    }
+    if (!password.trim()) {
+      setLoginError('Password is required. Please fill in this field.');
       return;
     }
 

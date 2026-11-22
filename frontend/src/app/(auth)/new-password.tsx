@@ -48,9 +48,23 @@ export default function NewPasswordScreen() {
   const isPasswordValid = isLengthValid && hasLowercase && hasUppercase && hasNumber && hasSpecial;
 
   const handleSave = () => {
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      setAlertTitle("Missing Fields");
-      setAlertMessage("Please fill out all password fields before saving.");
+    if (!oldPassword.trim()) {
+      setAlertTitle("Required Field");
+      setAlertMessage("Old password is required. Please fill in this field.");
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
+    }
+    if (!newPassword.trim()) {
+      setAlertTitle("Required Field");
+      setAlertMessage("New password is required. Please fill in this field.");
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
+    }
+    if (!confirmPassword.trim()) {
+      setAlertTitle("Required Field");
+      setAlertMessage("Confirm password is required. Please fill in this field.");
       setAlertType('error');
       setAlertVisible(true);
       return;

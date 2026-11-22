@@ -206,7 +206,7 @@ export function emptyDraft(): ActivityDraft {
     step: 'focus',
     title: '',
     sound: '/r/',
-    level: 'Phrases',
+    level: 'Words',
     positionLabel: 'Initial, Medial, Final',
     language: 'English',
     instructions: defaultInstructions,

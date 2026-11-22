@@ -46,7 +46,17 @@ export function AssignActivity() {
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Pressable accessibilityLabel="Back" onPress={() => router.back()} style={[styles.back, { borderColor: palette.line }]}>
+      <Pressable
+        accessibilityLabel="Back"
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.push('/therapist/activities' as never);
+          }
+        }}
+        style={[styles.back, { borderColor: palette.line }]}
+      >
         <ChevronLeftIcon color={palette.text} size={18} />
       </Pressable>
       <Text style={[styles.title, { color: palette.text }]}>Assign Activity</Text>
@@ -87,7 +97,17 @@ export function AssignActivity() {
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.actions}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={[styles.secondary, { borderColor: palette.line }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push('/therapist/activities' as never);
+            }
+          }}
+          style={[styles.secondary, { borderColor: palette.line }]}
+        >
           <Text style={[styles.secondaryText, { color: palette.text }]}>Cancel</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={assign} style={styles.primary}>
