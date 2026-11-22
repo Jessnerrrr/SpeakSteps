@@ -18,22 +18,22 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
     {
       id: 'play',
       label: 'Play',
-      icon: 'phone-portrait-outline' as const, 
-      activeIcon: 'phone-portrait' as const,
+      icon: 'game-controller-outline' as const,
+      activeIcon: 'game-controller' as const,
       route: '/sentences',
     },
     {
       id: 'stars',
       label: 'Stars',
-      icon: 'star-half-outline' as const, 
+      icon: 'star-outline' as const,
       activeIcon: 'star' as const,
       route: '/patient-stars',
     },
     {
       id: 'buddy',
       label: 'Buddy',
-      icon: 'happy-outline' as const, 
-      activeIcon: 'happy' as const,
+      icon: 'paw-outline' as const,
+      activeIcon: 'paw' as const,
       route: '/pick-buddy',
     },
   ];
@@ -46,6 +46,8 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
           <TouchableOpacity
             key={tab.id}
             style={styles.tabItem}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
             activeOpacity={0.7}
             onPress={() => {
               if (!isActive && tab.route) {
@@ -53,7 +55,7 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
               }
             }}
           >
-            <View style={styles.iconWrapper}>
+            <View style={[styles.iconWrapper, isActive && styles.activeIconWrapper]}>
               <Ionicons
                 name={isActive ? tab.activeIcon : tab.icon}
                 size={24}
@@ -89,11 +91,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   iconWrapper: {
-    width: 32,
-    height: 30,
+    width: 42,
+    height: 32,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  activeIconWrapper: { backgroundColor: '#E7F4FF' },
   tabLabel: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,

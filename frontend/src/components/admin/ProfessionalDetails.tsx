@@ -42,7 +42,7 @@ export default function ProfessionalDetails({ person, students, historicalAssign
   const field = (label: string, value?: string) => <Value label={label} value={value?.trim() || (person.role === 'Therapist' ? 'Not provided' : 'Unavailable in school records')} />;
 
   return <View>
-    <Section title="Current Caseload" divider>
+    <Section title="Current Caseload">
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
         <Text style={{ color: C.muted, fontSize: 12, lineHeight: 17 }}>Students currently assigned</Text>
         <Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, textAlign: 'right' }}>{activeStudents.length} {activeStudents.length === 1 ? 'student' : 'students'}</Text>
@@ -55,7 +55,7 @@ export default function ProfessionalDetails({ person, students, historicalAssign
         <Text style={{ color: C.green, fontFamily: 'Geist-Medium', fontSize: 12 }}>Current</Text>
         <Ionicons name="chevron-forward" size={16} color={C.subtle} />
       </TouchableOpacity>)}
-      {activeStudents.length === 0 ? <View style={{ paddingVertical: 24, alignItems: 'center' }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 15, lineHeight: 20 }}>No active assignments</Text><Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 3, textAlign: 'center' }}>This {person.role.toLowerCase()} has no students currently assigned.</Text></View> : null}
+      {activeStudents.length === 0 ? <View style={{ paddingVertical: 16, alignItems: 'center' }}><Text style={{ color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 15, lineHeight: 20 }}>No active assignments</Text><Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 3, textAlign: 'center' }}>This {person.role.toLowerCase()} has no students currently assigned.</Text></View> : null}
     </Section>
 
     {historicalAssignments.length ? <Section title="Historical assignments" divider>
@@ -65,7 +65,7 @@ export default function ProfessionalDetails({ person, students, historicalAssign
       </View>)}
     </Section> : null}
 
-    <Section title={person.role === 'Therapist' ? 'Professional information' : 'School information'}>
+    <Section title={person.role === 'Therapist' ? 'Professional information' : 'School information'} divider>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
         {person.role === 'Therapist' ? <>
           {field('Professional title', person.professionalTitle)}
