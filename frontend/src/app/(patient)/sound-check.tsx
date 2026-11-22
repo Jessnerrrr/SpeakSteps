@@ -1,3 +1,4 @@
+import { CheckinHeader } from '../../components/CheckinHeader';
 import React, { useState } from 'react';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
@@ -89,16 +90,7 @@ export default function SoundCheckScreen() {
           bounces={false}
         >
           {/* Top Header Bar placed below the top pattern area, right above the card */}
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              activeOpacity={0.75}
-              onPress={handleBack}
-            >
-              <Text style={styles.backIcon}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Say it!</Text>
-          </View>
+          <CheckinHeader title="Say it!" onBack={handleBack} />
 
           {/* Main White Card */}
           <View
@@ -205,39 +197,6 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     alignSelf: 'center',
     width: '100%',
-  },
-  headerRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  backButton: {
-    width: 43,
-    height: 43,
-    borderRadius: 21.5,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#C8DFEE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 11,
-    shadowColor: '#0C66AD',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  backIcon: {
-    fontSize: 21.5,
-    color: '#0C66AD',
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24.5,
-    color: '#0C66AD',
-    marginTop: -3,
   },
   card: {
     backgroundColor: '#FFFFFF',

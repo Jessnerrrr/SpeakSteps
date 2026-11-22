@@ -187,8 +187,10 @@ export default function AdminAuthScreen({ mode }: { mode: AuthMode }) {
       <View style={styles.fieldGroup}>
         <Text style={styles.inputLabel}>{label}</Text>
         <View
+          nativeID={currentMode === 'sign-in' ? `sign-in-admin-${name}-field` : undefined}
           style={[
             styles.inputWrapper,
+            currentMode === 'sign-in' && value.length > 0 && styles.filledInput,
             focusedField === name && styles.inputWrapperFocused,
             errors[name] && styles.inputWrapperError,
           ]}
@@ -552,6 +554,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 12,
   },
+  filledInput: { backgroundColor: '#FFF3C4' },
   inputWrapperError: { borderColor: COLORS.danger },
   inputIcon: { marginRight: 9 },
   textInput: {
