@@ -111,37 +111,45 @@ export default function PatientLoginScreen() {
                 {/* Email Input */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Email</Text>
-                  <TextInput 
-                    style={[
-                      styles.input, 
-                      (hasSubmitted && !email) || loginError ? styles.errorBorder : null
-                    ]} 
-                    placeholder="new@speaksteps.com"
-                    placeholderTextColor="#999"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    value={email}
-                    onChangeText={handleEmailChange}
-                  />
+                  <View nativeID="sign-in-patient-email-field" style={[
+                    styles.field,
+                    email.length > 0 && styles.filledInput,
+                    (hasSubmitted && !email) || loginError ? styles.errorBorder : null,
+                  ]}>
+                    <TextInput
+                      style={styles.fieldInput}
+                      underlineColorAndroid="transparent"
+                      placeholder="new@speaksteps.com"
+                      placeholderTextColor="#999"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      value={email}
+                      onChangeText={handleEmailChange}
+                    />
+                  </View>
                 </View>
 
                 {/* Password Input */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Password</Text>
-                  <View style={[
-                    styles.passwordWrapper, 
+                  <View nativeID="sign-in-patient-password-field" style={[
+                    styles.field,
+                    password.length > 0 && styles.filledInput,
                     (hasSubmitted && !password) || loginError ? styles.errorBorder : null
                   ]}>
                     <TextInput 
-                      style={styles.passwordInput} 
+                      style={styles.fieldInput}
+                      underlineColorAndroid="transparent"
                       placeholder="••••••••"
                       placeholderTextColor="#999"
                       secureTextEntry={!showPassword}
                       value={password}
                       onChangeText={handlePasswordChange}
                     />
-                    <TouchableOpacity 
-                      style={styles.showButton}
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                      style={[styles.showButton, password.length > 0 && !loginError && styles.filledInput]}
                       onPress={() => setShowPassword(!showPassword)}
                     >
                       <Text style={styles.showButtonText}>{showPassword ? 'Hide' : 'Show'}</Text>
@@ -217,22 +225,8 @@ const styles = StyleSheet.create({
   inputContainer: { marginBottom: 15 },
   inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0865AD', marginBottom: 5 },
   
-  input: { 
-    backgroundColor: '#FFFFFF', 
-    borderWidth: 1.5, 
-    borderColor: '#CBE6F6', 
-    borderRadius: 10, 
-    paddingHorizontal: 15, 
-    height: 45, 
-    fontFamily: 'SourGummy', 
-    color: '#333', 
-    elevation: 2, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 1 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 2 
-  },
-  passwordWrapper: { 
+  field: {
+    overflow: 'hidden',
     flexDirection: 'row', 
     alignItems: 'center', 
     backgroundColor: '#FFFFFF', 
@@ -247,8 +241,9 @@ const styles = StyleSheet.create({
     shadowRadius: 2 
   },
   
-  passwordInput: { flex: 1, paddingHorizontal: 15, fontFamily: 'SourGummy', color: '#333' },
-  showButton: { backgroundColor: '#CBE6F6', paddingVertical: 5, paddingHorizontal: 12, borderRadius: 15, marginRight: 8 },
+  filledInput: { backgroundColor: '#FFF3C4' },
+  fieldInput: { flex: 1, alignSelf: 'stretch', minWidth: 0, backgroundColor: 'transparent', paddingHorizontal: 15, fontFamily: 'SourGummy', color: '#333' },
+  showButton: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 15, marginRight: 8 },
   showButtonText: { color: '#0865AD', fontFamily: 'SourGummy-Bold', fontSize: 12 },
   
   // Custom Error UI Styling

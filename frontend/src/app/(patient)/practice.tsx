@@ -1,19 +1,21 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  Pressable,
   View,
-  useWindowDimensions,
 } from 'react-native';
 
 // FIXED IMPORTS: 2 levels up to reach src/types and src/components
 import type { Position } from '../../types/sentences';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
+import { ChildScreenFrame, childScreenColors } from '../../components/child-screen-frame';
+import { BuddyStore } from '../../data/buddy-store';
 
 export default function PracticeScreen() {
   const params = useLocalSearchParams<{
@@ -28,17 +30,15 @@ export default function PracticeScreen() {
   const sound = params.sound ?? '/s/';
   const syllable = params.syllable ?? 'sa';
 
-  const [recording, setRecording] = useState(false);
 
-  // Responsive Hooks
-  const { width } = useWindowDimensions();
-  const isTablet = width > 600;
+  const buddy = useSyncExternalStore(BuddyStore.subscribe, BuddyStore.getActiveBuddy, BuddyStore.getActiveBuddy);
 
   // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../../assets/SourGummy.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
-  
+
   if (!fontsLoaded) return null;
 
   const handleBack = () => {
@@ -52,15 +52,15 @@ export default function PracticeScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
+      <ChildScreenFrame>
 
         {/* Header */}
         <View style={styles.header}>
-          <View style={[styles.headerContent, isTablet && styles.contentMax]}>
-            <TouchableOpacity onPress={handleBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
-              <Text style={styles.backIcon}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Practice</Text>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleBack} style={({ pressed }) => [styles.backBtn, pressed && styles.buttonPressed]} accessibilityRole="button" accessibilityLabel="Back">
+              <Ionicons name="chevron-back" size={26} color="#0D68AC" />
+            </Pressable>
+            <Text accessibilityRole="header" style={styles.headerTitle}>Practice</Text>
           </View>
         </View>
 
@@ -70,72 +70,59 @@ export default function PracticeScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Centering Wrapper for tablet responsiveness */}
-          <View style={[styles.centerWrapper, isTablet && styles.contentMax]}>
-            
-            {/* Sound Banner (Chirpy) */}
+          <View style={styles.centerWrapper}>
+
             <View style={styles.banner}>
-              {/* FIXED IMAGE PATH (3 levels up) */}
-              <Image
-                source={require('../../../assets/images/bird-logo.gif')}
-                style={styles.chirpy}
-                contentFit="contain"
-              />
+              <Image source={buddy.image} style={styles.buddyImage} contentFit="contain" />
               <View style={styles.bannerText}>
                 <Text style={styles.bannerLabel}>Sounds · {position}</Text>
                 <Text style={styles.bannerSound}>{sound} {syllable}</Text>
               </View>
             </View>
 
-            {/* Video Card */}
             <View style={styles.videoCard}>
               <View style={styles.videoPlaceholder}>
-                <Text style={styles.videoPlaceholderText}>▶</Text>
+                <Ionicons name="play" size={34} color="#0D68AC" />
               </View>
-              <Text style={styles.videoHint}>Watch the video how to say the word</Text>
-              <TouchableOpacity style={styles.watchAgainBtn} activeOpacity={0.8}>
-                <Text style={styles.watchAgainText}>▶  Watch again</Text>
-              </TouchableOpacity>
+              <Text style={styles.videoHint}>Watch how to say it.</Text>
+              <Pressable accessibilityRole="button" style={({ pressed }) => [styles.watchAgainBtn, pressed && styles.buttonPressed]}>
+                <Text style={styles.watchAgainText}>Watch again</Text>
+              </Pressable>
             </View>
 
-            {/* Mic Section */}
             <View style={styles.micSection}>
-              <TouchableOpacity
-                style={[styles.micBtn, recording && styles.micBtnActive]}
-                onPressIn={() => setRecording(true)}
-                onPressOut={() => setRecording(false)}
-                activeOpacity={0.85}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Microphone"
+                style={({ pressed }) => [styles.micBtn, pressed && styles.buttonPressed, pressed && styles.micBtnActive]}
               >
-                {/* FIXED IMAGE PATH (3 levels up) */}
                 <Image
                   source={require('../../../assets/images/mic.png')}
                   style={styles.micIconImg}
                   contentFit="contain"
                 />
-              </TouchableOpacity>
+              </Pressable>
               <Text style={styles.micLabel}>Ask your child to say it</Text>
               <Text style={styles.micHint}>Long press the mic to record your voice</Text>
             </View>
 
             {/* Submit Button */}
-            <TouchableOpacity style={styles.submitBtn} activeOpacity={0.8} onPress={() => router.back()}>
+            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.submitBtn, pressed && styles.buttonPressed]} onPress={handleBack}>
               <Text style={styles.submitText}>Submit</Text>
-            </TouchableOpacity>
+            </Pressable>
 
           </View>
         </ScrollView>
 
         {/* Global Footer Navigation Component */}
-        <View style={styles.footerContainer}>
-          <ChildBottomNav activeTab="play" />
-        </View>
+        <ChildBottomNav activeTab="play" />
 
-      </View>
+      </ChildScreenFrame>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
   scrollContainer: { flex: 1 },
   scrollContent: { paddingBottom: 24 },
 
@@ -144,15 +131,10 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  contentMax: {
-    maxWidth: 760, 
-    width: '100%',
-    alignSelf: 'center'
-  },
 
   header: {
-    backgroundColor: '#0865AD',
-    paddingTop: 55,
+    backgroundColor: childScreenColors.canvas,
+    paddingTop: 12,
     paddingBottom: 12,
   },
   headerContent: {
@@ -161,39 +143,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   backBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: childScreenColors.surface,
+    borderWidth: 1,
+    borderColor: '#C7DFEE',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
-  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold', textAlign: 'center' },
-  headerTitle: { fontFamily: 'SourGummy', color: '#fff', fontSize: 20 },
+  headerTitle: { fontFamily: 'SourGummy-Bold', color: '#0D68AC', fontSize: 26 },
 
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0865AD',
+    borderWidth: 1,
+    borderColor: '#CBE6F6',
+    backgroundColor: childScreenColors.surface,
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 15,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
-  chirpy: { width: 70, height: 70, marginRight: 16 },
+  buddyImage: { width: 70, height: 70, marginRight: 16 },
   bannerText: { flex: 1 },
-  bannerLabel: { fontFamily: 'SourGummy', color: 'rgba(255,255,255,0.8)', fontSize: 13 },
-  bannerSound: { fontFamily: 'SourGummy', color: '#fff', fontSize: 30, fontWeight: 'bold' },
+  bannerLabel: { fontFamily: 'SourGummy-Medium', color: '#485569', fontSize: 14 },
+  bannerSound: { fontFamily: 'SourGummy-Bold', color: '#183B56', fontSize: 30 },
 
   videoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: childScreenColors.surface,
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 16,
@@ -210,84 +190,78 @@ const styles = StyleSheet.create({
   videoPlaceholder: {
     width: 100,
     height: 80,
-    backgroundColor: '#E8F4FB',
+    backgroundColor: childScreenColors.canvas,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  videoPlaceholderText: { fontSize: 36, color: '#0865AD' },
   videoHint: {
-    fontFamily: 'SourGummy',
-    fontSize: 12,
-    color: '#999',
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 14,
+    color: '#526779',
     textAlign: 'center',
     marginBottom: 14,
   },
   watchAgainBtn: {
-    backgroundColor: '#FFB923',
+    backgroundColor: childScreenColors.canvas,
+    minHeight: 44,
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 25,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+    justifyContent: 'center',
   },
-  watchAgainText: { fontFamily: 'SourGummy', color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  watchAgainText: { fontFamily: 'SourGummy-Bold', color: '#0D68AC', fontSize: 18 },
 
   micSection: { alignItems: 'center', marginTop: 24 },
   micBtn: {
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#F66540',
+    backgroundColor: childScreenColors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
-    shadowColor: '#F66540',
+    shadowColor: childScreenColors.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
   },
-  micBtnActive: { backgroundColor: '#DE502C', transform: [{ scale: 0.95 }] },
+  micBtnActive: { backgroundColor: '#A43829' },
   micIconImg: {
     width: 52,
     height: 52,
   },
   micLabel: {
-    fontFamily: 'SourGummy',
+    fontFamily: 'SourGummy-Bold',
     fontSize: 16,
     color: '#0865AD',
-    fontWeight: 'bold',
     marginTop: 12,
   },
   micHint: {
-    fontFamily: 'SourGummy',
-    fontSize: 12,
-    color: '#999',
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 14,
+    color: '#526779',
+    textAlign: 'center',
     marginTop: 4,
   },
 
   submitBtn: {
-    backgroundColor: '#0865AD',
+    backgroundColor: childScreenColors.accent,
     marginHorizontal: 40,
     marginTop: 24,
+    minHeight: 48,
     paddingVertical: 14,
     borderRadius: 25,
     alignItems: 'center',
+    justifyContent: 'center',
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
-  submitText: { fontFamily: 'SourGummy', color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  
-  footerContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#CCE0F0',
-  }
+  submitText: { fontFamily: 'SourGummy-Bold', color: '#fff', fontSize: 20 },
+  buttonPressed: { opacity: 0.83, transform: [{ scale: 0.97 }, { translateY: 2 }] },
+
 });

@@ -1,3 +1,4 @@
+import { CheckinHeader } from '../../components/CheckinHeader';
 import React, { useEffect, useRef, useState } from 'react';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
@@ -160,18 +161,7 @@ export default function SpeechCheckInQuestionsScreen() {
           ]}
         >
           {/* HEADER */}
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleBack}
-            >
-              <Text style={styles.backIcon}>←</Text>
-            </TouchableOpacity>
-
-            <Text style={styles.headerTitle}>
-              Speech check-in
-            </Text>
-          </View>
+          <CheckinHeader title="Speech check-in" onBack={handleBack} />
 
           {/* MINIMAL QUESTION CARD */}
           <View
@@ -268,40 +258,6 @@ const styles = StyleSheet.create({
   },
 
   // HEADER
-  headerRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3,
-    marginRight: 12,
-  },
-
-  backIcon: {
-    fontSize: 23,
-    color: '#0C66AD',
-    fontWeight: 'bold',
-  },
-
-  headerTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 25,
-    color: '#0C66AD',
-  },
-
   // QUESTION CARD (MINIMAL)
   questionCard: {
     width: '100%',

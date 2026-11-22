@@ -1,19 +1,28 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { ChildScreenFrame, childScreenColors as playColors } from '@/components/child-screen-frame';
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   BackHandler,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions
+  TouchableWithoutFeedback,
 } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { NotificationBellButton } from '@/components/notification-popover';
+import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
+import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 import { sentences } from '@/data/sentences';
 import type { Language, Position, Sentence } from '@/types/sentences';
 import { POSITIONS } from '@/types/sentences';
+
 
 // ─── Language Toggle ──────────────────────────────────────────────────────────
 function LanguageToggle({
@@ -71,9 +80,7 @@ function StarRating({ stars }: { stars: 0 | 1 | 2 | 3 }) {
   return (
     <View style={styles.starRow}>
       {[1, 2, 3].map((i) => (
-        <Text key={i} style={i <= stars ? styles.starFilled : styles.starEmpty}>
-          ★
-        </Text>
+        <Ionicons key={i} name={i <= stars ? 'star' : 'star-outline'} size={17} color={i <= stars ? '#C58216' : '#527A96'} />
       ))}
     </View>
   );
@@ -82,27 +89,36 @@ function StarRating({ stars }: { stars: 0 | 1 | 2 | 3 }) {
 // ─── Sentence Card ────────────────────────────────────────────────────────────
 function SentenceCard({
   sentence,
-  index,
   onSelect,
-  cardWidth,
 }: {
   sentence: Sentence;
-  index: number;
   onSelect: (s: Sentence) => void;
-  cardWidth: number | string;
 }) {
+  const scale = useSharedValue(1);
+  const motion = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
   return (
-    <TouchableOpacity style={[styles.card, { width: cardWidth }]} onPress={() => onSelect(sentence)}>
-      <View style={styles.cardTopline}>
-        <Text style={styles.cardNumber}>{String(index + 1).padStart(2, '0')}</Text>
-        <Text style={styles.cardAction}>PRACTICE</Text>
-      </View>
-      <View style={styles.cardInner}>
-        <Text style={styles.cardSound}>{sentence.sound}</Text>
-        <Text style={styles.cardSyllable}>{sentence.syllable}</Text>
-      </View>
-      <StarRating stars={sentence.stars} />
-    </TouchableOpacity>
+    <Animated.View style={[styles.cardSlot, motion]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Practice ${sentence.sound}, ${sentence.syllable}, ${sentence.stars} out of 3 stars`}
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        onPressIn={() => { scale.value = withTiming(0.96, { duration: 70 }); }}
+        onPressOut={() => { scale.value = withSpring(1, { damping: 16, stiffness: 320 }); }}
+        onPress={() => onSelect(sentence)}
+      >
+        <View style={styles.cardInner}>
+          <Text style={styles.cardSound}>{sentence.sound}</Text>
+          <Text style={styles.cardSyllable}>{sentence.syllable}</Text>
+        </View>
+        <View style={styles.cardFooter}>
+          <StarRating stars={sentence.stars} />
+          <View style={styles.cardPlay}>
+            <Ionicons name="play" size={15} color={playColors.accent} />
+          </View>
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -111,18 +127,14 @@ export default function SentencesScreen() {
   const [language, setLanguage] = useState<Language>('English');
   const [position, setPosition] = useState<Position>('Initial');
 
-  // Responsive Hooks
-  const { width } = useWindowDimensions();
-  // We constrain the central content to 760px on wide screens.
-  // The grid padding is 16*2 = 32px. We calculate exactly how wide each of the two cards should be.
-  const contentWidth = Math.min(width, 760); 
-  const availableGridWidth = contentWidth - 32; 
-  // Subtracting 14 for the gap between the two columns
-  const cardWidth = (availableGridWidth - 14) / 2;
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
+  const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   // FIXED FONT PATH: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../../assets/SourGummy.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   // Handle back button: explicitly returns to the Child Dashboard (/patient-dashboard)
@@ -163,25 +175,76 @@ export default function SentencesScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
+      <ChildScreenFrame>
+        <View style={styles.topHeader}>
+          <Text accessibilityRole="header" style={styles.headerTitle}>Play</Text>
+
+          <View style={styles.headerRightActions}>
+            <NotificationBellButton
+              audience="child"
+              onBeforeOpen={() => setIsMenuOpen(false)}
+            />
+
             <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backBtn}
+              style={styles.menuButton}
               accessibilityRole="button"
-              accessibilityLabel="Back to child dashboard"
+              accessibilityLabel={isMenuOpen ? 'Close menu' : 'Open menu'}
+              accessibilityState={{ expanded: isMenuOpen }}
+              activeOpacity={0.7}
+              onPress={() => setIsMenuOpen(!isMenuOpen)}
             >
-              <Text style={styles.backIcon}>‹</Text>
+              <Ionicons
+                name={isMenuOpen ? 'close' : 'menu'}
+                size={34}
+                color="#0D68AC"
+              />
             </TouchableOpacity>
-            <View>
-              <Text style={styles.eyebrow}>SPEECH PRACTICE</Text>
-              <Text style={styles.headerTitle}>Sentence library</Text>
-            </View>
           </View>
         </View>
 
-        {/* Central Content Wrapper limits width on tablets */}
+        {isMenuOpen && (
+          <>
+            <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
+              <View style={styles.menuBackdrop} />
+            </TouchableWithoutFeedback>
+
+            <View style={styles.menuDropdownCard}>
+              <TouchableOpacity
+                style={styles.menuItemRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setIsGrownUpModalVisible(true);
+                }}
+              >
+                <Image
+                  source={require('../../../assets/images/parent-mode-icon.png')}
+                  style={styles.menuParentIcon}
+                  contentFit="cover"
+                />
+                <Text style={styles.menuItemText}>Parent mode</Text>
+                <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+              </TouchableOpacity>
+
+              <View style={styles.menuDivider} />
+
+              <TouchableOpacity
+                style={styles.menuItemRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setIsSignOutModalVisible(true);
+                }}
+              >
+                <View style={styles.logoutIconBadge}>
+                  <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
+                </View>
+                <Text style={styles.menuItemText}>Sign out</Text>
+                <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
         <View style={styles.centerWrapper}>
           <FlatList
             data={items}
@@ -191,135 +254,184 @@ export default function SentencesScreen() {
             columnWrapperStyle={styles.gridRow}
             ListHeaderComponent={
               <View style={styles.contentHeader}>
-                <Text style={styles.pageTitle}>Choose a sound to practice</Text>
-                <Text style={styles.pageSubtitle}>
-                  Build confidence one clear sentence at a time.
-                </Text>
+                <Text accessibilityRole="header" style={styles.pageTitle}>Pick a sound to practice</Text>
                 <Text style={styles.controlLabel}>Language</Text>
                 <LanguageToggle value={language} onChange={setLanguage} />
-                <View style={styles.positionHeading}>
-                  <Text style={styles.controlLabel}>Sound position</Text>
-                  <Text style={styles.promptCount}>{items.length} prompts</Text>
-                </View>
+                <Text style={styles.controlLabel}>Sound position</Text>
                 <PositionTabs value={position} onChange={setPosition} />
               </View>
             }
-            renderItem={({ item, index }) => (
-              <SentenceCard sentence={item} index={index} onSelect={handleSelect} cardWidth={cardWidth} />
+            renderItem={({ item }) => (
+              <SentenceCard sentence={item} onSelect={handleSelect} />
             )}
           />
         </View>
 
         {/* Global Child Bottom Navigation Bar */}
         <ChildBottomNav activeTab="play" />
-      </View>
+      </ChildScreenFrame>
+
+      <GrownUpCheckModal
+        visible={isGrownUpModalVisible}
+        onClose={() => setIsGrownUpModalVisible(false)}
+        onSuccess={() => {
+          setIsGrownUpModalVisible(false);
+          router.push('/parent-dashboard' as any);
+        }}
+      />
+
+      <SignOutConfirmModal
+        visible={isSignOutModalVisible}
+        onClose={() => setIsSignOutModalVisible(false)}
+        onConfirm={() => {
+          setIsSignOutModalVisible(false);
+          router.replace('/patient-login' as any);
+        }}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  
-  // Centering wrapper for tablets
-  centerWrapper: {
-    flex: 1,
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-  },
+  // Tablet Responsive Constraint
 
-  header: {
-    backgroundColor: '#0865AD',
-    paddingTop: 56,
-    paddingBottom: 22,
-  },
-  headerContent: {
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  backBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold', textAlign: 'center' },
-  eyebrow: {
-    color: '#FFB923',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.4,
-    marginBottom: 3,
-  },
-  headerTitle: { fontFamily: 'SourGummy', color: '#fff', fontSize: 25 },
-
-  contentHeader: {
-    width: '100%',
-    paddingTop: 28,
-  },
-  pageTitle: {
-    color: '#0865AD',
-    fontFamily: 'SourGummy',
-    fontSize: 27,
-    lineHeight: 32,
-    marginBottom: 8,
-  },
-  pageSubtitle: { color: '#666', fontSize: 14, marginBottom: 22 },
-  controlLabel: {
-    color: '#0865AD',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  positionHeading: {
+  /* Top Header */
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: playColors.canvas,
   },
-  promptCount: { color: '#999', fontSize: 12, marginBottom: 8 },
+  headerTitle: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 26,
+    color: '#0D68AC',
+    letterSpacing: -0.5,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuButton: {
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* Dropdown Backdrop & Floating Menu Card */
+  menuBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    zIndex: 30,
+  },
+  menuDropdownCard: {
+    position: 'absolute',
+    top: 66,
+    right: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#D4E7F5',
+    zIndex: 40,
+    minWidth: 190,
+  },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  menuParentIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  menuItemText: {
+    flex: 1,
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 13,
+    color: '#0D68AC',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#EDF4F9',
+    marginVertical: 4,
+  },
+  logoutIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0D68AC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  centerWrapper: { flex: 1 },
+  contentHeader: {
+    width: '100%',
+    paddingTop: 12,
+  },
+  pageTitle: {
+    color: '#0865AD',
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 22,
+    lineHeight: 28,
+    marginBottom: 16,
+  },
+  controlLabel: {
+    color: '#0865AD',
+    fontSize: 15,
+    fontFamily: 'SourGummy-Bold',
+    marginBottom: 6,
+  },
 
   toggleRow: {
     flexDirection: 'row',
-    backgroundColor: '#E8F4FB',
+    backgroundColor: playColors.surface,
     borderRadius: 12,
     padding: 3,
-    marginBottom: 22,
+    marginBottom: 16,
   },
-  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
-  toggleBtnActive: { backgroundColor: '#0865AD' },
-  toggleText: { fontFamily: 'SourGummy', color: '#0865AD', fontSize: 14 },
-  toggleTextActive: { color: '#fff' },
+  toggleBtn: { flex: 1, minHeight: 44, paddingVertical: 8, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  toggleBtnActive: { backgroundColor: playColors.accent },
+  toggleText: { fontFamily: 'SourGummy-Bold', color: playColors.accent, fontSize: 16 },
+  toggleTextActive: { color: playColors.surface },
 
   tabRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: 44,
+    paddingVertical: 8,
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: '#E8F4FB',
+    justifyContent: 'center',
+    backgroundColor: playColors.surface,
   },
-  tabActive: { backgroundColor: '#FFB923' },
-  tabText: { fontFamily: 'SourGummy', color: '#0865AD', fontSize: 13 },
-  tabTextActive: { color: '#fff' },
+  tabActive: { backgroundColor: playColors.accent },
+  tabText: { fontFamily: 'SourGummy-Bold', color: playColors.accent, fontSize: 15 },
+  tabTextActive: { color: playColors.surface },
 
   grid: { paddingHorizontal: 16, paddingBottom: 30 },
-  gridRow: { justifyContent: 'space-between', marginBottom: 14 },
+  gridRow: { gap: 12, marginBottom: 12 },
 
+  cardSlot: { flex: 1, maxWidth: '50%' },
   card: {
-    // Dynamic width applied inline via props
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 15,
+    flex: 1,
+    backgroundColor: playColors.surface,
+    borderRadius: 18,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#CBE6F6',
     elevation: 2,
@@ -328,14 +440,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.07,
     shadowRadius: 5,
   },
-  cardTopline: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
-  cardNumber: { color: '#9AA4AA', fontSize: 11, fontWeight: '700' },
-  cardAction: { color: '#0865AD', fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
-  cardInner: { marginBottom: 18 },
-  cardSound: { fontFamily: 'SourGummy', fontSize: 28, color: '#0865AD' },
-  cardSyllable: { fontFamily: 'SourGummy', fontSize: 16, color: '#555', marginTop: 3 },
+  cardPressed: { backgroundColor: '#EDF7FE' },
+  cardInner: { marginBottom: 12 },
+  cardSound: { fontFamily: 'SourGummy-Bold', fontSize: 32, lineHeight: 38, color: playColors.accent },
+  cardSyllable: { fontFamily: 'SourGummy-Medium', fontSize: 18, lineHeight: 23, color: '#465D70' },
 
+  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 },
+  cardPlay: { width: 30, height: 30, borderRadius: 10, backgroundColor: playColors.canvas, alignItems: 'center', justifyContent: 'center' },
   starRow: { flexDirection: 'row', gap: 2 },
-  starFilled: { color: '#FFB923', fontSize: 16 },
-  starEmpty: { color: '#DDD', fontSize: 16 },
 });

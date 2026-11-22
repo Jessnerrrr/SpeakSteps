@@ -1,3 +1,4 @@
+import { CheckinHeader } from '../../components/CheckinHeader';
 import React, { useState } from 'react';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -62,23 +63,7 @@ export default function SpeechCheckinResult() {
           <View style={styles.card}>
 
             {/* HEADER */}
-            <View style={styles.headerRow}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-                activeOpacity={0.7}
-              >
-                <Image
-                  source={require('../../../assets/images/back.png')}
-                  style={styles.backIcon}
-                  contentFit="contain"
-                />
-              </TouchableOpacity>
-
-              <Text style={styles.headerTitle}>
-                Check-in Result
-              </Text>
-            </View>
+            <CheckinHeader title="Check-in Result" onBack={() => router.back()} />
 
             {/* RECOMMENDED STARTING POINT */}
             <View style={styles.levelCardWrapper}>
@@ -174,7 +159,7 @@ export default function SpeechCheckinResult() {
                 activeOpacity={0.85}
                 onPress={() => router.replace('/sentences' as any)}
               >
-                <Text style={styles.startButtonText}>
+                <Text style={styles.doneButtonText}>
                   Start Practicing
                 </Text>
               </TouchableOpacity>
@@ -203,7 +188,6 @@ export default function SpeechCheckinResult() {
                 style={styles.alertButton}
                 onPress={proceedToSetup}
                 activeOpacity={0.85}
-                onPress={() => router.replace('/parent-dashboard' as any)}
               >
                 <Text style={styles.doneButtonText}>
                   Done
@@ -261,36 +245,6 @@ const styles = StyleSheet.create({
   },
 
   // HEADER
-  headerRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
-    flexShrink: 0,
-  },
-
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#0C66AD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-
-  backIcon: {
-    width: 50,
-    height: 40,
-  },
-
-  headerTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 23,
-    color: '#0C66AD',
-  },
-
   // BLUE CARD
   levelCardWrapper: {
     width: '100%',
