@@ -27,6 +27,13 @@ import {
 
 type FilterKey = 'overall' | 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
 
+const ADVENTURE_ICONS: Record<string, any> = {
+  sounds: require('../../../assets/images/adventure-sounds.png'),
+  words: require('../../../assets/images/adventure-words.png'),
+  phrases: require('../../../assets/images/adventure-phrases.png'),
+  sentences: require('../../../assets/images/adventure-sentences.png'),
+};
+
 export default function ParentProgressScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -59,14 +66,6 @@ export default function ParentProgressScreen() {
   }, []);
 
   if (!fontsLoaded) return null;
-
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.push('/parent-dashboard' as any);
-    }
-  };
 
   const handleToggleFilter = (key: FilterKey) => {
     if (key === 'overall') {
@@ -136,8 +135,7 @@ export default function ParentProgressScreen() {
             
             <ParentHeader
               title="Progress & History"
-              showBack={true}
-              onBack={handleBack}
+              showBack={false}
             />
 
             <View style={styles.filterSection}>
@@ -291,15 +289,11 @@ export default function ParentProgressScreen() {
                       <View key={category.id} style={styles.categoryRow}>
                         <View style={styles.categoryHeader}>
                           <View style={[styles.categoryCircle, { backgroundColor: category.circleBg }]}>
-                            {category.iconType === 'sounds' ? (
-                              <Ionicons name="musical-notes" size={18} color="#FFFFFF" />
-                            ) : category.iconType === 'words' ? (
-                              <Text style={styles.categoryAaText}>Aa</Text>
-                            ) : category.iconType === 'phrases' ? (
-                              <Text style={styles.categoryQuotesText}>❝❞</Text>
-                            ) : (
-                              <Ionicons name="clipboard" size={17} color="#FFFFFF" />
-                            )}
+                            <Image
+                              source={ADVENTURE_ICONS[category.iconType] || ADVENTURE_ICONS[category.id]}
+                              style={styles.categoryCircleIcon}
+                              contentFit="contain"
+                            />
                           </View>
                           <Text style={styles.categoryName}>{category.name}</Text>
                           <Text style={styles.categoryRatio}>
@@ -713,11 +707,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   categoryCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  categoryCircleIcon: {
+    width: 22,
+    height: 22,
   },
   categoryAaText: {
     fontFamily: 'SourGummy-Bold',

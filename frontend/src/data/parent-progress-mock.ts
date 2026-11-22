@@ -168,7 +168,7 @@ export const INITIAL_PROGRESS_DATA: ProgressSummary = {
       attempts: 1,
       pendingCount: 1,
       barColor: '#0D68AC',
-      circleBg: '#5DADE2',
+      circleBg: '#4DAEEB',
     },
     {
       id: 'cat-words',
@@ -179,7 +179,7 @@ export const INITIAL_PROGRESS_DATA: ProgressSummary = {
       attempts: 1,
       pendingCount: 1,
       barColor: '#68BA50',
-      circleBg: '#76C25B',
+      circleBg: '#6BB34C',
     },
     {
       id: 'cat-phrases',
@@ -190,7 +190,7 @@ export const INITIAL_PROGRESS_DATA: ProgressSummary = {
       attempts: 0,
       pendingCount: 1,
       barColor: '#F5A623',
-      circleBg: '#F5A623',
+      circleBg: '#F6A823',
     },
     {
       id: 'cat-sentences',
@@ -200,8 +200,8 @@ export const INITIAL_PROGRESS_DATA: ProgressSummary = {
       totalCount: TARGET_MILESTONES, // 3
       attempts: 0,
       pendingCount: 1,
-      barColor: '#FF4D4D',
-      circleBg: '#FF4D4D',
+      barColor: '#ED6B85',
+      circleBg: '#ED6B85',
     },
   ],
   feedback: MOCK_FEEDBACK_ITEMS,

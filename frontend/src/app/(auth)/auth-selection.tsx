@@ -105,7 +105,7 @@ export default function AuthSelectionScreen() {
       } else if (currentRole === 'teacher') {
         router.replace('/teacher/teacher-dashboard' as any);
       } else if (currentRole === 'patient') {
-        router.replace('/patient-dashboard' as any);
+        router.replace('/user-mode-select' as any);
       } else {
         router.replace('/' as any);
       }

@@ -68,6 +68,15 @@ export default function PatientRegistrationScreen() {
       return; 
     }
 
+    const ageNum = parseInt(childAge, 10);
+    if (isNaN(ageNum) || ageNum < 5) {
+      setAlertTitle("Child Age Requirement");
+      setAlertMessage("SpeakSteps is designed for speaking children aged 5 and older. Child must be at least 5 years old to register.");
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
+    }
+
     if (!isPasswordValid) {
       setAlertTitle("Weak Password");
       setAlertMessage("Please ensure your password meets all the security requirements.");

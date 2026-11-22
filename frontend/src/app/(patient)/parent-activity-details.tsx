@@ -455,9 +455,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 5,
-    borderRadius: 12,
+    width: 96,
+    minWidth: 96,
+    maxWidth: 96,
+    height: 32,
+    minHeight: 32,
+    maxHeight: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   statusBadgePending: {
     backgroundColor: '#FFD9D9',
@@ -466,8 +473,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#D7F5E8',
   },
   statusBadgeText: {
+    width: '100%',
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 16,
   },
   statusTextPending: {
     color: '#FF4D4D',

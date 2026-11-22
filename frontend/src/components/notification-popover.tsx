@@ -120,7 +120,7 @@ export function NotificationPopover({
       .then((enabled) => {
         if (mounted) setReduceMotion(enabled);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     const subscription = AccessibilityInfo.addEventListener(
       'reduceMotionChanged',
@@ -607,15 +607,15 @@ export function NotificationBellButton({
 
 const styles = StyleSheet.create({
   bellTouchTarget: {
-    width: 32,
-    height: 32,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bellInnerCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1.5,
     borderColor: '#FBD27C',
     backgroundColor: '#FFFFFF',
