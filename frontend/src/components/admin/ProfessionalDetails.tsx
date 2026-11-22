@@ -37,7 +37,7 @@ export default function ProfessionalDetails({ person, students, historicalAssign
 }) {
   const access = person.access ?? (person.status === 'Suspended' ? 'Suspended' : 'Active');
   const membership = person.membership ?? (person.status === 'Deactivated' ? 'Deactivated' : 'Active');
-  const setup = person.invitation === 'Completed' ? 'Completed' : person.invitation === 'Failed' ? 'Needs attention' : 'Pending';
+  const setup = person.invitation === 'Completed' ? 'Completed' : person.invitation === 'Expired' ? 'Expired' : 'Pending';
   const activeStudents = students.filter((student) => student.enrollment === 'Enrolled');
   const field = (label: string, value?: string) => <Value label={label} value={value?.trim() || (person.role === 'Therapist' ? 'Not provided' : 'Unavailable in school records')} />;
 

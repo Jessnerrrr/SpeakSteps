@@ -102,7 +102,7 @@ export default function SecurityQuestionsScreen() {
         </KeyboardAvoidingView>
 
         {/* Custom Dropdown Modal */}
-        <Modal visible={isDropdownVisible} transparent={true} animationType="fade">
+        <Modal visible={isDropdownVisible} transparent={true} animationType="fade" onRequestClose={() => setDropdownVisible(false)}>
           <TouchableOpacity 
             style={styles.modalOverlay} 
             activeOpacity={1} 

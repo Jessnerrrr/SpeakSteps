@@ -363,7 +363,7 @@ export default function PatientRegistrationScreen() {
         </KeyboardAvoidingView>
       </ImageBackground>
 
-      <Modal visible={alertVisible} transparent={true} animationType="fade">
+      <Modal visible={alertVisible} transparent={true} animationType="fade" onRequestClose={closeAlert}>
         <View style={styles.modalOverlay}>
           <View style={styles.alertBox}>
             <Text style={styles.alertTitle}>{alertTitle}</Text>
@@ -375,7 +375,7 @@ export default function PatientRegistrationScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showLevelDropdown} transparent={true} animationType="fade">
+      <Modal visible={showLevelDropdown} transparent={true} animationType="fade" onRequestClose={() => setShowLevelDropdown(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowLevelDropdown(false)}>
           <View style={styles.modalContent}>
             {levelOptions.map((item) => (

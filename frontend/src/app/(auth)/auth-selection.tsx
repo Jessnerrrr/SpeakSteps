@@ -200,7 +200,7 @@ export default function AuthSelectionScreen() {
         </KeyboardAvoidingView>
 
         {/* REDESIGNED MODAL */}
-        <Modal visible={showPinModal} transparent={true} animationType="fade">
+        <Modal visible={showPinModal} transparent={true} animationType="fade" onRequestClose={handleCloseModal}>
           <View style={styles.modalOverlay}>
             <View style={styles.newModalBox}>
               

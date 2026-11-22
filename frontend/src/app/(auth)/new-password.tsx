@@ -253,7 +253,7 @@ export default function NewPasswordScreen() {
         </KeyboardAvoidingView>
 
         {/* Custom Branded UI Alert Modal */}
-        <Modal visible={alertVisible} transparent={true} animationType="fade">
+        <Modal visible={alertVisible} transparent={true} animationType="fade" onRequestClose={handleAlertClose}>
           <View style={styles.modalOverlay}>
             <View style={styles.alertBox}>
               <Text style={[styles.alertTitle, alertType === 'error' ? { color: '#E74C3C' } : { color: '#0865AD' }]}>

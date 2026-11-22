@@ -1,6 +1,6 @@
 export type ProfessionalRole = 'Therapist' | 'Teacher';
 export type ProfessionalStatus = 'Active' | 'Suspended' | 'Deactivated';
-export type InvitationStatus = 'Not sent' | 'Pending' | 'Failed' | 'Completed';
+export type InvitationStatus = 'Not sent' | 'Pending' | 'Expired' | 'Completed';
 export type PatientAccess = 'Active' | 'Suspended' | 'Setup pending';
 export type EnrollmentStatus = 'Enrolled' | 'Archived';
 export type CareEpisodeClosureCategory = 'Clinical discharge' | 'Authorized withdrawal' | 'External transfer' | 'Other authorized administrative closure';
@@ -52,6 +52,8 @@ export type Professional = {
   joined: string;
   invitationUpdated: string;
   lifecycleUpdatedAt?: string;
+  /** Effective local date of the latest access or membership transition. */
+  lifecycleEffectiveDate?: string;
 };
 
 export type TherapistStaffRecord = {
@@ -97,6 +99,8 @@ export type Patient = {
   section?: string;
   teacherId?: string;
   lifecycleUpdatedAt?: string;
+  /** Effective local date of the latest access, membership, or enrollment transition. */
+  lifecycleEffectiveDate?: string;
 };
 
 export type SuspensionRequest = {
@@ -110,6 +114,16 @@ export type SuspensionRequest = {
   resolvedBy?: string;
   resolvedAt?: string;
   resolutionReason?: string;
+  /** Authorized file records from the originating request workflow. */
+  attachments?: RequestAttachment[];
+};
+
+export type RequestAttachment = {
+  id: string;
+  fileName: string;
+  uri: string;
+  mimeType?: string;
+  sizeBytes?: number;
 };
 
 export type ReleaseRequest = {
@@ -135,6 +149,8 @@ export type ReleaseRequest = {
   resolutionReason?: string;
   effectiveCloseDate?: string;
   authorizationReference?: string;
+  /** Original files from the originating request workflow. */
+  attachments?: RequestAttachment[];
 };
 
 export type RequestEvent = {
@@ -143,6 +159,8 @@ export type RequestEvent = {
   detail: string;
   actor: string;
   date: string;
+  /** Files submitted with this specific verification or follow-up event. */
+  attachments?: RequestAttachment[];
 };
 
 export type ActivityEntry = {
@@ -166,7 +184,7 @@ export type AdminNotification = {
 export const initialProfessionals: Professional[] = [
   { id: 'pro-1', name: 'Maria Santos', firstName: 'Maria', lastName: 'Santos', email: 'maria.santos@sample.org', role: 'Therapist', staffId: 'TH-1041', professionalTitle: 'Speech-Language Pathologist', specialization: 'Articulation and language', licenseNumber: 'SLP-48210', contactNumber: '+63 917 555 1041', status: 'Active', invitation: 'Completed', joined: '2025-08-12', invitationUpdated: '2025-08-12' },
   { id: 'pro-2', name: 'Mark Dizon', firstName: 'Mark', lastName: 'Dizon', email: 'mark.dizon@sample.org', role: 'Teacher', professionalIdentifier: 'EDU-RLC-0035', school: 'Riverside Learning Center', gradeSections: ['Grade 2 · Narra', 'Grade 3 · Sampaguita'], status: 'Active', invitation: 'Completed', joined: '2025-09-04', invitationUpdated: '2025-09-04' },
-  { id: 'pro-3', name: 'Ana Cruz', firstName: 'Ana', lastName: 'Cruz', email: 'ana.cruz@sample.org', role: 'Therapist', staffId: 'TH-1088', professionalTitle: 'Speech-Language Pathologist', specialization: 'Early language development', licenseNumber: 'SLP-49302', contactNumber: '+63 917 555 1088', status: 'Active', invitation: 'Pending', joined: '2026-10-30', invitationUpdated: '2026-10-30' },
+  { id: 'pro-3', name: 'Ana Cruz', firstName: 'Ana', lastName: 'Cruz', email: 'ana.cruz@sample.org', role: 'Therapist', staffId: 'TH-1088', professionalTitle: 'Speech-Language Pathologist', specialization: 'Early language development', licenseNumber: 'SLP-49302', contactNumber: '+63 917 555 1088', status: 'Active', invitation: 'Expired', joined: '2026-10-30', invitationUpdated: '2026-10-30' },
   { id: 'pro-4', name: 'John Reyes', firstName: 'John', lastName: 'Reyes', email: 'john.reyes@sample.org', role: 'Therapist', staffId: 'TH-1126', professionalTitle: 'Speech-Language Pathologist', specialization: 'Fluency', licenseNumber: 'SLP-50774', contactNumber: '+63 917 555 1126', status: 'Active', invitation: 'Completed', joined: '2025-11-18', invitationUpdated: '2025-11-18' },
   { id: 'pro-5', name: 'Leah Navarro', firstName: 'Leah', lastName: 'Navarro', email: 'leah.navarro@sample.org', role: 'Therapist', staffId: 'TH-1152', professionalTitle: 'Speech-Language Pathologist', specialization: 'Speech sound disorders', licenseNumber: 'SLP-51639', contactNumber: '+63 917 555 1152', status: 'Suspended', invitation: 'Completed', joined: '2025-12-02', invitationUpdated: '2025-12-02' },
   { id: 'pro-6', name: 'Paolo Lim', firstName: 'Paolo', lastName: 'Lim', email: 'paolo.lim@sample.org', role: 'Teacher', professionalIdentifier: 'EDU-EFA-0214', school: 'Eastfield Academy', gradeSections: ['Grade 1 · Molave', 'Grade 2 · Narra'], status: 'Active', invitation: 'Completed', joined: '2026-02-20', invitationUpdated: '2026-02-20' },
@@ -227,8 +245,15 @@ export const initialNotifications: AdminNotification[] = [
 ];
 
 export const centerProfile = {
-  name: 'Riverside Speech & Learning Center',
-  email: 'admin@riversidespeech.example',
+  name: 'Headway School for Giftedness',
+  email: 'admin@headwayschool.example',
   phone: '+63 2 8123 4567',
   address: '18 Orchard Lane, Quezon City, Philippines',
+};
+
+/** Demonstration-only Center Admin details; no administrator identity provider is connected. */
+export const initialAdminProfile = {
+  firstName: 'Center',
+  lastName: 'Admin',
+  contactNumber: '',
 };

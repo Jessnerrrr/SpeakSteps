@@ -214,7 +214,7 @@ export default function OtpVerificationScreen() {
           </View>
         </KeyboardAvoidingView>
 
-        <Modal visible={alertVisible} transparent={true} animationType="fade">
+        <Modal visible={alertVisible} transparent={true} animationType="fade" onRequestClose={() => setAlertVisible(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.alertBox}>
               <Text style={[styles.alertTitle, alertType === 'error' ? { color: '#E74C3C' } : { color: '#0865AD' }]}>

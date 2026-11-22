@@ -42,21 +42,8 @@ export default function PatientLoginScreen() {
 
   const handleLogin = () => {
     setHasSubmitted(true);
-<<<<<<< Updated upstream
     setLoginError('');
 
-    if (!email.trim() || !password.trim()) {
-=======
-    setLoginError(''); // Reset error on new attempt
-    
-    if (!email.trim() && !password.trim()) {
->>>>>>> Stashed changes
-      setLoginError('Please enter both Email and Password.');
-      return;
-    }
-<<<<<<< Updated upstream
-
-=======
     if (!email.trim()) {
       setLoginError('Email is required. Please fill in this field.');
       return;
@@ -69,8 +56,6 @@ export default function PatientLoginScreen() {
       setLoginError('Password is required. Please fill in this field.');
       return;
     }
-    
->>>>>>> Stashed changes
     const emailLower = email.trim().toLowerCase();
 
     // Account 1: NEW Patient (Temp Pass) -> Show TOTP Setup Alert first

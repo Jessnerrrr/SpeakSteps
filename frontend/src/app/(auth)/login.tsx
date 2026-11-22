@@ -181,7 +181,7 @@ export default function LoginScreen() {
       </ImageBackground>
 
       {/* --- TEMPORARY ACCOUNTS MODAL --- */}
-      <Modal visible={isModalVisible} transparent={true} animationType="fade">
+      <Modal visible={isModalVisible} transparent={true} animationType="fade" onRequestClose={handleCloseModal}>
         <View style={styles.modalOverlay}>
           {/* Prevent the modal from stretching infinitely on wide screens */}
           <View style={[styles.modalContent, isTablet && styles.modalContentTablet]}>
