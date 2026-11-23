@@ -1253,7 +1253,9 @@ export default function TeacherDashboardScreen() {
     setShowMenu(false);
     setShowSettingsModal(false);
     triggerToast('Logged out successfully.');
-    router.replace('/login' as any);
+    if (router.canDismiss()) {
+      router.dismissAll();
+    }
   };
 
   const handleMarkAllNotificationsRead = () => {
