@@ -48,6 +48,7 @@ import {
   type Professional,
   type ProfessionalRole,
   type ProfessionalStatus,
+  type RequestAttachment,
   type ReleaseRequest,
   type RequestStatus,
   type SuspensionRequest,
@@ -58,6 +59,7 @@ import AccountDetailsActionRow from '../../components/admin/AccountDetailsAction
 import AccountDetailsHeader from '../../components/admin/AccountDetailsHeader';
 import ProfessionalDetails from '../../components/admin/ProfessionalDetails';
 import SupportingAttachments from '../../components/admin/SupportingAttachments';
+import SupportingDocumentDropzone from '../../components/admin/SupportingDocumentDropzone';
 
 type Page = 'Dashboard' | 'Accounts' | 'Activity Logs' | 'Settings';
 type AccountView = 'Directory' | 'Student Requests' | 'Archive Center';
@@ -151,7 +153,6 @@ const setAdminAccountsExpanded = (update: React.SetStateAction<boolean>) => {
 const formatDate = (date: string) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${date.slice(0, 10)}T12:00:00`));
 const localIsoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const isValidIsoDate = (value: string) => parseCalendarDate(value, 'iso') !== null;
-const archiveEpisodeStatus = (episode: CareEpisode): 'Completed' | undefined => episode.closureCategory === 'Clinical discharge' ? 'Completed' : undefined;
 const archiveEpisodeType = (episode: CareEpisode) => episode.closureCategory ?? 'Closure category missing';
 const requireArchive = (archive: ArchiveRecord | undefined): ArchiveRecord => {
   if (!archive || !isValidIsoDate(archive.archivedAt.slice(0, 10)) || Number.isNaN(Date.parse(archive.archivedAt)) || !archive.reason.trim()) {
@@ -210,9 +211,9 @@ function TooltipIconButton({ icon, label, hint, onPress, buttonStyle, disabled =
   </View>;
 }
 
-function Button({ label, onPress, kind = 'secondary', disabled = false, icon, loading = false }: { label: string; onPress: NonNullable<React.ComponentProps<typeof TouchableOpacity>['onPress']>; kind?: 'primary' | 'secondary' | 'text' | 'danger'; disabled?: boolean; icon?: React.ComponentProps<typeof Ionicons>['name']; loading?: boolean }) {
+function Button({ label, onPress, kind = 'secondary', disabled = false, icon, loading = false, accent = false }: { label: string; onPress: NonNullable<React.ComponentProps<typeof TouchableOpacity>['onPress']>; kind?: 'primary' | 'secondary' | 'text' | 'danger'; disabled?: boolean; icon?: React.ComponentProps<typeof Ionicons>['name']; loading?: boolean; accent?: boolean }) {
   const iconColor = kind === 'primary' ? C.white : kind === 'danger' ? C.red : C.blue;
-  return <TouchableOpacity onPress={onPress} disabled={disabled || loading} accessibilityRole="button" accessibilityState={{ disabled: disabled || loading, busy: loading }} style={[styles.button, kind === 'primary' ? styles.button_primary : kind === 'danger' ? styles.button_danger : kind === 'text' ? styles.button_text : styles.button_secondary, (disabled || loading) && styles.buttonDisabled]}>{loading ? <ActivityIndicator size="small" color={iconColor} /> : icon ? <Ionicons name={icon} size={16} color={iconColor} /> : null}<Text style={[styles.buttonText, kind === 'primary' && styles.buttonTextPrimary, kind === 'danger' && styles.buttonTextDanger, (disabled || loading) && styles.mutedText]}>{label}</Text></TouchableOpacity>;
+  return <TouchableOpacity onPress={onPress} disabled={disabled || loading} accessibilityRole="button" accessibilityState={{ disabled: disabled || loading, busy: loading }} style={[styles.button, kind === 'primary' ? styles.button_primary : kind === 'danger' ? styles.button_danger : kind === 'text' ? styles.button_text : styles.button_secondary, (disabled || loading) && styles.buttonDisabled]}>{loading ? <ActivityIndicator size="small" color={iconColor} /> : icon ? <Ionicons name={icon} size={16} color={iconColor} /> : null}<Text style={[styles.buttonText, kind === 'primary' && styles.buttonTextPrimary, kind === 'danger' && styles.buttonTextDanger, accent && styles.buttonTextAccent, (disabled || loading) && styles.mutedText]}>{label}</Text></TouchableOpacity>;
 }
 
 function Status({ label, tone }: { label: string; tone?: 'green' | 'yellow' | 'red' | 'blue' | 'neutral' }) {
@@ -239,7 +240,7 @@ function Filter({ value, options, onChange, label, getLabel = (option) => option
   return <View style={styles.filterWrap}><Text style={styles.filterLabel}>{label}</Text><SelectControl label={label} value={value} options={options} getLabel={getLabel} onChange={onChange} /></View>;
 }
 
-function ColumnFilter({ label, active, options, onSort, sortDirection, multiSelect = false, sortEnabled = true, compactMenu = false }: { label: string; active?: boolean; options: { label: string; selected: boolean; onSelect: () => void }[]; onSort?: () => void; sortDirection?: 'ascending' | 'descending' | null; multiSelect?: boolean; sortEnabled?: boolean; compactMenu?: boolean }) {
+function ColumnFilter({ label, active, options, onSort, sortDirection, multiSelect = false, sortEnabled = true, compactMenu = false, indicatorIcon = 'chevron-down' }: { label: string; active?: boolean; options: { label: string; selected: boolean; onSelect: () => void }[]; onSort?: () => void; sortDirection?: 'ascending' | 'descending' | null; multiSelect?: boolean; sortEnabled?: boolean; compactMenu?: boolean; indicatorIcon?: 'chevron-down' | 'arrow-down' }) {
   const [open, setOpen] = useState(false);
   const anchorId = React.useId();
   const [menuPosition, setMenuPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
@@ -270,7 +271,7 @@ function ColumnFilter({ label, active, options, onSort, sortDirection, multiSele
   };
   const menu = <View style={[styles.columnFilterMenu, compactMenu && styles.roleFilterMenu]}>{options.map((option, index) => <Pressable key={`${option.label}-${index}`} accessibilityRole={multiSelect ? 'checkbox' : 'button'} accessibilityState={{ selected: option.selected, checked: multiSelect ? option.selected : undefined }} onPress={(event) => { event.stopPropagation(); option.onSelect(); if (!multiSelect) setOpen(false); }} style={(state) => [styles.columnFilterOption, 'hovered' in state && state.hovered && styles.rowHover]}><Text style={[styles.columnFilterOptionText, option.selected && styles.columnFilterOptionSelected]}>{option.label}</Text>{option.selected ? <Ionicons name="checkmark" size={15} color={C.blue} /> : null}</Pressable>)}</View>;
   return <View nativeID={anchorId} style={[styles.columnFilterWrap, open && styles.columnFilterWrapOpen]}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}><Pressable accessibilityRole="button" accessibilityLabel={sortEnabled ? `Sort by ${label}${sortDirection ? `, ${sortDirection}` : ''}` : `Filter ${label}`} onPress={() => sortEnabled && onSort ? onSort() : toggleMenu()} style={styles.columnFilterTrigger}><Text style={styles.columnFilterLabel}>{label}</Text>{sortEnabled && onSort && sortDirection === 'descending' ? <Ionicons name="arrow-down" size={12} color={C.blue} /> : null}</Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Filter ${label}`} accessibilityState={{ expanded: open }} onPress={toggleMenu} style={{ minWidth: 25, minHeight: 34, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="chevron-down" size={12} color={active ? C.blue : C.muted} /></Pressable></View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}><Pressable accessibilityRole="button" accessibilityLabel={sortEnabled ? `Sort by ${label}${sortDirection ? `, ${sortDirection}` : ''}` : `Filter ${label}`} onPress={() => sortEnabled && onSort ? onSort() : toggleMenu()} style={styles.columnFilterTrigger}><Text style={styles.columnFilterLabel}>{label}</Text>{sortEnabled && onSort && sortDirection === 'descending' ? <Ionicons name="arrow-down" size={12} color={C.blue} /> : null}</Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Filter ${label}`} accessibilityState={{ expanded: open }} onPress={toggleMenu} style={{ minWidth: 25, minHeight: 34, alignItems: 'center', justifyContent: 'center' }}><Ionicons name={indicatorIcon} size={12} color={active ? C.blue : C.muted} /></Pressable></View>
     {open ? <Modal transparent visible onRequestClose={() => setOpen(false)}>
       <Pressable style={styles.columnFilterBackdrop} onPress={() => setOpen(false)}>
         <View style={menuPosition ? [styles.columnFilterPosition, menuPosition] : undefined}>
@@ -385,10 +386,12 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   });
   const [accountAccess, setAccountAccess] = useState(accountAccessParam ?? 'All access');
   const [accountSetup, setAccountSetup] = useState<string[]>(() => accountSetupParam && accountSetupParam !== 'All setup' ? accountSetupParam.split(',').filter(Boolean) : []);
+  const [archiveStatuses, setArchiveStatuses] = useState<string[]>([]);
   const [accountMembership, setAccountMembership] = useState('All memberships');
   const [closurePatient, setClosurePatient] = useState<Patient | null>(null);
   const [closureCategory, setClosureCategory] = useState<Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>>('Authorized withdrawal');
   const [closureReason, setClosureReason] = useState('');
+  const [closureEvidence, setClosureEvidence] = useState<RequestAttachment | null>(null);
   const [closureEffectiveDate, setClosureEffectiveDate] = useState('');
   const [closureAuthorizationReference, setClosureAuthorizationReference] = useState('');
   const [reenrollmentPatient, setReenrollmentPatient] = useState<Patient | null>(null);
@@ -644,6 +647,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       && (accountView === 'Archive Center' || accountAssignments.length === 0 || accountAssignments.includes(assignedCount > 0 ? 'Assigned' : 'Unassigned'))
       && (!query || [person.name, person.id, person.email, person.role, professionalAccess(person), professionalMembership(person), professionalSetup(person), person.staffId ?? '', person.professionalIdentifier ?? ''].some((value) => value.toLowerCase().includes(query)));
   });
+  const studentDirectoryOnly = accountRoles.length === 1 && accountRoles[0] === 'Student';
   const visibleAccountPatients = patients.filter((patient) => {
     const query = accountSearch.trim().toLowerCase();
     const setupStatus = studentSetup(patient);
@@ -651,7 +655,6 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     return (accountView === 'Archive Center' ? inactive : !inactive && patient.enrollment !== 'Archived')
       && (!accountRoles.length || accountRoles.includes('Student'))
       && (accountView === 'Archive Center' || accountSetup.length === 0 || accountSetup.includes(setupStatus))
-      && (accountView === 'Archive Center' || accountAssignments.length === 0 || accountAssignments.includes(studentAssignmentStatus(patient)))
       && (!query || [patient.name, patient.id, patient.studentNumber, patient.guardianContact, studentAccess(patient), studentMembership(patient), 'student'].some((value) => value.toLowerCase().includes(query)));
   });
   const openArchiveEpisodes = careEpisodes.filter((episode): episode is Extract<CareEpisode, { status: 'Closed' }> => episode.status === 'Closed' && !episode.restoredAt);
@@ -666,16 +669,16 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     ...accountRoles.map((value) => ({ label: `Role: ${value}`, clear: () => toggleFilterValue(accountRoles, value, setAccountRoles) })),
     ...(accountView === 'Archive Center' && accountAccess !== 'All access' ? [{ label: `Access: ${accountAccess}`, clear: () => setAccountAccess('All access') }] : []),
     ...accountSetup.map((value) => ({ label: `Setup: ${value}`, clear: () => toggleFilterValue(accountSetup, value, setAccountSetup) })),
-    ...accountAssignments.map((value) => ({ label: `Assignments: ${value}`, clear: () => toggleFilterValue(accountAssignments, value, setAccountAssignments) })),
+    ...(!studentDirectoryOnly ? accountAssignments.map((value) => ({ label: `Assignments: ${value}`, clear: () => toggleFilterValue(accountAssignments, value, setAccountAssignments) })) : []),
   ];
-  const resetAccountFilters = () => { setAccountRoles([]); setAccountAccess('All access'); setAccountSetup([]); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); setAccountAssignments([]); setPatientTeacher('All teachers'); setPatientTherapist('All therapists'); };
+  const resetAccountFilters = () => { setAccountSearch(''); setAccountRoles([]); setAccountAccess('All access'); setAccountSetup([]); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); setAccountAssignments([]); setPatientTeacher('All teachers'); setPatientTherapist('All therapists'); };
   const changeAccountRoles = (role: string) => { setAccountRoles((current) => current.includes(role) ? current.filter((item) => item !== role) : [...current, role]); };
-  const accountFilterKey = [accountView, accountSearch, accountRoles.join(','), accountAccess, accountSetup.join(','), accountAssignments.join(',')].join('|');
+  const accountFilterKey = [accountView, accountSearch, accountRoles.join(','), archiveStatuses.join(','), accountAccess, accountSetup.join(','), accountAssignments.join(',')].join('|');
   const accountPage = accountPageState.filterKey === accountFilterKey ? accountPageState.page : 0;
   const setAccountPage = (page: number) => setAccountPageState({ page, filterKey: accountFilterKey });
   const archiveForRow = (row: AccountRow) => row.kind === 'archiveEpisode' ? row.episode.archive : requireArchive(row.kind === 'professional' ? row.person.archive : row.patient.archive);
   const archiveStatus = (row: AccountRow) => row.kind === 'archiveEpisode'
-    ? archiveEpisodeStatus(row.episode) ?? 'Data model conflict'
+    ? 'Completed'
     : (row.kind === 'professional' ? professionalMembership(row.person) : studentMembership(row.patient)) === 'Deactivated' ? 'Deactivated' : 'Suspended';
   const archiveRecordCount = openArchiveEpisodes.length
     + professionals.filter((person) => professionalAccess(person) === 'Suspended' || professionalMembership(person) === 'Deactivated').length
@@ -687,13 +690,13 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       const patient = patients.find((item) => item.id === episode.patientId);
       return patient ? [{ kind: 'archiveEpisode' as const, episode, patient }] : [];
     }) : []),
-  ].sort((a, b) => {
+  ].filter((row) => accountView !== 'Archive Center' || !archiveStatuses.length || archiveStatuses.includes(archiveStatus(row))).sort((a, b) => {
     const value = (row: AccountRow) => {
       if (accountSort.key === 'Account') return row.kind === 'professional' ? row.person.name : row.patient.name;
       if (accountSort.key === 'ID') return row.kind === 'professional' ? (row.person.role === 'Therapist' ? row.person.staffId ?? '' : row.person.professionalIdentifier ?? '') : row.patient.studentNumber;
       if (accountSort.key === 'Date') return accountView === 'Archive Center' ? archiveForRow(row).archivedAt : new Date(`${(row.kind === 'professional' ? row.person.joined : row.patient.registered).slice(0, 10)}T12:00:00`).getTime();
       if (accountSort.key === 'Access' && accountView === 'Archive Center') return archiveStatus(row);
-      if (accountSort.key === 'Access') return row.kind === 'archiveEpisode' ? archiveEpisodeStatus(row.episode) ?? 'Data model conflict' : row.kind === 'professional' ? professionalMembership(row.person) === 'Deactivated' ? 'Deactivated' : professionalAccess(row.person) : studentMembership(row.patient) === 'Deactivated' ? 'Deactivated' : studentAccess(row.patient);
+      if (accountSort.key === 'Access') return row.kind === 'archiveEpisode' ? 'Completed' : row.kind === 'professional' ? professionalMembership(row.person) === 'Deactivated' ? 'Deactivated' : professionalAccess(row.person) : studentMembership(row.patient) === 'Deactivated' ? 'Deactivated' : studentAccess(row.patient);
       if (accountSort.key === 'Setup') return row.kind === 'professional' ? professionalSetup(row.person) : row.kind === 'student' ? studentSetup(row.patient) : '';
       return row.kind === 'professional' ? patients.filter((student) => (row.person.role === 'Therapist' ? student.therapistId === row.person.id : student.teacherId === row.person.id) && student.enrollment === 'Enrolled').length : -1;
     };
@@ -732,13 +735,57 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     if (professional) return { name: professional.name, identifier: professional.role === 'Therapist' ? professional.staffId : professional.professionalIdentifier, type: professional.role };
     return null;
   };
+  const activityActorDetails = (entry: ActivityEntry) => {
+    const actor = entry.actor?.trim();
+    if (!actor) return '';
+    if (actor.toLocaleLowerCase() === 'center admin' || actor.toLocaleLowerCase() === profileName.toLocaleLowerCase()) return 'Center Admin';
+    const professional = professionals.find((item) => item.name.toLocaleLowerCase() === actor.toLocaleLowerCase());
+    if (professional) {
+      const identifier = professional.role === 'Therapist' ? professional.staffId : professional.professionalIdentifier;
+      return [professional.role, identifier].filter(Boolean).join(' · ');
+    }
+    if (patients.some((item) => item.guardian?.toLocaleLowerCase() === actor.toLocaleLowerCase())) return 'Guardian';
+    return '';
+  };
   const logCategoryOptions = ['Accounts', 'Assignments', 'Enrollment', 'Requests', 'Students', 'Settings'];
-  const activityResult = (entry: ActivityEntry) => entry.result ?? (entry.title.match(/declined|suspended|deactivated|approved|restored|reactivated|closed/i)?.[0].toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) ?? 'Recorded');
+  const activityStatus = (entry: ActivityEntry) => {
+    const title = entry.title.toLocaleLowerCase();
+    const subject = activitySubject(entry);
+    const patient = subject?.type === 'Student' ? patients.find((item) => item.studentNumber === subject.identifier || item.name === subject.name) : undefined;
+    const professional = subject && subject.type !== 'Student' ? professionals.find((item) => item.name === subject.name || item.staffId === subject.identifier || item.professionalIdentifier === subject.identifier) : undefined;
+    const requestId = `${entry.title} ${entry.detail}`.match(/(?:req|rel)-[\w-]+/i)?.[0];
+
+    if (activityLogCategory(entry) === 'Requests') {
+      const request = requests.find((item) => item.id === requestId) ?? requests.find((item) => patient && item.patientId === patient.id);
+      const release = releaseRequests.find((item) => item.id === requestId) ?? releaseRequests.find((item) => patient && item.patientId === patient.id);
+      return request ? primaryRequestStatus(request.status) : release ? primaryRequestStatus(release.status) : entry.result ?? '';
+    }
+    if (patient) {
+      if (/assign/.test(title)) return studentAssignmentStatus(patient);
+      if (/enroll|withdraw|transfer|archiv/.test(title)) return patient.enrollment;
+      if (/setup|invitation|created/.test(title)) return studentSetup(patient);
+      if (/deactivat/.test(title)) return studentMembership(patient);
+      return studentAccess(patient);
+    }
+    if (professional) {
+      if (/setup|invitation|created/.test(title)) return professionalSetup(professional);
+      if (/deactivat|reinstat/.test(title)) return professionalMembership(professional);
+      return professionalAccess(professional);
+    }
+    return entry.result ?? '';
+  };
+  const activityStatusTone = (status: string): 'green' | 'yellow' | 'red' | 'neutral' => {
+    const normalized = status.toLocaleLowerCase();
+    if (/pending|awaiting|more information/.test(normalized)) return 'yellow';
+    if (/suspended|declined|deactivated|expired|archived/.test(normalized)) return 'red';
+    if (/approved|active|completed|enrolled|restored|assigned/.test(normalized)) return 'green';
+    return 'neutral';
+  };
   const activityLogTimestamp = (entry: ActivityEntry) => new Intl.DateTimeFormat('en', {
     month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
   }).format(new Date(entry.date));
   const visibleLogs = orderedActivity.filter((entry) => (!logCategoriesSelected.length || logCategoriesSelected.includes(activityLogCategory(entry)))
-    && (!logSearch.trim() || [entry.title, entry.detail, entry.actor, entry.category, activityLogCategory(entry), activityResult(entry), activityLogTimestamp(entry), activitySubject(entry)?.name ?? '', activitySubject(entry)?.identifier ?? '', activitySubject(entry)?.type ?? ''].some((value) => value.toLocaleLowerCase().includes(logSearch.trim().toLocaleLowerCase()))));
+    && (!logSearch.trim() || [entry.title, entry.detail, entry.actor, entry.category, activityLogCategory(entry), activityStatus(entry), activityLogTimestamp(entry), activitySubject(entry)?.name ?? '', activitySubject(entry)?.identifier ?? '', activitySubject(entry)?.type ?? ''].some((value) => value.toLocaleLowerCase().includes(logSearch.trim().toLocaleLowerCase()))));
   const makeProfessional = (draft: ProfessionalDraft) => {
     const profile = draft.role === 'Teacher' ? (({ lookupStaffId: _lookupStaffId, ...teacherRecord }) => teacherRecord)(draft) : draft;
     const recordIdentifier = draft.role === 'Therapist' ? draft.staffId : draft.professionalIdentifier;
@@ -966,7 +1013,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     });
   };
 
-  const closeEnrollmentRecord = (patient: Patient, details: { category: Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>; reason: string; effectiveDate: string; authorizationReference: string }) => {
+  const closeEnrollmentRecord = (patient: Patient, details: { category: Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>; reason: string; effectiveDate: string; authorizationReference: string; evidence?: RequestAttachment }) => {
     const now = new Date().toISOString();
     const endedAssignments: AssignmentHistory[] = [
       ...(patient.therapistId ? [{ id: `assignment-${patient.id}-therapist-${details.effectiveDate}`, patientId: patient.id, professionalId: patient.therapistId, role: 'Therapist' as const, endedAt: details.effectiveDate, endReason: `${details.category}: ${details.reason}` }] : []),
@@ -977,7 +1024,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const closedEpisode: CareEpisode = {
       ...(existingEpisode ?? { id: `episode-${patient.id}-${careEpisodes.length + 1}`, patientId: patient.id }),
       status: 'Closed', archive: { archivedAt: now, archivedBy: profileName, reason: details.reason }, effectiveCloseDate: details.effectiveDate, closureCategory: details.category,
-      closureReason: details.reason, authorizedBy: 'Center Admin', authorizationReference: details.authorizationReference,
+      closureReason: details.reason, closureEvidence: details.evidence, authorizedBy: 'Center Admin', authorizationReference: details.authorizationReference,
       therapistIdAtClose: patient.therapistId,
     };
     setCareEpisodes((current) => existingEpisode
@@ -997,10 +1044,10 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     setClosurePatient(patient);
     setClosureCategory('Authorized withdrawal');
     setClosureReason('');
+    setClosureEvidence(null);
     setClosureEffectiveDate('');
     setClosureAuthorizationReference('');
   };
-
   const closureMinDate = (patientId: string) => {
     const startedAt = careEpisodes.find((episode) => episode.patientId === patientId && episode.status === 'Active')?.startedAt;
     if (!startedAt) return undefined;
@@ -1015,8 +1062,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const submitClosureForm = () => {
     if (!closurePatient || closurePatient.enrollment !== 'Enrolled') return;
     const validDate = validClosureDate(closureEffectiveDate, closurePatient.id);
-    if (!closureReason.trim() || !validDate || !closureAuthorizationReference.trim()) { flash('Enter the closure reason, a valid effective date, and the authorization reference.'); return; }
-    const details = { category: closureCategory as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>, reason: closureReason.trim(), effectiveDate: closureEffectiveDate, authorizationReference: closureAuthorizationReference.trim() };
+    if (!closureReason.trim() || !validDate || !closureAuthorizationReference.trim() || !closureEvidence) { flash('Enter the closure reason, attach a supporting document, choose a valid effective date, and enter the authorization reference.'); return; }
+    const details = { category: closureCategory as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>, reason: closureReason.trim(), effectiveDate: closureEffectiveDate, authorizationReference: closureAuthorizationReference.trim(), evidence: closureEvidence ?? undefined };
     const patient = closurePatient;
     setClosurePatient(null);
     setConfirmation({
@@ -1275,7 +1322,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const selectedArchiveState = selectedArchiveRow ? archiveStatus(selectedArchiveRow) : null;
   const archivedHeaderStates = selectedArchiveState ? [
     { label: 'Archived', tone: 'neutral' as const },
-    { label: selectedArchiveState, tone: selectedArchiveState === 'Completed' ? 'green' as const : selectedArchiveState === 'Data model conflict' ? 'yellow' as const : 'red' as const },
+    { label: selectedArchiveState, tone: selectedArchiveState === 'Completed' ? 'green' as const : 'red' as const },
   ] : null;
   const selectedAccountHeader = selectedProfessional ? <AccountDetailsHeader
     name={selectedProfessional.name}
@@ -1312,6 +1359,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     && (!accountRoles.length || accountRoles.includes('Student'))
     && patients.some((patient) => patient.enrollment !== 'Archived' && studentAccess(patient) !== 'Suspended' && studentMembership(patient) === 'Active' && patient.studentNumber.trim().toLowerCase() === accountSearch.trim().toLowerCase());
   const showStudentDetailsColumns = (accountRoles.length === 1 && accountRoles[0] === 'Student') || searchedStudentId;
+  const showAssignmentColumn = !showStudentDetailsColumns;
   const professionalRow = (person: Professional) => {
     const assigned = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled').length;
     const identifier = person.role === 'Therapist' ? person.staffId ?? 'Not recorded' : person.professionalIdentifier ?? 'Unavailable';
@@ -1332,7 +1380,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     {showStudentDetailsColumns ? <><Text style={[styles.tableCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]} numberOfLines={1}>{professionals.find((person) => person.id === patient.teacherId)?.name ?? 'Unassigned'}</Text><Text style={[styles.tableCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]} numberOfLines={1}>{professionals.find((person) => person.id === patient.therapistId)?.name ?? 'Unassigned'}</Text><Text style={[styles.tableCell, styles.enrollmentTableCell, inlineAccountDetails && detailPanelStyles.enrollmentColumnWithPanel]}>{patient.enrollment}</Text></> : null}
     <View style={[styles.tableCell, styles.statusTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.statusColumnWithPanel]}><Status label={studentMembership(patient) === 'Deactivated' ? 'Deactivated' : studentAccess(patient)} tone={studentMembership(patient) === 'Deactivated' || studentAccess(patient) === 'Suspended' ? 'red' : 'green'} /></View>
     <View style={[styles.tableCell, styles.setupTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.setupColumnWithPanel]}><SetupStatus label={studentSetup(patient)} /></View>
-    <><View style={[styles.tableCell, styles.assignmentTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.assignmentColumnWithPanel]}><AssignmentBadge label={studentAssignmentStatus(patient)} /></View><View style={styles.rowAction}><Ionicons name="chevron-forward" size={19} color={C.blueDeep} /></View></>
+    <>{showAssignmentColumn ? <View style={[styles.tableCell, styles.assignmentTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.assignmentColumnWithPanel]} /> : null}<View style={styles.rowAction}><Ionicons name="chevron-forward" size={19} color={C.blueDeep} /></View></>
   </Pressable>;
   const mobileAccountRow = (row: AccountRow) => row.kind === 'professional' ? (() => {
     const person = row.person;
@@ -1344,15 +1392,15 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     </Pressable>;
   })() : <Pressable key={row.patient.id} onPress={() => setSelection({ kind: 'patient', id: row.patient.id })} style={(state) => [styles.mobileRow, styles.clickableRow, ('hovered' in state && state.hovered) && styles.rowHover]} accessibilityRole="button" accessibilityLabel={`View Student ${row.patient.name}, ${row.patient.studentNumber}`}>
     <View style={styles.personCell}>{avatar(row.patient.name)}<View style={styles.personText}><Text style={styles.personName}>{row.patient.name}</Text><Text style={styles.secondaryText}>Student · {row.patient.studentNumber}</Text><Text style={styles.secondaryText}>{row.patient.guardianContact}</Text></View></View>
-    <View style={styles.mobileRowBottom}><Status label={studentMembership(row.patient) === 'Deactivated' ? 'Deactivated' : studentAccess(row.patient)} tone={studentMembership(row.patient) === 'Deactivated' || studentAccess(row.patient) === 'Suspended' ? 'red' : 'green'} /><><SetupStatus label={studentSetup(row.patient)} compact /><AssignmentBadge label={studentAssignmentStatus(row.patient)} /></></View>
+    <View style={styles.mobileRowBottom}><Status label={studentMembership(row.patient) === 'Deactivated' ? 'Deactivated' : studentAccess(row.patient)} tone={studentMembership(row.patient) === 'Deactivated' || studentAccess(row.patient) === 'Suspended' ? 'red' : 'green'} /><SetupStatus label={studentSetup(row.patient)} compact /></View>
     {showStudentDetailsColumns ? <View style={styles.studentMobileDetails}><Text style={styles.secondaryText}>Teacher · {professionals.find((person) => person.id === row.patient.teacherId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Therapist · {professionals.find((person) => person.id === row.patient.therapistId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Enrollment · {row.patient.enrollment}</Text></View> : null}
   </Pressable>;
 
-  const activityLine = (entry: ActivityEntry, compactMode = false) => <View key={entry.id} onLayout={({ nativeEvent }) => { recentActivityRows.current.set(entry.id, { top: nativeEvent.layout.y, height: nativeEvent.layout.height }); markVisibleActivityRead(); }} style={[styles.activityItem, compactMode && styles.activityItemCompact]}>
+  const activityLine = (entry: ActivityEntry, compactMode = false) => <Pressable key={entry.id} onPress={() => { setLogSearch(entry.title); setLogCategoriesSelected([]); goTo('Activity Logs'); }} accessibilityRole="button" accessibilityLabel={`View activity log for ${entry.title}`} onLayout={({ nativeEvent }) => { recentActivityRows.current.set(entry.id, { top: nativeEvent.layout.y, height: nativeEvent.layout.height }); markVisibleActivityRead(); }} style={[styles.activityItem, styles.clickableRow, compactMode && styles.activityItemCompact]}>
     {!entry.read ? <View style={[styles.activityMark, { backgroundColor: C.blue }]} /> : null}
     <View style={styles.activityCopy}><Text style={styles.activityTitle}>{entry.title}</Text><Text style={styles.secondaryText}>{entry.detail} · {entry.actor}</Text></View>
     <Text style={styles.activityDate}>{formatTimestamp(entry.date)}</Text>
-  </View>;
+  </Pressable>;
 
   const dashboard = () => {
     const metrics = [
@@ -1444,21 +1492,17 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       <View style={styles.personCell}><View style={styles.personText}><Text style={styles.personName}>{record.name}</Text><Text style={styles.secondaryText} numberOfLines={1}>{row.kind === 'professional' ? row.person.email : row.patient.guardianContact}</Text></View></View>
       <View style={[styles.tableCell, styles.roleTableCell, styles.leadingBadgeCell]}><RoleBadge role={role} /></View>
       <Text style={[styles.tableCell, styles.idTableCell]} numberOfLines={1}>{identifier}</Text>
-      <View style={[styles.tableCell, styles.statusTableCell, styles.archiveStatusCell, styles.leadingBadgeCell]}><Status label={status} tone={status === 'Completed' ? 'green' : status === 'Data model conflict' ? 'yellow' : 'red'} /></View>
+      <View style={[styles.tableCell, styles.statusTableCell, styles.archiveStatusCell, styles.leadingBadgeCell]}><Status label={status} tone={status === 'Completed' ? 'green' : 'red'} /></View>
       <Text style={[styles.tableCell, styles.setupTableCell]}>{formatDate(archive.archivedAt)}</Text>
       <Text style={[styles.tableCell, styles.archiveReasonCell]} numberOfLines={2}>{archive.reason}</Text>
-      <View pointerEvents="box-none" style={[styles.tableCell, styles.assignmentTableCell, styles.archiveRowActions]}><Button label="Restore" kind="text" disabled={!canRestore} onPress={(event) => { event.stopPropagation(); restoreRecord(); }} /></View>
+      <View pointerEvents="box-none" style={[styles.tableCell, styles.assignmentTableCell, styles.archiveRowActions]}><Button label="Restore" kind="text" accent disabled={!canRestore} onPress={(event) => { event.stopPropagation(); restoreRecord(); }} /><Pressable accessibilityRole="button" accessibilityLabel={`View ${record.name} details`} onPress={(event) => { event.stopPropagation(); setSelection(selection); }} style={styles.archiveDetailsArrow}><Ionicons name="chevron-forward" size={19} color={C.blueDeep} /></Pressable></View>
     </View>;
   };
   const archiveDirectoryPage = () => <>
     <View style={styles.accountSearchRow}><SearchBox value={accountSearch} onChange={setAccountSearch} placeholder="Search name, ID, or email" fullWidth /></View>
-    <View style={[styles.directoryControls, styles.raisedFilterControls]}>
-      <MultiFilter label="Role" values={accountRoles} options={['Student', 'Therapist', 'Teacher']} onToggle={changeAccountRoles} includeAllOption />
-      <MultiFilter label="Sort by" values={[selectedAccountSort.label]} options={ACCOUNT_SORT_OPTIONS.map((option) => option.label)} onToggle={selectAccountSort} singleSelect />
-    </View>
-    <View style={styles.directoryMeta}><Text style={styles.resultCount}>{archiveRecordCount} {archiveRecordCount === 1 ? 'archived record' : 'archived records'}</Text><Text style={styles.secondaryText}>Therapy history, restricted accounts, and records needing correction</Text></View>
-    <ScrollView style={styles.filterableTableLayer} horizontal showsHorizontalScrollIndicator contentContainerStyle={{ width: '100%' as any, minWidth: 980, flexGrow: 1 }}><View style={[styles.table, { width: '100%' as any, minWidth: 980 }]}><View style={[styles.tableHead, styles.archiveTableColumns]}><View style={[styles.tableHeadCell, styles.personHead, { minWidth: 0 }]}><Text style={styles.columnFilterLabel}>Account</Text></View><View style={[styles.tableHeadCell, styles.roleTableCell, styles.leadingBadgeCell]}><Text style={styles.columnFilterLabel}>Role</Text></View><View style={[styles.tableHeadCell, styles.idTableCell]}><Text style={styles.columnFilterLabel}>ID</Text></View><View style={[styles.tableHeadCell, styles.statusTableCell, styles.archiveStatusCell, styles.leadingBadgeCell]}><Text style={styles.columnFilterLabel}>Status</Text></View><View style={[styles.tableHeadCell, styles.setupTableCell]}><Text style={styles.columnFilterLabel}>Date</Text></View><View style={[styles.tableHeadCell, styles.archiveReasonCell]}><Text style={styles.columnFilterLabel}>Archive reason</Text></View><View style={[styles.tableHeadCell, styles.assignmentTableCell]}><Text style={styles.columnFilterLabel}>Actions</Text></View></View>{accountPageRows.map(archiveDirectoryRow)}</View></ScrollView>{accountPagination}
-    {accountRows.length === 0 ? <EmptyState title={archiveRecordCount ? 'No matching archive records' : 'No archived records'} detail={archiveRecordCount ? 'Try another name, ID, or email, or clear the filters.' : 'Closed enrollments and restricted accounts will appear here.'} action={accountSearch ? <Button label="Clear search" onPress={() => setAccountSearch('')} /> : null} /> : null}
+    <View style={styles.directoryMeta}><Text style={styles.resultCount}>{accountRows.length} {accountRows.length === 1 ? 'archived record' : 'archived records'}</Text><Text style={styles.secondaryText}>Therapy history, restricted accounts, and records needing correction</Text></View>
+    <ScrollView style={styles.filterableTableLayer} horizontal showsHorizontalScrollIndicator contentContainerStyle={{ width: '100%' as any, minWidth: 980, flexGrow: 1 }}><View style={[styles.table, { width: '100%' as any, minWidth: 980 }]}><View style={[styles.tableHead, styles.archiveTableColumns]}><View style={[styles.tableHeadCell, styles.personHead, { minWidth: 0 }]}><ColumnFilter label="Account" indicatorIcon="arrow-down" active={selectedAccountSort.label !== ACCOUNT_SORT_OPTIONS[0].label} options={ACCOUNT_SORT_OPTIONS.map((option) => ({ label: option.label, selected: selectedAccountSort.label === option.label, onSelect: () => selectAccountSort(option.label) }))} /></View><View style={[styles.tableHeadCell, styles.roleTableCell, styles.leadingBadgeCell]}><ColumnFilter label="Role" compactMenu active={accountRoles.length > 0} multiSelect sortEnabled={false} options={[{ label: 'All', selected: accountRoles.length === 0, onSelect: () => setAccountRoles([]) }, ...['Student', 'Therapist', 'Teacher'].map((role) => ({ label: role, selected: accountRoles.includes(role), onSelect: () => changeAccountRoles(role) }))]} /></View><View style={[styles.tableHeadCell, styles.idTableCell]}><Text style={styles.columnFilterLabel}>ID</Text></View><View style={[styles.tableHeadCell, styles.statusTableCell, styles.archiveStatusCell, styles.leadingBadgeCell]}><ColumnFilter label="Status" compactMenu active={archiveStatuses.length > 0} multiSelect sortEnabled={false} options={[{ label: 'All', selected: archiveStatuses.length === 0, onSelect: () => setArchiveStatuses([]) }, ...['Suspended', 'Deactivated', 'Completed'].map((status) => ({ label: status, selected: archiveStatuses.includes(status), onSelect: () => toggleFilterValue(archiveStatuses, status, setArchiveStatuses) }))]} /></View><View style={[styles.tableHeadCell, styles.setupTableCell]}><Text style={styles.columnFilterLabel}>Date</Text></View><View style={[styles.tableHeadCell, styles.archiveReasonCell]}><Text style={styles.columnFilterLabel}>Archive reason</Text></View><View style={[styles.tableHeadCell, styles.assignmentTableCell]}><Text style={styles.columnFilterLabel}>Actions</Text></View></View>{accountPageRows.map(archiveDirectoryRow)}</View></ScrollView>{accountPagination}
+    {accountRows.length === 0 ? <EmptyState title={archiveRecordCount ? 'No matching archive records' : 'No archived records'} detail={archiveRecordCount ? 'Try another name, ID, or email, or clear the filters.' : 'Closed enrollments and restricted accounts will appear here.'} action={accountSearch || accountRoles.length || archiveStatuses.length ? <Button label="Clear search and filters" onPress={() => { setAccountSearch(''); setAccountRoles([]); setArchiveStatuses([]); }} /> : null} /> : null}
   </>;
   const accounts = () => accountView === 'Student Requests' ? studentRequestsPage() : <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
     <Header title={accountView} subtitle={accountView === 'Directory' ? 'Manage student and professional accounts across your center.' : 'Review therapy history and accounts with restricted access.'} action={accountView === 'Directory' ? <Button label="Add Account" kind="primary" icon="add" onPress={() => { setCreatePatientOpen(true); setNewAccountOpen(true); }} /> : undefined} />
@@ -1473,7 +1517,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
         <Filter label="Sort by" value={selectedAccountSort.label} options={ACCOUNT_SORT_OPTIONS.map((option) => option.label)} onChange={selectAccountSort} />
         <MultiFilter label="Role" values={accountRoles} options={['Student', 'Therapist', 'Teacher']} onToggle={(value) => changeAccountRoles(value)} includeAllOption />
         <MultiFilter label="Setup" values={accountSetup} options={['Pending', 'Completed', 'Expired']} onToggle={(value) => toggleFilterValue(accountSetup, value, setAccountSetup)} />
-        <MultiFilter label="Assignments" values={accountAssignments} options={['Assigned', 'Unassigned']} onToggle={(value) => toggleFilterValue(accountAssignments, value, setAccountAssignments)} />
+        {!showStudentDetailsColumns ? <MultiFilter label="Assignments" values={accountAssignments} options={['Assigned', 'Unassigned']} onToggle={(value) => toggleFilterValue(accountAssignments, value, setAccountAssignments)} /> : null}
       </ScrollView><View style={styles.dialogActions}><Button label="Reset filters" onPress={resetAccountFilters} /><Button label="Done" kind="primary" onPress={() => setAccountFiltersOpen(false)} /></View></Pressable></Pressable></Modal> : null}
     </View>
     {accountPageCount <= 1 ? <View style={styles.directoryMeta}><Text style={styles.resultCount}>{accountRows.length} {accountRows.length === 1 ? 'account' : 'accounts'}</Text></View> : null}
@@ -1484,7 +1528,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       {showStudentDetailsColumns ? <><View style={[styles.tableHeadCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]}><Text style={styles.columnFilterLabel}>Teacher</Text></View><View style={[styles.tableHeadCell, styles.studentDetailsCell, inlineAccountDetails && detailPanelStyles.studentDataColumnWithPanel]}><Text style={styles.columnFilterLabel}>Therapist</Text></View><View style={[styles.tableHeadCell, styles.enrollmentTableCell, inlineAccountDetails && detailPanelStyles.enrollmentColumnWithPanel]}><Text style={styles.columnFilterLabel}>Enrollment</Text></View></> : null}
       <View style={[styles.tableHeadCell, styles.statusTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.statusColumnWithPanel]}><Text style={styles.columnFilterLabel}>Access</Text></View>
       <View style={[styles.tableHeadCell, styles.setupTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.setupColumnWithPanel]}><ColumnFilter label="Setup" onSort={() => toggleAccountSort('Setup')} sortDirection={accountSort.key === 'Setup' ? accountSort.direction : null} active={accountSetup.length > 0} multiSelect options={['Pending', 'Completed', 'Expired'].map((value) => ({ label: value, selected: accountSetup.includes(value), onSelect: () => toggleFilterValue(accountSetup, value, setAccountSetup) }))} /></View>
-      <View style={[styles.tableHeadCell, styles.assignmentTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.assignmentColumnWithPanel]}><ColumnFilter label="Assignments" onSort={() => toggleAccountSort('Assignments')} sortDirection={accountSort.key === 'Assignments' ? accountSort.direction : null} active={accountAssignments.length > 0} multiSelect options={['Assigned', 'Unassigned'].map((value) => ({ label: value, selected: accountAssignments.includes(value), onSelect: () => toggleFilterValue(accountAssignments, value, setAccountAssignments) }))} /></View>
+      {showAssignmentColumn ? <View style={[styles.tableHeadCell, styles.assignmentTableCell, styles.centeredBadgeCell, inlineAccountDetails && detailPanelStyles.assignmentColumnWithPanel]}><ColumnFilter label="Assignments" onSort={() => toggleAccountSort('Assignments')} sortDirection={accountSort.key === 'Assignments' ? accountSort.direction : null} active={accountAssignments.length > 0} multiSelect options={['Assigned', 'Unassigned'].map((value) => ({ label: value, selected: accountAssignments.includes(value), onSelect: () => toggleFilterValue(accountAssignments, value, setAccountAssignments) }))} /></View> : null}
       <View style={styles.rowAction} />
     </View>{accountPageRows.map((row) => row.kind === 'professional' ? professionalRow(row.person) : accountStudentRow(row.patient))}{accountPagination}</View> : <><View style={styles.mobileRows}>{accountPageRows.map(mobileAccountRow)}</View>{accountPagination}</>}
     {visibleProfessionals.length + visibleAccountPatients.length === 0 ? <EmptyState title="No matching records." detail="Try clearing your search or filters." action={accountSearch || accountFilterTags.length ? <Button label="Clear search and filters" onPress={() => { resetAccountFilters(); setAccountSearch(''); }} /> : null} /> : null}
@@ -1612,8 +1656,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
         ))}
       </View>
     )}
-    {requestFilterTags.length ? <View style={styles.accountFilterTagRow}>{requestFilterTags.map((tag) => <TouchableOpacity key={tag.label} accessibilityRole="button" accessibilityLabel={`Remove ${tag.label} filter`} onPress={tag.clear} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>{tag.label}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}</View> : null}
-    <View style={styles.directoryMeta}><Text style={styles.resultCount}>{filteredStudentRequests.length} {filteredStudentRequests.length === 1 ? 'request' : 'requests'}</Text><View style={styles.requestMetaControls}><TouchableOpacity onPress={resetStudentRequestFilters} style={[styles.accountFilterReset, { marginLeft: 0 }]} accessibilityRole="button" accessibilityLabel="Reset request search and filters"><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity></View></View>
+    {requestFilterTags.length ? <View style={styles.accountFilterTagRow}>{requestFilterTags.map((tag) => <TouchableOpacity key={tag.label} accessibilityRole="button" accessibilityLabel={`Remove ${tag.label} filter`} onPress={tag.clear} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>{tag.label}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}<TouchableOpacity onPress={resetStudentRequestFilters} style={styles.accountFilterReset} accessibilityRole="button" accessibilityLabel="Reset request search and filters"><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity></View> : null}
+    <View style={styles.directoryMeta}><Text style={styles.resultCount}>{filteredStudentRequests.length} {filteredStudentRequests.length === 1 ? 'request' : 'requests'}</Text></View>
     <ScrollView horizontal={requestTableHorizontal} showsHorizontalScrollIndicator={requestTableHorizontal} contentContainerStyle={{ width: '100%' as any, minWidth: requestTableHorizontal ? 1052 : '100%', flexGrow: 1 }}><View style={[styles.requestList, { width: '100%' as any }]}><View style={styles.requestTableHeader}><Text style={[styles.requestColumnHeader, requestColumnStyles.student]}>Student</Text><View style={requestColumnStyles.type}><ColumnFilter label="Request Type" active={requestTypeFilters.length > 0} multiSelect options={requestTypeOptions.map((value) => ({ label: value, selected: requestTypeFilters.includes(value), onSelect: () => toggleFilterValue(requestTypeFilters, value, setRequestTypeFilters) }))} /></View><Text style={[styles.requestColumnHeader, requestColumnStyles.submitter]}>Submitted By</Text><View style={requestColumnStyles.stage}><ColumnFilter label="Workflow Stage" active={requestStageFilters.length > 0} multiSelect options={requestStageOptions.map((value) => ({ label: value, selected: requestStageFilters.includes(value), onSelect: () => toggleFilterValue(requestStageFilters, value, setRequestStageFilters) }))} /></View><View style={requestColumnStyles.status}><ColumnFilter label="Status" active={requestStatusFilters.length > 0 || requestFollowupFilters.length > 0} multiSelect options={[
       { label: 'All statuses', selected: requestStatusFilters.length === 0, onSelect: () => setRequestStatusFilters([]) },
       ...requestStatusOptions.map((value) => ({ label: value, selected: requestStatusFilters.includes(value), onSelect: () => toggleFilterValue(requestStatusFilters, value, setRequestStatusFilters) })),
@@ -1634,55 +1678,53 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     <ListPagination {...requestPagination} total={filteredStudentRequests.length} noun="requests" accent={C.blue} muted={C.muted} border={C.line} />
   </ScrollView>;
   const logsPage = () => {
-    const stacked = width < 1160;
+    const stacked = width < 760;
     const columns = [
-      { label: 'Date & Time', width: 114 },
-      { label: 'Category', width: 82 },
-      { label: 'Activity', width: 130 },
-      { label: 'Record', width: 118 },
-      { label: 'Role', width: 74 },
-      { label: 'Performed By', width: 102 },
-      { label: 'Result', width: 80 },
-      { label: 'Reason / Note', width: 170 },
+      { label: 'Date & Time', width: 1.05 },
+      { label: 'Activity', width: 1.5 },
+      { label: 'Category', width: 0.72 },
+      { label: 'Record', width: 1.35 },
+      { label: 'Performed By', width: 1.15 },
+      { label: 'Status', width: 1.3 },
     ];
     const LogContainer = stacked ? View : ScrollView;
+    const categoryFilter = <ColumnFilter label="Category" indicatorIcon="chevron-down" sortEnabled={false} active={logCategoriesSelected.length > 0} options={logCategoryOptions.map((value) => ({ label: value, selected: logCategoriesSelected.includes(value), onSelect: () => toggleFilterValue(logCategoriesSelected, value, setLogCategoriesSelected) }))} />;
+    const hasFilters = logSearch.trim().length > 0 || logCategoriesSelected.length > 0;
     return <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
       <Header title="Activity Logs" subtitle="A chronological record of account, student, and request decisions." />
       <View style={styles.accountSearchRow}><SearchBox value={logSearch} onChange={setLogSearch} placeholder="Search activity, record, or administrator" fullWidth /></View>
-      <View style={[styles.directoryControls, styles.raisedFilterControls]}><MultiFilter label="Category" values={logCategoriesSelected} options={logCategoryOptions} onToggle={(value) => toggleFilterValue(logCategoriesSelected, value, setLogCategoriesSelected)} /></View>
-      {logCategoriesSelected.length ? <View style={styles.accountFilterTagRow}>{logCategoriesSelected.map((value) => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`Remove ${value} category filter`} onPress={() => toggleFilterValue(logCategoriesSelected, value, setLogCategoriesSelected)} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>Category: {value}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}<TouchableOpacity accessibilityRole="button" onPress={() => setLogCategoriesSelected([])} style={styles.accountFilterReset}><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity></View> : null}
+      {hasFilters || stacked ? <View style={styles.logFilterRow}>
+        <View style={styles.logActiveFilters}>{logCategoriesSelected.map((value) => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`Remove ${value} category filter`} onPress={() => toggleFilterValue(logCategoriesSelected, value, setLogCategoriesSelected)} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>Category: {value}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}{hasFilters ? <TouchableOpacity accessibilityRole="button" onPress={() => { setLogSearch(''); setLogCategoriesSelected([]); }} style={styles.accountFilterReset}><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity> : null}</View>
+        {stacked ? categoryFilter : null}
+      </View> : null}
       {visibleLogs.length ? <LogContainer style={styles.filterableTableLayer} {...(stacked ? {} : { horizontal: true, contentContainerStyle: { flexGrow: 1 } })}>
-        <View style={[styles.logList, stacked ? { width: '100%' } : { minWidth: 980, flexGrow: 1 }]}>
+        <View style={[styles.logList, stacked ? { width: '100%' } : { minWidth: 900, flexGrow: 1 }]}>
           {!stacked ? <View style={styles.logHeader}>
-            {columns.map((column) => <Text key={column.label} style={[styles.logHeading, { flex: column.width, minWidth: 0 }]}>{column.label}</Text>)}
+            {columns.map((column) => <View key={column.label} style={{ flex: column.width, minWidth: 0 }}>{column.label === 'Category' ? categoryFilter : <Text style={styles.logHeading}>{column.label}</Text>}</View>)}
           </View> : null}
           {visibleLogs.slice(logPagination.start, logPagination.end).map((entry) => {
             const subject = activitySubject(entry);
-            const values = [
-              activityLogTimestamp(entry),
-              activityLogCategory(entry),
-              entry.title,
-              subject ? [subject.name, subject.identifier].filter(Boolean).join(' · ') : '—',
-              subject?.type ?? '—',
-              entry.actor,
-              activityResult(entry),
-              entry.detail || '—',
-            ];
-            return <View key={entry.id} style={[styles.logRow, stacked && styles.logRowStacked]}>
-              {columns.map((column, index) => <View key={column.label} style={stacked ? styles.logStackedCell : { flex: column.width, minWidth: 0 }}>
-                {stacked ? <Text style={styles.logHeading}>{column.label}</Text> : null}
-                <Text style={index === 2 ? styles.activityTitle : styles.secondaryText}>{values[index]}</Text>
-              </View>)}
-            </View>;
+            const date = new Date(entry.date);
+            const dateLabel = Number.isNaN(date.getTime()) ? entry.date : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+            const timeLabel = Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit' }).format(date);
+            const status = activityStatus(entry);
+            return <Pressable key={entry.id} style={({ hovered }) => [styles.logRow, stacked && styles.logRowStacked, hovered && styles.logRowHover]}>
+              <View style={stacked ? styles.logStackedCell : { flex: columns[0].width, minWidth: 0 }}>{stacked ? <Text style={styles.logHeading}>{columns[0].label}</Text> : null}<Text style={styles.logPrimary}>{dateLabel}</Text>{timeLabel ? <Text style={styles.logSecondary}>{timeLabel}</Text> : null}</View>
+              <View style={stacked ? styles.logStackedCell : { flex: columns[1].width, minWidth: 0 }}>{stacked ? <Text style={styles.logHeading}>{columns[1].label}</Text> : null}<Text style={styles.logPrimary}>{entry.title}</Text></View>
+              <View style={stacked ? styles.logStackedCell : { flex: columns[2].width, minWidth: 0 }}>{stacked ? <Text style={styles.logHeading}>{columns[2].label}</Text> : null}<Text style={styles.logSecondary}>{activityLogCategory(entry)}</Text></View>
+              <View style={stacked ? styles.logStackedCell : { flex: columns[3].width, minWidth: 0 }}>{stacked ? <Text style={styles.logHeading}>{columns[3].label}</Text> : null}<Text style={styles.logPrimary}>{subject?.name || '\u2014'}</Text>{subject?.identifier ? <Text style={styles.logSecondary}>{subject.identifier}{subject.type ? ` \u00B7 ${subject.type}` : ''}</Text> : subject?.type ? <Text style={styles.logSecondary}>{subject.type}</Text> : null}</View>
+              <View style={stacked ? styles.logStackedCell : { flex: columns[4].width, minWidth: 0 }}>{stacked ? <Text style={styles.logHeading}>{columns[4].label}</Text> : null}<Text style={styles.logPrimary}>{entry.actor || '\u2014'}</Text>{activityActorDetails(entry) ? <Text style={styles.logSecondary}>{activityActorDetails(entry)}</Text> : null}</View>
+              <View style={stacked ? styles.logStackedCell : { flex: columns[5].width, minWidth: 0 }}>{stacked ? <Text style={styles.logHeading}>{columns[5].label}</Text> : null}{status ? <Text style={[styles.logPrimary, { color: activityStatusTone(status) === 'red' ? C.red : activityStatusTone(status) === 'yellow' ? C.yellow : activityStatusTone(status) === 'green' ? C.green : C.ink }]}>{status}</Text> : <Text style={styles.logPrimary}>{'\u2014'}</Text>}</View>
+            </Pressable>;
           })}
         </View>
-      </LogContainer> : <EmptyState title="No activity found" detail="Try a different category or search term." action={<Button label="Clear filters" onPress={() => { setLogSearch(''); setLogCategoriesSelected([]); }} />} />}
+      </LogContainer> : <EmptyState title={activity.length === 0 ? 'No activity recorded yet' : 'No activity matches these filters'} detail={activity.length === 0 ? 'Recorded account, student, and request events will appear here.' : 'Try another search term or category, or clear the current filters.'} action={hasFilters ? <Button label="Clear search and filters" onPress={() => { setLogSearch(''); setLogCategoriesSelected([]); }} /> : null} />}
       <ListPagination {...logPagination} total={visibleLogs.length} noun="entries" accent={C.blue} muted={C.muted} border={C.line} />
     </ScrollView>;
   };
 
   const settingsPage = () => <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
-    <Header title="Center Profile" subtitle="Center information used to identify this administrative workspace." />
+    <Header title="Center Profile" subtitle="Center information used to identify this administrative workspace." action={<TouchableOpacity accessibilityRole="button" accessibilityLabel="Close Settings and return to Dashboard" onPress={() => goTo('Dashboard')} style={styles.closeButton}><Ionicons name="close" size={19} color={C.ink} /></TouchableOpacity>} />
     <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Center information</Text><Text style={styles.sectionSub}>These changes are local to this demo session.</Text>{([['name', 'Center name'], ['phone', 'Phone'], ['address', 'Address']] as const).map(([key, label]) => <View key={key} style={[styles.settingRow, compact && styles.settingRowCompact]}><Text style={styles.settingLabel}>{label}</Text><TextInput value={centerSettings[key]} onChangeText={(value) => { setCenterSettings((current) => ({ ...current, [key]: value })); setSettingsSaved(false); }} style={[styles.settingInput, compact && styles.settingInputCompact]} accessibilityLabel={label} /></View>)}<View style={[styles.settingRow, compact && styles.settingRowCompact]}><Text style={styles.settingLabel}>Administrator email</Text><Text style={[styles.settingValue, compact && styles.settingValueCompact]}>{centerSettings.email}</Text></View><Text style={styles.sectionSub}>This development placeholder is not connected to authentication.</Text><View style={styles.settingsAction}><Button label={settingsSaved ? 'Saved' : 'Save settings'} kind="primary" onPress={() => { setSettingsSaved(true); addLog('Center profile updated', `${centerSettings.name} · local demo settings`, 'Settings'); flash('Center profile settings saved in this demo.'); }} /></View></View>
     <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Administrator profile</Text><View style={styles.profileSummary}>{avatar(profileName)}<View><Text style={styles.personName}>{profileName}</Text><Text style={styles.secondaryText}>Center Administrator · {centerSettings.name}</Text></View></View><Button label="View profile" onPress={() => { setAdminProfileDraft(profile); setShowProfileDetails(true); }} /></View>
   </ScrollView>;
@@ -1729,7 +1771,6 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       <View style={styles.archiveDetailSection}>
         <Text style={styles.requestSectionTitle}>Reason for archiving</Text>
         <Text style={[styles.requestReason, styles.archiveDetailReason]}>{archive.reason}</Text>
-        {selectedArchiveState === 'Data model conflict' ? <Text style={styles.sourceNote}>This closure is not recorded as a clinical discharge and cannot be labeled Completed.</Text> : null}
       </View>
       {episode ? <View style={styles.archiveDetailSection}>
         <Text style={styles.requestSectionTitle}>Authorization</Text>
@@ -1738,6 +1779,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
           <Detail label="Reference" value={episode.authorizationReference ?? 'Not recorded'} />
         </View>
       </View> : null}
+      {episode?.closureEvidence ? <SupportingAttachments attachments={[episode.closureEvidence]} originalTitle="Enrollment closure" originalSubmitter={episode.authorizedBy ?? 'Center Admin'} originalSubmittedAt={episode.archive.archivedAt} /> : null}
       {patient ? <View style={styles.archiveDetailSection}>
         <Text style={styles.requestSectionTitle}>Student information</Text>
         <View style={styles.detailGrid}>
@@ -1927,7 +1969,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 
     <Modal visible={newAccountOpen} transparent animationType="fade" onRequestClose={() => { setNewAccountOpen(false); setCreatePatientOpen(false); }}><Pressable style={styles.overlay} onPress={() => { setNewAccountOpen(false); setCreatePatientOpen(false); }}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}>{createPatientOpen ? <CreatePatientDialog teachers={activeTeachers.map(({ id, name }) => ({ id, name }))} therapists={therapistCounts} existingNumbers={patients.map((patient) => patient.studentNumber)} onClose={() => { setCreatePatientOpen(false); setNewAccountOpen(false); }} onCreate={makePatient} onSwitchRole={(role) => { setCreatePatientOpen(false); setAccountNewRole(role); }} /> : <CreateProfessionalDialog key={accountNewRole} role={accountNewRole} existingProfessionals={professionals} onClose={() => setNewAccountOpen(false)} onCreate={makeProfessional} onSwitchRole={(role) => { if (role === 'Student') setCreatePatientOpen(true); else setAccountNewRole(role); }} />}</Pressable></Pressable></Modal>
 
-    <Modal visible={Boolean(closurePatient)} transparent animationType="fade" onRequestClose={() => setClosurePatient(null)}><Pressable style={styles.overlay} onPress={() => setClosurePatient(null)}><Pressable style={[styles.dialog, styles.formDialog, styles.closureDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title={`Close enrollment — ${closureCategory.replace('Authorized ', '')}`} subtitle="Record an authorized administrative closure" onClose={() => setClosurePatient(null)} /><ScrollView style={styles.closureDialogBody} keyboardShouldPersistTaps="handled"><View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Clinical discharge is recorded by the Therapist. This form is for an authorized withdrawal, external transfer, or other administrative closure.</Text></View>{closurePatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{closurePatient.name}</Text><Text style={styles.secondaryText}>{closurePatient.studentNumber} · {closurePatient.school}</Text></View> : null}<View style={styles.field}><Text style={styles.fieldLabel}>Closure category</Text><SelectControl label="Closure category" value={closureCategory} options={['Authorized withdrawal', 'External transfer', 'Other authorized administrative closure']} getLabel={(value) => value} onChange={(value) => setClosureCategory(value as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>)} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Documented reason</Text><TextInput value={closureReason} onChangeText={setClosureReason} placeholder="Enter the authorized reason" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Effective date</Text><EffectiveDateInput value={closureEffectiveDate} onChange={setClosureEffectiveDate} minDate={closurePatient ? closureMinDate(closurePatient.id) : undefined} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Authorization reference</Text><TextInput value={closureAuthorizationReference} onChangeText={setClosureAuthorizationReference} placeholder="Authorization or record reference" placeholderTextColor={C.subtle} style={styles.input} /></View></ScrollView><View style={[styles.dialogActions, styles.closureDialogFooter]}><Button label="Cancel" onPress={() => setClosurePatient(null)} /><Button label="Review closure" kind="primary" disabled={!closureReason.trim() || !closureAuthorizationReference.trim() || (!closurePatient || !validClosureDate(closureEffectiveDate, closurePatient.id))} onPress={submitClosureForm} /></View></Pressable></Pressable></Modal>
+    <Modal visible={Boolean(closurePatient)} transparent animationType="fade" onRequestClose={() => setClosurePatient(null)}><Pressable style={styles.overlay} onPress={() => setClosurePatient(null)}><Pressable style={[styles.dialog, styles.formDialog, styles.closureDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title={`Close enrollment — ${closureCategory.replace('Authorized ', '')}`} subtitle="Record an authorized administrative closure" onClose={() => setClosurePatient(null)} /><ScrollView style={styles.closureDialogBody} keyboardShouldPersistTaps="handled"><View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Clinical discharge is recorded by the Therapist. This form is for an authorized withdrawal, external transfer, or other administrative closure.</Text></View>{closurePatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{closurePatient.name}</Text><Text style={styles.secondaryText}>{closurePatient.studentNumber} · {closurePatient.school}</Text></View> : null}<View style={styles.field}><Text style={styles.fieldLabel}>Closure category</Text><SelectControl label="Closure category" value={closureCategory} options={['Authorized withdrawal', 'External transfer', 'Other authorized administrative closure']} getLabel={(value) => value} onChange={(value) => setClosureCategory(value as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>)} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Documented reason</Text><TextInput value={closureReason} onChangeText={setClosureReason} placeholder="Enter the authorized reason" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View><View style={styles.field}><View style={styles.closureEvidenceLabelRow}><Text style={styles.fieldLabel}>Supporting document <Text style={styles.requiredMark}>*</Text></Text><Text style={styles.sourceNote}>Required</Text></View><SupportingDocumentDropzone value={closureEvidence} onChange={setClosureEvidence} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Effective date</Text><EffectiveDateInput value={closureEffectiveDate} onChange={setClosureEffectiveDate} minDate={closurePatient ? closureMinDate(closurePatient.id) : undefined} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Authorization reference</Text><TextInput value={closureAuthorizationReference} onChangeText={setClosureAuthorizationReference} placeholder="Authorization or record reference" placeholderTextColor={C.subtle} style={styles.input} /></View></ScrollView><View style={[styles.dialogActions, styles.closureDialogFooter]}><Button label="Cancel" onPress={() => setClosurePatient(null)} /><Button label="Review closure" kind="primary" disabled={!closureReason.trim() || !closureAuthorizationReference.trim() || !closureEvidence || (!closurePatient || !validClosureDate(closureEffectiveDate, closurePatient.id))} onPress={submitClosureForm} /></View></Pressable></Pressable></Modal>
 
     <Modal visible={Boolean(reenrollmentPatient)} transparent animationType="fade" onRequestClose={() => setReenrollmentPatient(null)}><Pressable style={styles.overlay} onPress={() => setReenrollmentPatient(null)}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title="Restore student enrollment?" subtitle="Confirm a new therapy enrollment" onClose={() => setReenrollmentPatient(null)} /><Text style={styles.confirmMessage}>This will begin a new enrollment for {reenrollmentPatient?.name ?? 'this Student'}. Previous therapy records and professional assignments will remain archived.</Text>{reenrollmentPatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{reenrollmentPatient.name}</Text><Text style={styles.secondaryText}>{reenrollmentPatient.studentNumber} · {reenrollmentPatient.school}</Text></View> : null}<View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Next step: verify eligibility and choose the new assigned Therapist and Teacher. The Therapist makes clinical treatment decisions.</Text></View><View style={styles.field}><Text style={styles.fieldLabel}>New Therapist</Text><SelectControl label="New Therapist" value={reenrollmentTherapistId} options={['', ...professionals.filter((person) => person.role === 'Therapist' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Therapist'} onChange={setReenrollmentTherapistId} /></View><View style={styles.field}><Text style={styles.fieldLabel}>New Teacher</Text><SelectControl label="New Teacher" value={reenrollmentTeacherId} options={['', ...professionals.filter((person) => person.role === 'Teacher' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Teacher'} onChange={setReenrollmentTeacherId} /></View><View style={styles.dialogActions}><Button label="Cancel" onPress={() => setReenrollmentPatient(null)} /><Button label="Restore" kind="primary" disabled={!reenrollmentTherapistId || !reenrollmentTeacherId} onPress={completeReenrollment} /></View></Pressable></Pressable></Modal>
 
@@ -2083,7 +2125,7 @@ const styles = StyleSheet.create({
   workspace: { flex: 1, minWidth: 0, backgroundColor: C.white, overflow: 'hidden', borderWidth: 1, borderColor: '#D9E5EE', borderRadius: 18, ...(Platform.OS === 'web' ? { boxShadow: '0 14px 38px rgba(73, 92, 105, 0.12)' } : { elevation: 2 }) } as any, topbar: { minHeight: 62, backgroundColor: C.white, borderBottomWidth: 1, borderBottomColor: C.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 26, zIndex: 10 }, breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 9 }, breadcrumbRoot: { color: C.subtle, fontSize: 13 }, breadcrumbCurrent: { color: C.ink, fontFamily: 'Geist-Medium', fontSize: 13 }, topbarRight: { flexDirection: 'row', alignItems: 'center', gap: 14 }, centerName: { color: C.muted, fontSize: 12, marginRight: 4 }, iconButton: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' }, iconBadge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, backgroundColor: C.red }, iconBadgeText: { color: C.white, fontSize: 9, fontFamily: 'Geist-SemiBold' }, adminMenuAnchor: { position: 'relative', zIndex: 20 }, adminChip: { minHeight: 44, flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 7 }, adminMenuArrow: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }, adminInitial: { width: 29, height: 29, borderRadius: 15, backgroundColor: C.blueSoft, alignItems: 'center', justifyContent: 'center' }, adminInitialText: { color: C.blue, fontSize: 10, fontFamily: 'Geist-SemiBold' }, adminChipText: { color: C.ink, fontSize: 12, fontFamily: 'Geist-Medium' }, content: { flex: 1, minHeight: 0 }, contentSplit: { flexDirection: 'row' }, contentMain: { flex: 1, minWidth: 0, minHeight: 0 }, accountDetailPane: { flexShrink: 0, alignSelf: 'stretch', minHeight: 0, overflow: 'hidden', backgroundColor: C.white, borderLeftWidth: 1, borderLeftColor: C.line }, accountDetailScroll: { flex: 1, minHeight: 0 }, accountDetailContent: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 30 },
   archiveTabs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: C.line }, archiveRecord: { paddingVertical: 15, borderTopWidth: 1, borderTopColor: C.line, gap: 5 }, archiveRecordHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 9 }, archiveRecordFields: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 2 }, archiveRecordActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }, archiveTextAction: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 8 }, archiveIdentity: { paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line, gap: 3 },
   pageScroll: { paddingHorizontal: 32, paddingTop: 28, paddingBottom: 45, maxWidth: 1500, width: '100%', alignSelf: 'center', gap: 24 }, pageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 20, minHeight: 54 }, pageHeaderText: { flex: 1, minWidth: 0 }, pageTitle: { color: C.ink, fontFamily: 'Geist-SemiBold', fontSize: 27, letterSpacing: -0.55 }, pageSubtitle: { color: C.muted, fontSize: 13, marginTop: 5, lineHeight: 19 },
-  button: { minHeight: 44, flexDirection: 'row', gap: 7, justifyContent: 'center', alignItems: 'center', borderRadius: 7, paddingHorizontal: 13, paddingVertical: 8 }, button_primary: { backgroundColor: C.blue }, button_secondary: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line }, button_text: { backgroundColor: 'transparent', paddingHorizontal: 7 }, button_danger: { backgroundColor: C.redSoft, borderWidth: 1, borderColor: '#F3D1D4' }, buttonText: { color: C.ink, fontFamily: 'Geist-Medium', fontSize: 12 }, buttonTextPrimary: { color: C.white }, buttonTextDanger: { color: C.red }, buttonDisabled: { opacity: 0.46 }, mutedText: { color: C.muted },
+  button: { minHeight: 44, flexDirection: 'row', gap: 7, justifyContent: 'center', alignItems: 'center', borderRadius: 7, paddingHorizontal: 13, paddingVertical: 8 }, button_primary: { backgroundColor: C.blue }, button_secondary: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line }, button_text: { backgroundColor: 'transparent', paddingHorizontal: 7 }, button_danger: { backgroundColor: C.redSoft, borderWidth: 1, borderColor: '#F3D1D4' }, buttonText: { color: C.ink, fontFamily: 'Geist-Medium', fontSize: 12 }, buttonTextPrimary: { color: C.white }, buttonTextDanger: { color: C.red }, buttonTextAccent: { color: C.blue }, buttonDisabled: { opacity: 0.46 }, mutedText: { color: C.muted },
   metricStrip: { flexDirection: 'row', backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 10, overflow: 'hidden' }, metric: { flex: 1, minWidth: 0, paddingHorizontal: 18, paddingVertical: 16, borderRightWidth: 1, borderRightColor: C.line }, metricCompact: { minWidth: '48%' as any, borderBottomWidth: 1, borderBottomColor: C.line, borderRightWidth: 0 }, metricStripCompact: { flexWrap: 'wrap' }, metricLabel: { color: C.muted, fontSize: 12, fontFamily: 'Geist-Medium' }, metricValueLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }, metricValue: { color: C.ink, fontSize: 29, lineHeight: 34, fontFamily: 'Geist-SemiBold', fontVariant: ['tabular-nums'] }, metricFoot: { color: C.subtle, fontSize: 10, marginTop: 5 }, attentionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.red },
   metricTop: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   attentionPanel: { backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 6 },
@@ -2100,12 +2142,18 @@ const styles = StyleSheet.create({
   logList: { borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line },
   logHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, backgroundColor: '#F0F7FB', borderBottomWidth: 1, borderBottomColor: C.line },
   logHeading: { color: C.muted, fontSize: 11, fontFamily: 'Geist-SemiBold' },
-  logRow: { minHeight: 66, flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingHorizontal: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.line },
-  logRowStacked: { flexWrap: 'wrap', columnGap: 12, rowGap: 8 },
-  logStackedCell: { flexBasis: '46%', flexGrow: 1, minWidth: 0, gap: 3 },
+  logFilterRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4, position: 'relative', zIndex: 20 },
+  logActiveFilters: { flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 7 },
+  logRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line, cursor: 'pointer' } as any,
+  logRowHover: { backgroundColor: '#F5FAFD' },
+  logRowPressed: { backgroundColor: C.blueSoft },
+  logRowStacked: { flexWrap: 'wrap', columnGap: 12, rowGap: 8, paddingVertical: 11, paddingRight: 37 },
+  logStackedCell: { flexBasis: '45%', flexGrow: 1, minWidth: 0, gap: 2 },
+  logPrimary: { color: C.ink, fontSize: 12, lineHeight: 17, fontFamily: 'Geist-Medium' },
+  logSecondary: { color: C.muted, fontFamily: 'Geist-Regular', fontSize: 11, lineHeight: 15 },
   clickableRow: { cursor: 'pointer' },
   archiveRowTarget: { zIndex: 1 },
-  archiveRowActions: { zIndex: 2, alignItems: 'flex-start' },
+  archiveRowActions: { zIndex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 2 }, archiveDetailsArrow: { width: 26, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
   archiveDetailSection: { alignSelf: 'stretch', borderTopWidth: 1, borderTopColor: '#C5D9E8', paddingTop: 18, paddingBottom: 18 },
   archiveDetailReason: { flex: 0 },
   raisedFilterControls: { position: 'relative', zIndex: 20 },
@@ -2120,6 +2168,7 @@ const styles = StyleSheet.create({
   closureDialog: { overflow: 'hidden' },
   closureDialogBody: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
   closureDialogFooter: { flexShrink: 0, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 12, marginTop: 0 },
+  closureEvidenceLabelRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
   leadingBadgeCell: { alignItems: 'flex-start' },
   archiveTableColumns: { columnGap: 14 },
   archiveStatusCell: { minWidth: 146 },

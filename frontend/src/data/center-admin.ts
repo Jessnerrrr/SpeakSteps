@@ -13,6 +13,7 @@ export type CareEpisode = {
   effectiveCloseDate?: string;
   closureCategory?: CareEpisodeClosureCategory;
   closureReason?: string;
+  closureEvidence?: RequestAttachment;
   authorizedBy?: string;
   authorizationReference?: string;
   therapistIdAtClose?: string | null;

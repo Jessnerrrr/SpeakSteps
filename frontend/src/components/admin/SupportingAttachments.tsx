@@ -90,11 +90,13 @@ function AttachmentRow({ file, onPreview }: { file: RequestAttachment; onPreview
 export default function SupportingAttachments({
   attachments = [],
   events = [],
+  originalTitle = 'Original submission',
   originalSubmitter,
   originalSubmittedAt,
 }: {
   attachments?: RequestAttachment[];
   events?: RequestEvent[];
+  originalTitle?: string;
   originalSubmitter?: string;
   originalSubmittedAt?: string;
 }) {
@@ -102,7 +104,7 @@ export default function SupportingAttachments({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   const groups: AttachmentGroup[] = [
-    ...(attachments.length ? [{ id: 'original-submission', title: 'Original submission', actor: originalSubmitter, date: originalSubmittedAt, files: attachments }] : []),
+    ...(attachments.length ? [{ id: 'original-submission', title: originalTitle, actor: originalSubmitter, date: originalSubmittedAt, files: attachments }] : []),
     ...events.filter((event) => event.attachments?.length).map((event) => ({ id: event.id, title: event.title, actor: event.actor, date: event.date, files: event.attachments! })),
   ];
   const fileCount = groups.reduce((total, group) => total + group.files.length, 0);
