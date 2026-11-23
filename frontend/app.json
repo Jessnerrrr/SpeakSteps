@@ -4,14 +4,22 @@
     "slug": "SpeakSteps",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/upload-icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "speakstepsclean",
     "userInterfaceStyle": "automatic",
     "android": {
+      "package": "com.speaksteps.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/images/app-icon.png",
+        "backgroundColor": "#F3F4F6"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "output": "single"
@@ -25,17 +33,48 @@
           }
         }
       ],
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/app-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#F3F4F6"
+        }
+      ],
       "expo-image",
       "expo-font",
       "@react-native-community/datetimepicker",
       "expo-web-browser",
       "expo-status-bar",
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow SpeakSteps to record your practice so you can listen to it.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": false
+        }
+      },
+      "eas": {
+        "projectId": "3d3e52ea-a402-4e0d-9733-d70c83a9f015"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3d3e52ea-a402-4e0d-9733-d70c83a9f015"
+    },
+    "ios": {}
   }
 }

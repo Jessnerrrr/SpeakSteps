@@ -1,4 +1,5 @@
 import { useAssignedActivities } from '@/data/assigned-activities';
+import { assignmentAttribution } from '@/data/learning-workflow';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -154,8 +155,9 @@ export default function ParentActivityDetailsScreen() {
                 </View>
 
                 <Text style={styles.assigneeText}>
-                  Assigned: {activity.assignedBy}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}
+                  Assigned by {assignmentAttribution(activity)}
                 </Text>
+                {activity.dueDate ? <Text style={styles.assigneeText}>Due {activity.dueDate}</Text> : null}
 
                 {activity.modelAudioUrls?.[0]
                   ? <AudioPlaybackButton audioUrl={activity.modelAudioUrls[0]} label="Play model audio" />

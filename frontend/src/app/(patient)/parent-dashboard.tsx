@@ -1,5 +1,5 @@
 import { PatientPressable } from '@/components/patient-pressable';
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6, Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -90,7 +90,7 @@ export default function ParentDashboardScreen() {
 
                 <PatientPressable style={styles.assignedCard} onPress={() => router.push('/parent-tasks' as any)}>
                   <View style={styles.assignedIconBadge}>
-                    <Ionicons name="list" size={24} color="#FFFFFF" />
+                    <FontAwesome6 name="clipboard-list" solid size={23} color="#FFFFFF" />
                   </View>
                   <Text style={styles.cardTitle}>Assigned</Text>
                   <Text style={styles.cardSubText}>{pendingActivities} Pending</Text>
@@ -99,7 +99,7 @@ export default function ParentDashboardScreen() {
 
               <PatientPressable style={styles.progressReportBanner} onPress={() => router.push('/parent-progress' as any)}>
                 <View style={styles.progressReportIconBadge}>
-                  <Ionicons name="file-tray-full" size={22} color="#FFFFFF" />
+                  <FontAwesome6 name="chart-column" solid size={21} color="#FFFFFF" />
                 </View>
                 <View style={styles.progressReportTextWrapper}>
                   <Text style={styles.progressReportTitle}>Progress</Text>
