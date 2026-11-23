@@ -1,5 +1,5 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
-
+git
 For UI design work, use [Frontend Design](frontend-design.md) and [Visual design principles](visual-design-principles.md) alongside the relevant screen's existing conventions.
 
 ## Expo has changed — do not trust your training data

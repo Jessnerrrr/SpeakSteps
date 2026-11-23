@@ -51,7 +51,7 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
             activeOpacity={0.7}
             onPress={() => {
               if (!isActive && tab.route) {
-                router.push(tab.route as any);
+                router.navigate(tab.route as any);
               }
             }}
           >

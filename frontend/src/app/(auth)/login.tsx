@@ -21,8 +21,8 @@ import {
 const TEMP_ACCOUNTS = {
   Therapist: { email: 'therapist@speaksteps.com', password: 'Therapist@123' },
   Teacher: { email: 'teacher@speaksteps.com', password: 'Teacher@123' },
-  'Patient (New)': { email: 'new@speaksteps.com', password: 'Patient@123' },
-  'Patient (Old)': { email: 'old@speaksteps.com', password: 'Patient@123' },
+  'Student (New)': { email: 'new@speaksteps.com', password: 'Patient@123' },
+  'Student (Returning)': { email: 'old@speaksteps.com', password: 'Patient@123' },
 };
 
 // Extracted role type from TEMP_ACCOUNTS keys
@@ -123,7 +123,7 @@ export default function LoginScreen() {
                   <Image source={require('../../../assets/images/therapist_blue.gif')} style={styles.gifIcon} contentFit="cover" />
                   <View style={styles.roleTextContainer}>
                     <Text style={styles.roleTitle}>Log In as Therapist</Text>
-                    <Text style={styles.roleSubtitle}>Manage patients and activities.</Text>
+                    <Text style={styles.roleSubtitle}>Manage students and activities.</Text>
                   </View>
                   <View style={styles.arrowCircle}>
                     <Text style={styles.arrowText}>›</Text>
@@ -146,7 +146,7 @@ export default function LoginScreen() {
                 <TouchableOpacity style={styles.roleCard} activeOpacity={0.7} onPress={() => router.push('/patient-login' as any)}>
                   <Image source={require('../../../assets/images/kid_yellow.gif')} style={styles.gifIcon} contentFit="cover" />
                   <View style={styles.roleTextContainer}>
-                    <Text style={styles.roleTitle}>Log In as Patient</Text>
+                    <Text style={styles.roleTitle}>Log In as Student</Text>
                     <Text style={styles.roleSubtitle}>Parent / Guardian and Child</Text>
                   </View>
                   <View style={styles.arrowCircle}>

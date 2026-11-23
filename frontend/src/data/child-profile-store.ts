@@ -1,3 +1,5 @@
+import { DEMO_STUDENT_ID } from './learning-workflow';
+import { maximumStudentAge, minimumStudentAge } from './calendar-date';
 /**
  * SpeakSteps - Shared Child Profile Store
  * 
@@ -26,7 +28,7 @@ export const PRESET_CHILD_AVATARS = [
 ];
 
 const DEFAULT_CHILD_PROFILE: ChildProfile = {
-  id: 'child-1',
+  id: DEMO_STUDENT_ID,
   fullName: 'Mia Santos',
   displayName: 'Mia',
   age: 5,
@@ -40,22 +42,22 @@ export const ChildProfileStore = {
   getProfile(): ChildProfile {
     return { ...currentProfile };
   },
-  updateProfile(updates: Partial<ChildProfile>) {
+  updateProfile(updates: Partial<Omit<ChildProfile, 'id'>>) {
     let displayName = updates.displayName || currentProfile.displayName;
     if (updates.fullName && !updates.displayName) {
       const parts = updates.fullName.trim().split(/\s+/);
       displayName = parts[0] || currentProfile.displayName;
     }
 
-    // Validation guard: Minimum age is 5 years old
-    if (updates.age !== undefined && updates.age < 5) {
-      updates.age = 5;
-    }
+    const age = typeof updates.age === 'number' && Number.isInteger(updates.age)
+      ? Math.min(maximumStudentAge, Math.max(minimumStudentAge, updates.age))
+      : currentProfile.age;
 
     currentProfile = {
       ...currentProfile,
       ...updates,
       displayName,
+      age,
     };
 
     listeners.forEach((listener) => listener({ ...currentProfile }));

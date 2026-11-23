@@ -1,3 +1,4 @@
+import { maximumStudentAge, minimumStudentAge } from '@/data/calendar-date';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -39,7 +40,7 @@ export default function ChildProfileScreen() {
   const [nameError, setNameError] = useState('');
 
   const [isEditingAge, setIsEditingAge] = useState(false);
-  const [tempAge, setTempAge] = useState(Math.max(5, profile.age));
+  const [tempAge, setTempAge] = useState(Math.min(maximumStudentAge, Math.max(minimumStudentAge, profile.age)));
 
   // Confirmation Modal State (for both Name and Age changes)
   const [pendingChange, setPendingChange] = useState<{
@@ -107,7 +108,7 @@ export default function ChildProfileScreen() {
   };
 
   const handleOpenAgeEdit = () => {
-    setTempAge(Math.max(5, profile.age));
+    setTempAge(Math.min(maximumStudentAge, Math.max(minimumStudentAge, profile.age)));
     setIsEditingAge(true);
   };
 
@@ -137,7 +138,7 @@ export default function ChildProfileScreen() {
       setIsEditingName(false);
     } else if (pendingChange.type === 'age') {
       const numericAge = parseInt(String(pendingChange.newValue), 10);
-      ChildProfileStore.updateProfile({ age: isNaN(numericAge) ? 5 : numericAge });
+      ChildProfileStore.updateProfile({ age: Number.isNaN(numericAge) ? minimumStudentAge : numericAge });
       setIsEditingAge(false);
     }
 
@@ -370,21 +371,21 @@ export default function ChildProfileScreen() {
             </View>
 
             <Text style={styles.dialogSubtitle}>
-              Adjust your child's age to calibrate recommended activities.
+              Update the age shown in your child's profile.
             </Text>
 
             {/* Stepper Control */}
             <View style={styles.stepperContainer}>
               <TouchableOpacity
-                style={[styles.stepperButton, tempAge <= 5 && styles.stepperButtonDisabled]}
+                style={[styles.stepperButton, tempAge <= minimumStudentAge && styles.stepperButtonDisabled]}
                 activeOpacity={0.7}
-                disabled={tempAge <= 5}
-                onPress={() => setTempAge((prev) => Math.max(5, prev - 1))}
+                disabled={tempAge <= minimumStudentAge}
+                onPress={() => setTempAge((prev) => Math.max(minimumStudentAge, prev - 1))}
               >
                 <Ionicons
                   name="remove"
                   size={26}
-                  color={tempAge <= 5 ? '#B2C8DA' : '#0D68AC'}
+                  color={tempAge <= minimumStudentAge ? '#B2C8DA' : '#0D68AC'}
                 />
               </TouchableOpacity>
 
@@ -394,15 +395,15 @@ export default function ChildProfileScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.stepperButton, tempAge >= 18 && styles.stepperButtonDisabled]}
+                style={[styles.stepperButton, tempAge >= maximumStudentAge && styles.stepperButtonDisabled]}
                 activeOpacity={0.7}
-                disabled={tempAge >= 18}
-                onPress={() => setTempAge((prev) => Math.min(18, prev + 1))}
+                disabled={tempAge >= maximumStudentAge}
+                onPress={() => setTempAge((prev) => Math.min(maximumStudentAge, prev + 1))}
               >
                 <Ionicons
                   name="add"
                   size={26}
-                  color={tempAge >= 18 ? '#B2C8DA' : '#0D68AC'}
+                  color={tempAge >= maximumStudentAge ? '#B2C8DA' : '#0D68AC'}
                 />
               </TouchableOpacity>
             </View>
@@ -411,7 +412,7 @@ export default function ChildProfileScreen() {
             <View style={styles.ageValidationBadge}>
               <Ionicons name="information-circle" size={17} color="#0D68AC" />
               <Text style={styles.ageValidationText}>
-                SpeakSteps activities are designed for speaking children aged 5 and older.
+                SpeakSteps is designed for children aged {minimumStudentAge} to {maximumStudentAge}.
               </Text>
             </View>
 
@@ -544,7 +545,7 @@ export default function ChildProfileScreen() {
             <Text style={styles.dialogSubtitle}>
               {pendingChange?.type === 'name'
                 ? "Are you sure you want to update your child's name? This will be updated across both Parent and Child modes."
-                : "Are you sure you want to update your child's age? Speech therapy activities will be adjusted for this age level."}
+                : "Are you sure you want to update your child's age?"}
             </Text>
 
             <View style={styles.changeComparisonCard}>

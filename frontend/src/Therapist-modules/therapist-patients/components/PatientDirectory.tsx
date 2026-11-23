@@ -39,7 +39,7 @@ export function PatientDirectory() {
           <ChevronLeftIcon color={palette.text} size={18} />
         </Pressable>
         <View style={styles.titleBlock}>
-          <Text style={[styles.title, { color: palette.primary }]}>Patients</Text>
+          <Text style={[styles.title, { color: palette.primary }]}>Students</Text>
           <Text style={[styles.subtitle, { color: palette.muted }]}>Track sound targets & case histories</Text>
         </View>
       </View>
@@ -89,7 +89,7 @@ export function PatientDirectory() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
         {visible.length === 0 ? (
-          <Text style={[styles.empty, { color: palette.muted }]}>No patients match this search.</Text>
+          <Text style={[styles.empty, { color: palette.muted }]}>No students match this search.</Text>
         ) : (
           visible.map((patient) => <PatientCard key={patient.id} patient={patient} />)
         )}

@@ -11,7 +11,7 @@
 import { MOCK_PATIENT_DASHBOARD } from './patient-dashboard-mock';
 import { MOCK_STARS_DATA } from './stars-mock';
 
-export type ActivityCategory = 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
+export type ActivityCategory = 'Sound' | 'Syllables' | 'Words' | 'Phrases' | 'Sentences';
 export type ActivityStatus = 'pending' | 'completed';
 
 export interface AssignedActivity {
@@ -22,8 +22,13 @@ export interface AssignedActivity {
   assignedBy: string;
   status: ActivityStatus;
   completedDate?: string;
+  dueDate?: string;
+  linked?: boolean;
+  submitted?: boolean;
   thumbnail: any;
   description?: string;
+  guidance?: string;
+  source?: 'Therapist' | 'Teacher';
   attempts: number;
   bestScore: string;
   stars: string;
@@ -42,7 +47,7 @@ export const INITIAL_ASSIGNED_ACTIVITIES: AssignedActivity[] = [
     id: 'task-1',
     title: 'baa',
     level: 'Level 1 • Sounds',
-    category: 'Sounds',
+    category: 'Sound',
     assignedBy: 'Teacher Anna',
     status: 'completed',
     completedDate: 'Nov 4, 2026',
@@ -56,7 +61,7 @@ export const INITIAL_ASSIGNED_ACTIVITIES: AssignedActivity[] = [
     id: 'task-2',
     title: 'baa',
     level: 'Level 1 • Sounds',
-    category: 'Sounds',
+    category: 'Sound',
     assignedBy: 'Doc. Tere',
     status: 'pending',
     thumbnail: require('../../assets/images/sheep.png'),

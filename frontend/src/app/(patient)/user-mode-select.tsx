@@ -1,3 +1,4 @@
+import { PatientPressable } from '@/components/patient-pressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -9,12 +10,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
 
 import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
+import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
 import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
 
 export default function UserModeSelectScreen() {
@@ -28,6 +29,7 @@ export default function UserModeSelectScreen() {
   });
 
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
+  const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export default function UserModeSelectScreen() {
   };
 
   const handleSelectParentMode = () => {
+    setIsGrownUpModalVisible(false);
     if (router.canDismiss()) {
       router.dismissAll();
     }
@@ -90,9 +93,8 @@ export default function UserModeSelectScreen() {
                   ===================================================================== */}
               <View style={styles.cardContainer}>
                 {/* 1. CHILD MODE CARD (Soft Golden / Apricot) */}
-                <TouchableOpacity
+                <PatientPressable
                   style={[styles.modeCard, styles.childCard]}
-                  activeOpacity={0.88}
                   onPress={handleSelectChildMode}
                   accessibilityRole="button"
                   accessibilityLabel="Child Mode, Play and Practice"
@@ -107,13 +109,12 @@ export default function UserModeSelectScreen() {
 
                   <Text style={styles.modeCardTitle}>Child Mode</Text>
                   <Text style={styles.modeCardSubtitle}>Play & Practice</Text>
-                </TouchableOpacity>
+                </PatientPressable>
 
                 {/* 2. PARENT/GUARDIAN CARD (Soft Powder Blue) */}
-                <TouchableOpacity
+                <PatientPressable
                   style={[styles.modeCard, styles.parentCard]}
-                  activeOpacity={0.88}
-                  onPress={handleSelectParentMode}
+                  onPress={() => setIsGrownUpModalVisible(true)}
                   accessibilityRole="button"
                   accessibilityLabel="Parent and Guardian Mode, Track practice and Monitor Children"
                 >
@@ -127,25 +128,28 @@ export default function UserModeSelectScreen() {
 
                   <Text style={styles.modeCardTitle}>Parent/Guardian</Text>
                   <Text style={styles.modeCardSubtitle}>Track practice & Monitor Children</Text>
-                </TouchableOpacity>
+                </PatientPressable>
               </View>
 
               {/* =====================================================================
                   LOG OUT ACTION BUTTON
                   ===================================================================== */}
-              <TouchableOpacity
+              <PatientPressable
                 style={styles.logoutButton}
-                activeOpacity={0.85}
                 onPress={() => setIsSignOutModalVisible(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Log Out"
               >
                 <Text style={styles.logoutButtonText}>Log Out</Text>
-              </TouchableOpacity>
+              </PatientPressable>
             </View>
           </ScrollView>
 
-          {/* Sign Out Confirmation Modal */}
+          <GrownUpCheckModal
+            visible={isGrownUpModalVisible}
+            onClose={() => setIsGrownUpModalVisible(false)}
+            onSuccess={handleSelectParentMode}
+          />
           <SignOutConfirmModal
             visible={isSignOutModalVisible}
             onConfirm={handleConfirmSignOut}

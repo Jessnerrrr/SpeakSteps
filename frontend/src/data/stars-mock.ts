@@ -7,12 +7,12 @@
  */
 
 export interface CategoryProgress {
-  id: 'sounds' | 'words' | 'phrases' | 'sentences';
+  id: 'sounds' | 'syllables' | 'words' | 'phrases' | 'sentences';
   title: string;
   completed: number;
   total: number;
   badgeBgColor: string;
-  iconType: 'sounds' | 'words' | 'phrases' | 'sentences';
+  iconType: CategoryProgress['id'];
 }
 
 export interface StarsScreenData {
@@ -33,11 +33,19 @@ export const MOCK_STARS_DATA: StarsScreenData = {
   categories: [
     {
       id: 'sounds',
-      title: 'Sounds',
+      title: 'Sound',
       completed: 1,
       total: 6,
       badgeBgColor: '#4DAEEB',
       iconType: 'sounds',
+    },
+    {
+      id: 'syllables',
+      title: 'Syllables',
+      completed: 0,
+      total: 6,
+      badgeBgColor: '#338BB5',
+      iconType: 'syllables',
     },
     {
       id: 'words',

@@ -38,11 +38,13 @@ export function ParentBottomNav({ activeTab = 'home' }: ParentBottomNavProps) {
         return (
           <TouchableOpacity
             key={tab.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
             style={styles.tabItem}
             activeOpacity={0.7}
             onPress={() => {
               if (!isActive && tab.route) {
-                router.push(tab.route as any);
+                router.navigate(tab.route as any);
               }
             }}
           >

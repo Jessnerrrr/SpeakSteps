@@ -17,7 +17,6 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -37,7 +36,7 @@ export interface AnchorRect {
   height: number;
 }
 
-type ParentFilter = 'all' | 'unread';
+type NotificationFilter = 'all' | 'unread';
 
 interface NotificationBellIconProps {
   unreadCount: number;
@@ -91,7 +90,7 @@ export function NotificationPopover({
   const [childDisplayName, setChildDisplayName] = useState<string>(
     () => ChildProfileStore.getProfile().displayName
   );
-  const [parentFilter, setParentFilter] = useState<ParentFilter>('all');
+  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>('all');
   const [reduceMotion, setReduceMotion] = useState(false);
 
   const [entranceAnim] = useState(() => new Animated.Value(0));
@@ -135,7 +134,7 @@ export function NotificationPopover({
 
   useEffect(() => {
     if (!visible) {
-      setParentFilter('all');
+      setNotificationFilter('all');
       entranceAnim.setValue(0);
       return;
     }
@@ -172,11 +171,11 @@ export function NotificationPopover({
   const unreadCount = notifications.filter((item) => !item.read).length;
 
   const displayedItems =
-    !isChild && parentFilter === 'unread'
+    notificationFilter === 'unread'
       ? notifications.filter((item) => !item.read)
       : notifications;
 
-  const popoverWidth = Math.min(width - 28, isTablet ? 430 : 376);
+  const popoverWidth = Math.min(width - 28, isTablet ? 360 : 330);
   const bellWidth = anchorRect?.width ?? 32;
   const bellHeight = anchorRect?.height ?? 32;
 
@@ -292,203 +291,62 @@ export function NotificationPopover({
             </Svg>
           </View>
 
-          {/* Header Row */}
           <View style={styles.popoverHeader}>
-            <View style={styles.popoverTitleGroup}>
-              <View style={styles.headerBellGlyph}>
-                <Ionicons
-                  name="notifications-outline"
-                  size={isChild ? 23 : 21}
-                  color="#F5A623"
-                />
-                {unreadCount > 0 && <View style={styles.headerBellDot} />}
-              </View>
-              <Text style={[styles.popoverTitle, !isChild && styles.popoverTitleParent]}>
-                Notifications
-              </Text>
-              {!isChild && unreadCount > 0 && (
-                <View style={styles.newCountPill}>
-                  <Text style={styles.newCountPillText}>{unreadCount} new</Text>
-                </View>
-              )}
+            <Text accessibilityRole="header" style={styles.popoverTitle}>Notifications</Text>
+            <View style={styles.filterPillsGroup}>
+              {(['all', 'unread'] as const).map((filter) => (
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.filterPill, notificationFilter === filter && styles.filterPillActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: notificationFilter === filter }}
+                  onPress={() => setNotificationFilter(filter)}
+                >
+                  <Text style={[styles.filterPillText, notificationFilter === filter && styles.filterPillTextActive]}>
+                    {filter === 'all' ? 'All' : 'Unread'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-
-            <TouchableOpacity
-              style={styles.closeButton}
-              activeOpacity={0.75}
-              onPress={onClose}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Close notifications"
-            >
-              <Ionicons name="close" size={23} color="#0D68AC" />
+            <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close notifications">
+              <Ionicons name="close" size={20} color="#0D68AC" />
             </TouchableOpacity>
           </View>
 
-          {/* Parent Filter & Mark All Read Bar */}
-          {!isChild && (
-            <View style={styles.parentControlsRow}>
-              <View style={styles.filterPillsGroup}>
-                <TouchableOpacity
-                  style={[
-                    styles.filterPill,
-                    parentFilter === 'all' && styles.filterPillActive,
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={() => setParentFilter('all')}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: parentFilter === 'all' }}
-                >
-                  <Text
-                    style={[
-                      styles.filterPillText,
-                      parentFilter === 'all' && styles.filterPillTextActive,
-                    ]}
-                  >
-                    All ({notifications.length})
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.filterPill,
-                    parentFilter === 'unread' && styles.filterPillActive,
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={() => setParentFilter('unread')}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: parentFilter === 'unread' }}
-                >
-                  <Text
-                    style={[
-                      styles.filterPillText,
-                      parentFilter === 'unread' && styles.filterPillTextActive,
-                    ]}
-                  >
-                    Unread ({unreadCount})
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {unreadCount > 0 ? (
-                <TouchableOpacity
-                  style={styles.markAllBtn}
-                  activeOpacity={0.75}
-                  onPress={() => PatientNotificationsStore.markAllAsRead('parent')}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mark all notifications as read"
-                >
-                  <Ionicons name="checkmark-done" size={14} color="#0D68AC" />
-                  <Text style={styles.markAllBtnText}>Mark all read</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.caughtUpChip}>
-                  <Ionicons name="checkmark-circle" size={14} color="#2E7D32" />
-                  <Text style={styles.caughtUpChipText}>All read</Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Notification Items List */}
-          <ScrollView
-            style={{ maxHeight: listMaxHeight }}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView style={{ maxHeight: listMaxHeight }} showsVerticalScrollIndicator={false}>
             {displayedItems.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Image
-                  source={require('../../assets/images/star-3d.png')}
-                  style={styles.emptyImage}
-                  contentFit="contain"
-                />
-                <Text style={styles.emptyTitle}>You&apos;re all caught up!</Text>
-                <Text style={styles.emptySubtitle}>
-                  No unread notifications for {childDisplayName}&apos;s account.
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyActionBtn}
-                  activeOpacity={0.85}
-                  onPress={() => setParentFilter('all')}
-                >
-                  <Text style={styles.emptyActionBtnText}>Show all notifications</Text>
-                </TouchableOpacity>
+                <Text style={styles.emptyTitle}>You're all caught up!</Text>
+                <Text style={styles.emptySubtitle}>No {notificationFilter === 'unread' ? 'unread ' : ''}notifications for {childDisplayName}.</Text>
               </View>
-            ) : (
-              displayedItems.map((item) => {
-                const isUnread = !item.read;
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.itemCard,
-                      isUnread
-                        ? isChild
-                          ? styles.itemCardUnreadChild
-                          : styles.itemCardUnreadParent
-                        : isChild
-                          ? styles.itemCardReadChild
-                          : styles.itemCardReadParent,
-                    ]}
-                    activeOpacity={0.82}
-                    onPress={() => handleNotificationPress(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${item.title}. ${item.message}${isUnread ? '. Unread' : ''}`}
-                  >
-                    <View
-                      style={[
-                        styles.itemAvatarBadge,
-                        isChild
-                          ? styles.itemAvatarBadgeChild
-                          : isUnread
-                            ? styles.itemAvatarBadgeParentUnread
-                            : styles.itemAvatarBadgeParentRead,
-                      ]}
-                    >
-                      <Image
-                        source={item.badgeImage}
-                        style={styles.itemBadgeImage}
-                        contentFit="contain"
-                      />
-                    </View>
-
-                    <View style={styles.itemTextColumn}>
-                      <View style={styles.itemTitleRow}>
-                        <Text style={styles.itemTitle}>{item.title}</Text>
-                        {isUnread && <View style={styles.itemUnreadDot} />}
-                      </View>
-
-                      <Text style={styles.itemMessage}>{item.message}</Text>
-
-                      {!isChild && (item.timeLabel || item.actionHint) && (
-                        <View style={styles.itemMetaRow}>
-                          {item.timeLabel ? (
-                            <Text style={styles.itemTimeLabel}>{item.timeLabel}</Text>
-                          ) : (
-                            <View />
-                          )}
-                          {item.actionHint && (
-                            <View style={styles.itemActionHint}>
-                              <Text style={styles.itemActionHintText}>
-                                {item.actionHint}
-                              </Text>
-                              <Ionicons
-                                name="chevron-forward"
-                                size={12}
-                                color="#0D68AC"
-                              />
-                            </View>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
-            )}
+            ) : displayedItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.itemCard}
+                activeOpacity={0.82}
+                onPress={() => handleNotificationPress(item)}
+                accessibilityRole="button"
+                accessibilityLabel={item.title + '. ' + item.message + (item.read ? '' : '. Unread')}
+              >
+                <View style={styles.itemTextColumn}>
+                  <View style={styles.itemTitleRow}>
+                    {!item.read && <View style={styles.itemUnreadDot} />}
+                    <Text style={styles.itemTitle}>{item.title}</Text>
+                  </View>
+                  <Text style={styles.itemMessage}>{item.message}</Text>
+                </View>
+                {item.timeLabel ? <Text style={styles.itemTimeLabel}>{item.timeLabel}</Text> : null}
+              </TouchableOpacity>
+            ))}
           </ScrollView>
+          <TouchableOpacity
+            style={[styles.markAllBtn, unreadCount === 0 && styles.markAllDisabled]}
+            onPress={() => PatientNotificationsStore.markAllAsRead(audience)}
+            accessibilityRole="button"
+            disabled={unreadCount === 0}
+          >
+            <Text style={styles.markAllBtnText}>{unreadCount === 0 ? 'All caught up' : 'Mark All as Read'}</Text>
+          </TouchableOpacity>
         </Animated.View>
       </View>
     </Modal>
@@ -705,55 +563,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 8,
     paddingHorizontal: 2,
-  },
-  popoverTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  headerBellGlyph: {
-    position: 'relative',
-    width: 26,
-    height: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerBellDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#F97316',
-    borderWidth: 1.2,
-    borderColor: '#FFFFFF',
   },
   popoverTitle: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 21,
     color: '#0D68AC',
     letterSpacing: -0.2,
-    includeFontPadding: false,
-  },
-  popoverTitleParent: {
-    fontSize: 20,
-  },
-  newCountPill: {
-    backgroundColor: '#FFF3C4',
-    borderWidth: 1,
-    borderColor: '#F5A623',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  newCountPillText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 11,
-    color: '#8D4E00',
     includeFontPadding: false,
   },
   closeButton: {
@@ -764,14 +582,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  parentControlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 10,
-    paddingHorizontal: 2,
-  },
   filterPillsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -802,103 +612,30 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   markAllBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#C2DFF4',
+    justifyContent: 'center',
+    minHeight: 40,
+    marginTop: 8,
+    borderRadius: 10,
+    backgroundColor: '#EDF7FE',
   },
+  markAllDisabled: { opacity: 0.65 },
   markAllBtnText: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11.5,
     color: '#0D68AC',
     includeFontPadding: false,
   },
-  caughtUpChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  caughtUpChipText: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 11.5,
-    color: '#2E7D32',
-    includeFontPadding: false,
-  },
 
-  listContent: {
-    gap: 10,
-    paddingBottom: 2,
-  },
   itemCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    gap: 12,
-    minHeight: 68,
-  },
-  itemCardUnreadChild: {
-    backgroundColor: '#FFF7C8',
-    borderWidth: 2,
-    borderColor: '#0D68AC',
-    borderBottomWidth: 3.5,
-  },
-  itemCardReadChild: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#4B96CC',
-    borderBottomWidth: 3,
-  },
-  itemCardUnreadParent: {
-    backgroundColor: '#FFF9DC',
-    borderWidth: 1.5,
-    borderColor: '#0D68AC',
-    borderBottomWidth: 3,
-  },
-  itemCardReadParent: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#CBE2F4',
-    borderBottomWidth: 2.5,
+    alignItems: 'flex-start',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DCEBF6',
+    paddingVertical: 10,
   },
 
-  itemAvatarBadge: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  itemAvatarBadgeChild: {
-    borderRadius: 24,
-    backgroundColor: '#FFF2BC',
-    borderWidth: 1.5,
-    borderColor: '#E1C067',
-  },
-  itemAvatarBadgeParentUnread: {
-    borderRadius: 16,
-    backgroundColor: '#FFF1BE',
-    borderWidth: 1.2,
-    borderColor: '#E7CA78',
-  },
-  itemAvatarBadgeParentRead: {
-    borderRadius: 16,
-    backgroundColor: '#EFF7FD',
-    borderWidth: 1.2,
-    borderColor: '#D2E6F5',
-  },
-  itemBadgeImage: {
-    width: 36,
-    height: 36,
-  },
 
   itemTextColumn: {
     flex: 1,
@@ -930,27 +667,10 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 1,
   },
-  itemMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    gap: 8,
-  },
   itemTimeLabel: {
     fontFamily: 'SourGummy-Medium',
     fontSize: 11,
     color: '#4E7494',
-  },
-  itemActionHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  itemActionHintText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 11.5,
-    color: '#0D68AC',
   },
 
   emptyCard: {
@@ -961,11 +681,6 @@ const styles = StyleSheet.create({
     paddingVertical: 22,
     paddingHorizontal: 16,
     alignItems: 'center',
-  },
-  emptyImage: {
-    width: 44,
-    height: 44,
-    marginBottom: 8,
   },
   emptyTitle: {
     fontFamily: 'SourGummy-Bold',
@@ -979,16 +694,5 @@ const styles = StyleSheet.create({
     color: '#254F73',
     textAlign: 'center',
     marginBottom: 12,
-  },
-  emptyActionBtn: {
-    backgroundColor: '#0D68AC',
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  emptyActionBtnText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 12.5,
-    color: '#FFFFFF',
   },
 });

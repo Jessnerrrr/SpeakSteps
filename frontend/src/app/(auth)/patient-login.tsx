@@ -133,7 +133,7 @@ export default function PatientLoginScreen() {
                   >
                     <Text style={styles.backIcon}>‹</Text>
                   </TouchableOpacity>
-                  <Text style={styles.headerText}>Patient login</Text>
+                  <Text style={styles.headerText}>Student login</Text>
                 </View>
 
                 {/* Patient Kid GIF Icon */}
@@ -143,7 +143,7 @@ export default function PatientLoginScreen() {
                   contentFit="cover"
                 />
 
-                <Text style={styles.welcomeText}>Patient sign in</Text>
+                <Text style={styles.welcomeText}>Student sign in</Text>
                 <Text style={styles.subText}>Welcome back! Sign in to start practicing.</Text>
 
                 {/* Email Input */}

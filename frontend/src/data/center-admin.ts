@@ -1,3 +1,4 @@
+import { CENTER_NAME } from '@/data/center-name';
 export type ProfessionalRole = 'Therapist' | 'Teacher';
 export type ProfessionalStatus = 'Active' | 'Suspended' | 'Deactivated';
 export type InvitationStatus = 'Not sent' | 'Pending' | 'Expired' | 'Completed';
@@ -259,7 +260,7 @@ export const initialNotifications: AdminNotification[] = [
 ];
 
 export const centerProfile = {
-  name: 'Headway School for Giftedness',
+  name: CENTER_NAME,
   email: 'admin@headwayschool.example',
   phone: '+63 2 8123 4567',
   address: '18 Orchard Lane, Quezon City, Philippines',

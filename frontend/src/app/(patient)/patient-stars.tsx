@@ -1,3 +1,4 @@
+import { PatientPressable } from '@/components/patient-pressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -17,18 +18,13 @@ import {
 } from 'react-native';
 
 // FIXED IMPORTS: 2 levels up to reach src/components and src/data
+import { PARTICIPATION_STARS, usePracticeSubmissions } from '../../data/practice-submissions';
 import { MOCK_STARS_DATA } from '../../data/stars-mock';
+import { AdventureIcon } from '@/components/adventure-icon';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
 import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
 import { NotificationBellButton } from '../../components/notification-popover';
 import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
-
-const ADVENTURE_ICONS: Record<string, any> = {
-  sounds: require('../../../assets/images/adventure-sounds.png'),
-  words: require('../../../assets/images/adventure-words.png'),
-  phrases: require('../../../assets/images/adventure-phrases.png'),
-  sentences: require('../../../assets/images/adventure-sentences.png'),
-};
 
 export default function PatientStarsScreen() {
   const { width } = useWindowDimensions();
@@ -41,7 +37,8 @@ export default function PatientStarsScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [data] = useState(MOCK_STARS_DATA);
+  const data = MOCK_STARS_DATA;
+  const submissions = usePracticeSubmissions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
@@ -49,7 +46,7 @@ export default function PatientStarsScreen() {
   if (!fontsLoaded) return null;
 
   const totalProgressPercentage =
-    (data.totalActivitiesCompleted / data.totalActivitiesTarget) * 100;
+    Math.min(100, (submissions.length / data.totalActivitiesTarget) * 100);
 
   return (
     <>
@@ -104,7 +101,7 @@ export default function PatientStarsScreen() {
               <LinearGradient colors={['#106AB0', '#2A8AC8', '#4DB3E9']} locations={[0, 0.45, 1]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.collectingStarsCard}>
                 <Text style={styles.collectingStarsTitle}>COLLECTING STARS</Text>
                 <View style={styles.starNumberRow}>
-                  <Text style={styles.starNumberText}>{data.totalStarsEarned}</Text>
+                  <Text style={styles.starNumberText}>{submissions.length * PARTICIPATION_STARS}</Text>
                   {/* FIXED IMAGE PATH */}
                   <Image source={require('../../../assets/images/speaksteps_star_3d.gif')} style={styles.starAssetImage} contentFit="contain" />
                 </View>
@@ -122,27 +119,19 @@ export default function PatientStarsScreen() {
 
               <View style={styles.categoriesList}>
                 {data.categories.map((cat) => {
-                  const catPercentage = (cat.completed / cat.total) * 100;
+                  const completed = submissions.filter((activity) => activity.category === cat.id).length;
+                  const catPercentage = (completed / cat.total) * 100;
                   return (
-                    <TouchableOpacity
+                    <PatientPressable
                       key={cat.id}
                       style={styles.categoryCard}
-                      activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`${cat.title} activity, ${cat.completed} of ${cat.total} done`}
-                      onPress={() =>
-                        router.push(
-                          (cat.id === 'sentences' ? '/sentences' : '/practice') as any,
-                        )
-                      }
+                      accessibilityLabel={`${cat.title} activity, ${completed} done`}
+                      onPress={() => router.push({ pathname: '/sentences', params: { category: cat.iconType } })}
                     >
                       <View style={styles.categoryCardHeader}>
                         <View style={[styles.categoryBadge, { backgroundColor: cat.badgeBgColor }]}>
-                          <Image
-                            source={ADVENTURE_ICONS[cat.iconType] || ADVENTURE_ICONS[cat.id]}
-                            style={styles.categoryBadgeIcon}
-                            contentFit="contain"
-                          />
+                          <AdventureIcon type={cat.iconType} size={22} />
                         </View>
                         <Text style={styles.categoryTitle}>{cat.title}</Text>
                         <Ionicons name="chevron-forward" size={16} color="#B6D7F2" style={styles.categoryChevron} />
@@ -150,8 +139,8 @@ export default function PatientStarsScreen() {
                       <View style={styles.categoryProgressTrack}>
                         <View style={[styles.categoryProgressFill, { width: `${Math.min(catPercentage, 100)}%` }]} />
                       </View>
-                      <Text style={styles.categoryCounterText}>{cat.completed}/{cat.total} done</Text>
-                    </TouchableOpacity>
+                      <Text style={styles.categoryCounterText}>{completed} done</Text>
+                    </PatientPressable>
                   );
                 })}
               </View>
@@ -209,9 +198,6 @@ const styles = StyleSheet.create({
   categoryCard: { backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1.5, borderColor: '#C7DFEE', borderBottomWidth: 4, borderBottomColor: '#B6D7F2', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
   categoryCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   categoryBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 2, elevation: 2 },
-  categoryBadgeIcon: { width: 22, height: 22 },
-  categoryAaText: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#FFFFFF' },
-  categoryQuotesText: { fontSize: 13, color: '#FFFFFF', fontWeight: 'bold' },
   categoryTitle: { fontFamily: 'SourGummy-Bold', fontSize: 15, color: '#0D68AC', marginLeft: 10 },
   categoryChevron: { marginLeft: 'auto' },
   categoryProgressTrack: { width: '100%', height: 10, backgroundColor: '#D8ECFA', borderRadius: 6, overflow: 'hidden', marginBottom: 6 },

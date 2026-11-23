@@ -24,7 +24,13 @@ import {
 } from 'lucide-react-native';
 
 import { TherapistShell } from '@/components/therapist/TherapistShell';
+import { TherapistChecklistFilter } from '@/components/therapist/TherapistChecklistFilter';
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { practiceLevels } from '@/data/practice-levels';
+import { matchesPracticeLanguage, PRACTICE_LANGUAGES } from '@/types/sentences';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
+import { useActivities } from '@/Therapist-modules/therapist-activities/state/ActivitiesProvider';
+import { patientName } from '@/Therapist-modules/therapist-patients/data/samplePatients';
 import { useReviews } from '@/Therapist-modules/therapist-reviews/state/ReviewsProvider';
 import type { ReviewRecord, ReviewStatus, ReviewTarget, WordPosition } from '@/Therapist-modules/therapist-reviews/data/reviewData';
 import {
@@ -61,18 +67,19 @@ function AudioCard({ title, meta }: { title: string; meta: string }) {
 // ─── Status Pill Component ───────────────────────────────────────────────────
 
 function StatusPill({ status }: { status: ReviewStatus }) {
+  const { isDark } = useTherapist();
   const reviewed = status === 'Reviewed';
   return (
     <View
       style={[
         reviewStyles.pill,
         {
-          backgroundColor: reviewed ? '#DCFCE7' : '#FEF3C7',
-          borderColor: reviewed ? '#BBF7D0' : '#FDE68A',
+          backgroundColor: reviewed ? (isDark ? '#16332B' : '#EFF7F3') : (isDark ? '#392D1C' : '#FFF7E6'),
+          borderColor: reviewed ? (isDark ? '#285042' : '#D6E9DE') : (isDark ? '#574327' : '#F1E0B9'),
         },
       ]}
     >
-      <Text style={[reviewStyles.pillText, { color: reviewed ? '#16A34A' : '#D97706' }]}>{status}</Text>
+      <Text style={[reviewStyles.pillText, { color: reviewed ? (isDark ? '#A4D9BE' : '#2B654D') : (isDark ? '#F6D38F' : '#805615') }]}>{status}</Text>
     </View>
   );
 }
@@ -80,15 +87,60 @@ function StatusPill({ status }: { status: ReviewStatus }) {
 // ─── 1. Reviews Main List Screen ─────────────────────────────────────────────
 
 const filters = ['All', 'Pending', 'Reviewed'] as const;
+const studentSortOptions = ['A–Z', 'Z–A'] as const;
 
 export function ReviewList() {
-  const { palette, isDark } = useTherapist();
+  const { palette, patients } = useTherapist();
   const { reviews } = useReviews();
+  const { activities } = useActivities();
   const [filter, setFilter] = useState<(typeof filters)[number]>('All');
+  const [activityFilters, setActivityFilters] = useState<string[]>([]);
+  const [studentFilters, setStudentFilters] = useState<string[]>([]);
+  const [languageFilters, setLanguageFilters] = useState<string[]>([]);
+  const [levelFilters, setLevelFilters] = useState<string[]>([]);
+  const [studentSort, setStudentSort] = useState<(typeof studentSortOptions)[number]>('A–Z');
 
-  const visible = useMemo(
-    () => (filter === 'All' ? reviews : reviews.filter((review) => review.status === filter)),
-    [filter, reviews],
+  const activityOptions = [...new Set([...activities.map(({ title }) => title), ...reviews.map(({ activity }) => activity)])]
+    .sort((first, second) => first.localeCompare(second));
+  const activityCaptions = new Map<string, string>();
+  for (const item of activities) {
+    const caption = item.language + ' · ' + item.level;
+    const previous = activityCaptions.get(item.title);
+    if (!previous) activityCaptions.set(item.title, caption);
+    else if (!previous.includes(caption)) activityCaptions.set(item.title, previous + ' / ' + caption);
+  }
+  const compareStudents = (first: string, second: string) => studentSort === 'A–Z' ? first.localeCompare(second) : second.localeCompare(first);
+  const studentOptions = [...new Set([...patients.map(patientName), ...reviews.map(({ student }) => student)])].sort(compareStudents);
+  const visibleReviews = useMemo(() => reviews.filter((review) =>
+    (filter === 'All' || filter === review.status) &&
+    (!activityFilters.length || activityFilters.includes(review.activity)) &&
+    (!studentFilters.length || studentFilters.includes(review.student)) &&
+    matchesPracticeLanguage(review.language, languageFilters[0]) &&
+    (!levelFilters.length || levelFilters.includes(review.level)),
+  ).sort((first, second) =>
+    first.activity.localeCompare(second.activity) ||
+    first.level.localeCompare(second.level) ||
+    (first.language ?? '').localeCompare(second.language ?? '') ||
+    (studentSort === 'A–Z' ? first.student.localeCompare(second.student) : second.student.localeCompare(first.student)),
+  ), [activityFilters, filter, languageFilters, levelFilters, reviews, studentFilters, studentSort]);
+  const pagination = useListPagination(visibleReviews.length, 8, JSON.stringify([filter, activityFilters, studentFilters, languageFilters, levelFilters, studentSort]));
+  const groups = new Map<string, ReviewRecord[]>();
+  for (const review of visibleReviews.slice(pagination.start, pagination.end)) {
+    const key = JSON.stringify([review.activity, review.level, review.language]);
+    const group = groups.get(key);
+    if (group) group.push(review);
+    else groups.set(key, [review]);
+  }
+  const studentOrder = (
+    <View style={reviewStyles.sortRow}>
+      <Text style={[reviewStyles.meta, { color: palette.text }]}>Sort by student name</Text>
+      {studentSortOptions.map((option) => (
+        <Pressable key={option} accessibilityRole="radio" accessibilityState={{ checked: option === studentSort }}
+          onPress={() => setStudentSort(option)} style={[reviewStyles.sortButton, { borderColor: option === studentSort ? palette.primary : palette.line }]}>
+          <Text style={[reviewStyles.meta, { color: palette.text }]}>{option}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 
   return (
@@ -101,7 +153,7 @@ export function ReviewList() {
         {filters.map((item) => {
           const selected = item === filter;
           return (
-            <Pressable key={item} accessibilityRole="button" onPress={() => setFilter(item)}>
+            <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setFilter(item)}>
               <Text
                 style={[
                   reviewStyles.tab,
@@ -118,31 +170,48 @@ export function ReviewList() {
         })}
       </View>
 
+      <View style={reviewStyles.filterRow}>
+        <TherapistChecklistFilter label="Filter reviews" sectionLabel="Activities" options={activityOptions} selected={activityFilters}
+          onChange={setActivityFilters} emptyLabel="All activities" allLabel="All activities" compact resetOnAll searchable optionCaptions={activityCaptions}
+          extraSections={[
+            { label: 'Language', options: PRACTICE_LANGUAGES, selected: languageFilters, onChange: setLanguageFilters, allLabel: 'All languages', single: true },
+            { label: 'Level', options: practiceLevels, selected: levelFilters, onChange: setLevelFilters, allLabel: 'All levels' },
+            { label: 'Students', options: studentOptions, selected: studentFilters, onChange: setStudentFilters, allLabel: 'All students', headerContent: studentOrder },
+          ]} />
+      </View>
+
       <View style={reviewStyles.list}>
-        {visible.map((review) => (
-          <Pressable
-            key={review.id}
-            accessibilityRole="button"
-            onPress={() => router.push(`/therapist/reviews/${review.id}` as never)}
-            style={[reviewStyles.card, { borderColor: palette.line, backgroundColor: palette.card }]}
-          >
-            <View style={[reviewStyles.avatar, { backgroundColor: review.avatar || '#E0F2FE' }]}>
-              <Text style={reviewStyles.initial}>{review.initial}</Text>
+        {[...groups].map(([key, group]) => (
+          <View key={key} style={reviewStyles.activityGroup}>
+            <View style={[reviewStyles.groupHeading, { borderBottomColor: palette.line }]}>
+              <Text accessibilityRole="header" style={[reviewStyles.name, { color: palette.text }]}>{group[0].activity}</Text>
+              <Text style={[reviewStyles.meta, { color: palette.muted }]}>{group[0].language || 'Language unspecified'} · {group[0].level}</Text>
             </View>
-            <View style={reviewStyles.copy}>
-              <Text style={[reviewStyles.name, { color: palette.text }]}>{review.student}</Text>
-              <Text style={[reviewStyles.meta, { color: palette.faint }]}>
-                {review.activity} · {review.level}
-              </Text>
-            </View>
-            <StatusPill status={review.status} />
-            <ChevronRight color={palette.faint} size={16} />
-          </Pressable>
+            {group.map((review) => (
+              <Pressable
+                key={review.id}
+                accessibilityRole="button"
+                onPress={() => router.push(`/therapist/reviews/${review.id}` as never)}
+                style={[reviewStyles.card, { borderColor: palette.line, backgroundColor: palette.card }]}
+              >
+                <View style={[reviewStyles.avatar, { backgroundColor: review.avatar || '#E0F2FE' }]}>
+                  <Text style={reviewStyles.initial}>{review.initial}</Text>
+                </View>
+                <View style={reviewStyles.copy}>
+                  <Text style={[reviewStyles.name, { color: palette.text }]}>{review.student}</Text>
+                  {!review.assignmentId && <Text style={[reviewStyles.meta, { color: palette.muted }]}>Demo review</Text>}
+                </View>
+                <StatusPill status={review.status} />
+                <ChevronRight color={palette.faint} size={16} />
+              </Pressable>
+            ))}
+          </View>
         ))}
-        {visible.length === 0 ? (
-          <Text style={[reviewStyles.empty, { color: palette.muted }]}>No {filter.toLowerCase()} reviews.</Text>
+        {groups.size === 0 ? (
+          <Text style={[reviewStyles.empty, { color: palette.muted }]}>No reviews match these filters.</Text>
         ) : null}
       </View>
+      <ListPagination {...pagination} total={visibleReviews.length} noun="reviews" accent={palette.primary} muted={palette.muted} border={palette.line} surface={palette.card} />
     </ScrollView>
   );
 }
@@ -151,7 +220,7 @@ export function ReviewList() {
 
 export function RecordingReview({ reviewId }: { reviewId: string }) {
   const navigation = useNavigation();
-  const { palette, isDark } = useTherapist();
+  const { palette, isDark, showActionNotice } = useTherapist();
   const { reviews, updateReview, updateTarget, saveEvaluation } = useReviews();
   const review = reviews.find((item) => item.id === reviewId);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -212,11 +281,9 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
             <Text style={reviewStyles.heroInitial}>{review.initial}</Text>
           </View>
           <View style={{ flex: 1, gap: 4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={[reviewStyles.heroStudentName, { color: palette.text }]}>{review.student}</Text>
+            <Text style={[reviewStyles.heroStudentName, { color: palette.text }]}>{review.student}</Text>
+            <View style={reviewStyles.heroMetadata}>
               <StatusPill status={review.status} />
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
               <View style={[reviewStyles.pillTag, { backgroundColor: isDark ? '#082F49' : '#E0F2FE' }]}>
                 <Text style={[reviewStyles.pillTagText, { color: '#0284C7' }]}>{review.activity}</Text>
               </View>
@@ -227,6 +294,18 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
           </View>
         </View>
 
+        {review.assignmentId ? (
+          review.practicePrompts?.length ? (
+            <View style={{ marginTop: 12, gap: 4 }}>
+              <Text style={[reviewStyles.inputLabel, { color: palette.text }]}>Practice prompts</Text>
+              {review.practicePrompts.map((prompt, index) => (
+                <Text key={index} style={[reviewStyles.meta, { color: palette.muted }]}>
+                  {prompt.position ? prompt.position + ' · ' : ''}{prompt.text}
+                </Text>
+              ))}
+            </View>
+          ) : null
+        ) : <>
         <View style={[reviewStyles.heroDivider, { backgroundColor: palette.line }]} />
 
         {/* 3-column Clinical Metrics */}
@@ -247,7 +326,7 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
               <Text style={[reviewStyles.metricLabel, { color: palette.faint }]}>Average</Text>
             </View>
             <Text style={[reviewStyles.metricVal, { color: '#0284C7' }]}>
-              {formatAverage(average)} <Text style={{ fontSize: 11, color: palette.faint }}>/ 5</Text>
+              {formatAverage(average)}
             </Text>
           </View>
           <View style={[reviewStyles.metricDivider, { backgroundColor: palette.line }]} />
@@ -258,17 +337,19 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
             </Text>
           </View>
         </View>
+        </>}
       </View>
 
       {/* ── Clinical Guidance Callout ── */}
       <View style={[reviewStyles.noticeCallout, { backgroundColor: isDark ? '#082F49' : '#F0F9FF', borderColor: isDark ? '#0369A1' : '#BAE6FD' }]}>
         <Info size={16} color="#0284C7" />
         <Text style={[reviewStyles.noticeCalloutText, { color: isDark ? '#BAE6FD' : '#0369A1' }]}>
-          Hold the recording on any placeholder and record SLP observations before clinical use. Scores are practice observations, not diagnostic results.
+          {review.assignmentId ? 'This submission has no recording. You can send written feedback to the guardian.' : 'Scores are practice observations. Use the recording and your clinical observations to guide the evaluation.'}
         </Text>
       </View>
 
       {/* ── Rating Scale Accordion Card ── */}
+      {!review.assignmentId ? <>
       <View style={[reviewStyles.guideCard, { backgroundColor: palette.card, borderColor: palette.line }]}>
         <Pressable
           accessibilityRole="button"
@@ -314,6 +395,7 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
         ) : null}
       </View>
 
+      </> : null}
       {/* ── Targets by Word Position ── */}
       {positions.map((pos) => {
         const group = review.targets.filter((target) => target.position === pos);
@@ -350,7 +432,7 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
           <View style={{ flex: 1 }}>
             <Text style={[reviewStyles.summaryCardTitle, { color: palette.text }]}>Evaluation Summary</Text>
             <Text style={[reviewStyles.summaryCardSubtitle, { color: palette.faint }]}>
-              {scored.length} of {review.targets.length} targets evaluated
+              {review.assignmentId ? 'Written feedback' : scored.length + ' of ' + review.targets.length + ' targets evaluated'}
             </Text>
           </View>
         </View>
@@ -436,7 +518,7 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
       <View style={reviewStyles.bottomActions}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => setNotice('Draft saved successfully.')}
+          onPress={() => setNotice('Draft kept for this session.')}
           style={[reviewStyles.draftBtn, { borderColor: palette.line, backgroundColor: palette.card }]}
         >
           <Text style={[reviewStyles.draftBtnText, { color: palette.text }]}>Save Draft</Text>
@@ -446,6 +528,7 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
           onPress={() => {
             try {
               saveEvaluation(review.id);
+              showActionNotice('Evaluation saved.');
               router.push('/therapist/reviews' as never);
             } catch (err: any) {
               setNotice(err?.message || 'Failed to save evaluation. Please try again.');
@@ -622,13 +705,18 @@ const reviewStyles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 18, borderBottomWidth: 1, marginBottom: 14 },
   tab: { fontSize: 14, fontWeight: '700', paddingBottom: 8, borderBottomWidth: 2, marginBottom: -1 },
   list: { gap: 10 },
+  filterRow: { alignSelf: 'flex-end', marginBottom: 16 },
+  sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8 },
+  sortButton: { minHeight: 36, paddingHorizontal: 10, justifyContent: 'center', borderWidth: 1, borderRadius: 8 },
+  activityGroup: { gap: 8, marginBottom: 8 },
+  groupHeading: { paddingBottom: 8, gap: 3, borderBottomWidth: 1 },
   card: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 10, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
   avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   initial: { fontSize: 16, fontWeight: '700', color: '#0284C7' },
-  copy: { flex: 1 },
+  copy: { flex: 1, minWidth: 0, paddingRight: 4 },
   name: { fontSize: 15, fontWeight: '700' },
   meta: { fontSize: 12, marginTop: 2 },
-  pill: { minWidth: 76, height: 26, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  pill: { flexShrink: 0, minHeight: 24, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   pillText: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
   empty: { textAlign: 'center', marginTop: 12 },
 
@@ -643,6 +731,7 @@ const reviewStyles = StyleSheet.create({
   heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   heroAvatar: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
   heroInitial: { fontSize: 20, fontWeight: '800', color: '#0284C7' },
+  heroMetadata: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 4 },
   heroStudentName: { fontSize: 18, fontWeight: '800' },
   pillTag: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
   pillTagText: { fontSize: 11, fontWeight: '700' },

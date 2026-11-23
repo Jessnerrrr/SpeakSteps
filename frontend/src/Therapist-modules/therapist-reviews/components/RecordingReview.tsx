@@ -116,7 +116,7 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => setNotice('Draft saved')}
+          onPress={() => setNotice('Draft kept for this session.')}
           style={[styles.draft, { borderColor: palette.line, backgroundColor: palette.card }]}
         >
           <Text style={[styles.draftText, { color: palette.text }]}>Save Draft</Text>
@@ -124,8 +124,12 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
         <Pressable
           accessibilityRole="button"
           onPress={() => {
-            saveEvaluation(review.id);
-            router.push('/therapist/reviews' as never);
+            try {
+              saveEvaluation(review.id);
+              router.push('/therapist/reviews' as never);
+            } catch (error) {
+              setNotice(error instanceof Error ? error.message : 'Unable to save the evaluation.');
+            }
           }}
           style={styles.save}
         >

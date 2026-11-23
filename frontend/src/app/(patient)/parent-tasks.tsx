@@ -1,8 +1,11 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { useAssignedActivities } from '@/data/assigned-activities';
+import { PatientPressable } from '@/components/patient-pressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -19,9 +22,9 @@ import {
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
-import { AssignedActivity, TaskStore } from '../../data/parent-tasks-mock';
+import type { AssignedActivity } from '../../data/parent-tasks-mock';
 
-type FilterType = 'all' | 'pending' | 'completed';
+type FilterType = 'all' | 'pending' | 'submitted' | 'completed';
 
 export default function ParentTasksScreen() {
   const { width } = useWindowDimensions();
@@ -35,7 +38,7 @@ export default function ParentTasksScreen() {
     });
 
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
-  const activities = TaskStore.getActivities();
+  const activities = useAssignedActivities();
 
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
@@ -47,22 +50,22 @@ export default function ParentTasksScreen() {
     return unsubscribe;
   }, []);
 
-  if (!fontsLoaded) return null;
-
   const filteredActivities = activities.filter((task: AssignedActivity) => {
     if (activeFilter === 'all') return true;
-    return task.status === activeFilter;
+    return activeFilter === 'submitted' ? task.status === 'pending' && task.submitted :
+      task.status === activeFilter && (activeFilter !== 'pending' || !task.submitted);
   });
+  const pagination = useListPagination(filteredActivities.length, 8, activeFilter);
+  if (!fontsLoaded) return null;
 
-  const pendingCount = activities.filter((t: AssignedActivity) => t.status === 'pending').length;
-  const completedCount = activities.filter((t: AssignedActivity) => t.status === 'completed').length;
-  const allCount = activities.length;
-
-  const getFilterLabel = () => {
-    if (activeFilter === 'pending') return `Pending (${pendingCount})`;
-    if (activeFilter === 'completed') return `Completed (${completedCount})`;
-    return `All (${allCount})`;
-  };
+  const filters = [
+    { id: 'all', label: 'All activities', count: activities.length, pill: styles.countPillNeutral, text: styles.countPillTextNeutral },
+    { id: 'pending', label: 'Pending', count: activities.filter((item) => item.status === 'pending' && !item.submitted).length, pill: styles.countPillPending, text: styles.countPillTextPending },
+    { id: 'submitted', label: 'Awaiting review', count: activities.filter((item) => item.status === 'pending' && item.submitted).length, pill: styles.countPillNeutral, text: styles.countPillTextNeutral },
+    { id: 'completed', label: 'Reviewed', count: activities.filter((item) => item.status === 'completed').length, pill: styles.countPillCompleted, text: styles.countPillTextCompleted },
+  ] as const;
+  const currentFilter = filters.find(({ id }) => id === activeFilter) ?? filters[0];
+  const getFilterLabel = () => currentFilter.label + ' (' + currentFilter.count + ')';
 
   return (
     <>
@@ -115,81 +118,17 @@ export default function ParentTasksScreen() {
                   </TouchableWithoutFeedback>
 
                   <View style={styles.filterDropdownCard}>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterOptionRow,
-                        activeFilter === 'all' && styles.filterOptionRowActive,
-                      ]}
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setActiveFilter('all');
-                        setIsFilterDropdownOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterOptionLabel,
-                          activeFilter === 'all' && styles.filterOptionLabelActive,
-                        ]}
-                      >
-                        All Activities
-                      </Text>
-                      <View style={styles.countPillNeutral}>
-                        <Text style={styles.countPillTextNeutral}>{allCount}</Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    <View style={styles.filterOptionDivider} />
-
-                    <TouchableOpacity
-                      style={[
-                        styles.filterOptionRow,
-                        activeFilter === 'pending' && styles.filterOptionRowActive,
-                      ]}
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setActiveFilter('pending');
-                        setIsFilterDropdownOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterOptionLabel,
-                          activeFilter === 'pending' && styles.filterOptionLabelActive,
-                        ]}
-                      >
-                        Pending
-                      </Text>
-                      <View style={styles.countPillPending}>
-                        <Text style={styles.countPillTextPending}>{pendingCount}</Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    <View style={styles.filterOptionDivider} />
-
-                    <TouchableOpacity
-                      style={[
-                        styles.filterOptionRow,
-                        activeFilter === 'completed' && styles.filterOptionRowActive,
-                      ]}
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setActiveFilter('completed');
-                        setIsFilterDropdownOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterOptionLabel,
-                          activeFilter === 'completed' && styles.filterOptionLabelActive,
-                        ]}
-                      >
-                        Completed
-                      </Text>
-                      <View style={styles.countPillCompleted}>
-                        <Text style={styles.countPillTextCompleted}>{completedCount}</Text>
-                      </View>
-                    </TouchableOpacity>
+                    {filters.map(({ id, label, count, pill, text }, index) => (
+                      <Fragment key={id}>
+                        {index > 0 && <View style={styles.filterOptionDivider} />}
+                        <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected: activeFilter === id }}
+                          style={[styles.filterOptionRow, activeFilter === id && styles.filterOptionRowActive]}
+                          onPress={() => { setActiveFilter(id); setIsFilterDropdownOpen(false); }}>
+                          <Text style={[styles.filterOptionLabel, activeFilter === id && styles.filterOptionLabelActive]}>{label}</Text>
+                          <View style={pill}><Text style={text}>{count}</Text></View>
+                        </TouchableOpacity>
+                      </Fragment>
+                    ))}
                   </View>
                 </>
               )}
@@ -204,17 +143,16 @@ export default function ParentTasksScreen() {
                   <Ionicons name="checkbox-outline" size={48} color="#A0BED4" />
                   <Text style={styles.emptyTitle}>No Activities Found</Text>
                   <Text style={styles.emptySub}>
-                    There are no {activeFilter} activities at the moment.
+                    No activities in this view.
                   </Text>
                 </View>
               ) : (
-                filteredActivities.map((activity) => (
-                  <TouchableOpacity
+                filteredActivities.slice(pagination.start, pagination.end).map((activity) => (
+                  <PatientPressable
                     key={activity.id}
-                    activeOpacity={0.8}
                     style={styles.taskCard}
+                    accessibilityRole="button"
                     onPress={() => {
-                      TaskStore.setActiveTaskId(activity.id);
                       router.push({
                         pathname: '/parent-activity-details',
                         params: { id: activity.id },
@@ -231,7 +169,7 @@ export default function ParentTasksScreen() {
 
                     <View style={styles.taskInfoContainer}>
                       <Text style={styles.taskTitle}>{activity.title}</Text>
-                      <Text style={styles.taskLevel}>{activity.level}</Text>
+                      <Text style={styles.taskLevel}>{activity.level}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}</Text>
                       <Text style={styles.taskAssignee}>
                         Assigned : {activity.assignedBy}
                       </Text>
@@ -253,12 +191,13 @@ export default function ParentTasksScreen() {
                             : styles.statusTextPending,
                         ]}
                       >
-                        {activity.status === 'completed' ? 'Completed' : 'Pending'}
+                        {activity.status === 'completed' ? 'Reviewed' : activity.submitted ? 'Awaiting review' : 'Pending'}
                       </Text>
                     </View>
-                  </TouchableOpacity>
+                  </PatientPressable>
                 ))
               )}
+              <ListPagination {...pagination} total={filteredActivities.length} noun="activities" />
             </ScrollView>
 
             <ParentBottomNav activeTab="tasks" />

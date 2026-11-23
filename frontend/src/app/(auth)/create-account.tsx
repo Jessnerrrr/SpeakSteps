@@ -59,7 +59,7 @@ export default function CreateAccountScreen() {
                 <Text style={styles.welcomeText}>Create an Account</Text>
                 <Text style={styles.subText}>Choose the type of account.</Text>
 
-                {/* Create Patient Account Button ONLY */}
+                {/* Create Student Account Button ONLY */}
                 <TouchableOpacity 
                   style={styles.roleCard}
                   activeOpacity={0.7}
@@ -71,7 +71,7 @@ export default function CreateAccountScreen() {
                     contentFit="cover"
                   />
                   <View style={styles.roleTextContainer}>
-                    <Text style={styles.roleTitle}>Create Patient Account</Text>
+                    <Text style={styles.roleTitle}>Create Student Account</Text>
                     <Text style={styles.roleSubtitle}>For parents/ guardians and child</Text>
                   </View>
                   <View style={styles.arrowCircle}>

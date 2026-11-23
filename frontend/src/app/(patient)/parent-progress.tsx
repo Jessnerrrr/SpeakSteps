@@ -1,6 +1,8 @@
+import { practiceLevels, type PracticeLevel } from '@/data/practice-levels';
+import { PatientPressable } from '@/components/patient-pressable';
+import { AdventureIcon } from '@/components/adventure-icon';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
-import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -22,17 +24,11 @@ import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store'
 import {
   CategoryProgress,
   INITIAL_PROGRESS_DATA,
-  ProgressSummary,
 } from '../../data/parent-progress-mock';
+import { usePracticeSubmissions } from '../../data/practice-submissions';
+import { MOCK_STARS_DATA } from '../../data/stars-mock';
 
-type FilterKey = 'overall' | 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
-
-const ADVENTURE_ICONS: Record<string, any> = {
-  sounds: require('../../../assets/images/adventure-sounds.png'),
-  words: require('../../../assets/images/adventure-words.png'),
-  phrases: require('../../../assets/images/adventure-phrases.png'),
-  sentences: require('../../../assets/images/adventure-sentences.png'),
-};
+type FilterKey = 'overall' | PracticeLevel;
 
 export default function ParentProgressScreen() {
   const { width } = useWindowDimensions();
@@ -50,13 +46,14 @@ export default function ParentProgressScreen() {
 
   const [selectedFilters, setSelectedFilters] = useState<Record<FilterKey, boolean>>({
     overall: true,
-    Sounds: false,
+    Sound: false,
+    Syllables: false,
     Words: false,
     Phrases: false,
     Sentences: false,
   });
 
-  const [data] = useState<ProgressSummary>(INITIAL_PROGRESS_DATA);
+  const submissions = usePracticeSubmissions();
 
   useEffect(() => {
     const unsubscribe = ChildProfileStore.subscribe((updated) => {
@@ -71,7 +68,8 @@ export default function ParentProgressScreen() {
     if (key === 'overall') {
       setSelectedFilters({
         overall: true,
-        Sounds: false,
+        Sound: false,
+        Syllables: false,
         Words: false,
         Phrases: false,
         Sentences: false,
@@ -83,7 +81,7 @@ export default function ParentProgressScreen() {
         [key]: !selectedFilters[key],
       };
 
-      const anySelected = (['Sounds', 'Words', 'Phrases', 'Sentences'] as FilterKey[]).some(
+      const anySelected = practiceLevels.some(
         (k) => updated[k]
       );
       if (!anySelected) {
@@ -94,25 +92,28 @@ export default function ParentProgressScreen() {
     }
   };
 
-  const activeCategories: CategoryProgress[] = selectedFilters.overall
-    ? data.categories
-    : data.categories.filter((cat) => selectedFilters[cat.name as FilterKey]);
+  const activeCategories: CategoryProgress[] = INITIAL_PROGRESS_DATA.categories
+    .filter((category) => selectedFilters.overall || selectedFilters[category.name])
+    .map((category) => {
+      const practices = submissions.filter((activity) => activity.category === category.iconType);
+      const totalCount = MOCK_STARS_DATA.categories.find(({ id }) => id === category.iconType)?.total ?? category.totalCount;
+      return {
+        ...category,
+        completedCount: practices.length,
+        totalCount,
+        attempts: practices.reduce((sum, activity) => sum + activity.attempts, 0),
+      };
+    });
 
-  const totalCompleted = selectedFilters.overall
-    ? data.completed
-    : activeCategories.reduce((sum, c) => sum + c.completedCount, 0);
-
-  const totalPending = selectedFilters.overall
-    ? data.pending
-    : activeCategories.reduce((sum, c) => sum + c.pendingCount, 0);
-
-  const totalAttempts = selectedFilters.overall
-    ? data.practiceAttempts
-    : activeCategories.reduce((sum, c) => sum + c.attempts, 0);
+  const totalCompleted = activeCategories.reduce((sum, category) => sum + category.completedCount, 0);
+  const totalAttempts = activeCategories.reduce((sum, category) => sum + category.attempts, 0);
+  const practiceGoal = selectedFilters.overall
+    ? MOCK_STARS_DATA.totalActivitiesTarget
+    : activeCategories.reduce((sum, category) => sum + category.totalCount, 0);
 
   const getFilterButtonLabel = () => {
     if (selectedFilters.overall) return 'Filters: Overall';
-    const activeNames = (['Sounds', 'Words', 'Phrases', 'Sentences'] as FilterKey[]).filter(
+    const activeNames = practiceLevels.filter(
       (k) => selectedFilters[k]
     );
     if (activeNames.length === 1) return `Filters: ${activeNames[0]}`;
@@ -189,65 +190,14 @@ export default function ParentProgressScreen() {
 
                     <View style={styles.checkboxDivider} />
 
-                    <TouchableOpacity
-                      style={styles.checkboxRow}
-                      activeOpacity={0.75}
-                      onPress={() => handleToggleFilter('Sounds')}
-                    >
-                      <Ionicons
-                        name={selectedFilters.Sounds ? 'checkbox' : 'square-outline'}
-                        size={20}
-                        color={selectedFilters.Sounds ? '#0D68AC' : '#8CA3B5'}
-                      />
-                      <Text style={[styles.checkboxLabel, selectedFilters.Sounds && styles.checkboxLabelActive]}>
-                        Sounds
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.checkboxRow}
-                      activeOpacity={0.75}
-                      onPress={() => handleToggleFilter('Words')}
-                    >
-                      <Ionicons
-                        name={selectedFilters.Words ? 'checkbox' : 'square-outline'}
-                        size={20}
-                        color={selectedFilters.Words ? '#0D68AC' : '#8CA3B5'}
-                      />
-                      <Text style={[styles.checkboxLabel, selectedFilters.Words && styles.checkboxLabelActive]}>
-                        Words
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.checkboxRow}
-                      activeOpacity={0.75}
-                      onPress={() => handleToggleFilter('Phrases')}
-                    >
-                      <Ionicons
-                        name={selectedFilters.Phrases ? 'checkbox' : 'square-outline'}
-                        size={20}
-                        color={selectedFilters.Phrases ? '#0D68AC' : '#8CA3B5'}
-                      />
-                      <Text style={[styles.checkboxLabel, selectedFilters.Phrases && styles.checkboxLabelActive]}>
-                        Phrases
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.checkboxRow}
-                      activeOpacity={0.75}
-                      onPress={() => handleToggleFilter('Sentences')}
-                    >
-                      <Ionicons
-                        name={selectedFilters.Sentences ? 'checkbox' : 'square-outline'}
-                        size={20}
-                        color={selectedFilters.Sentences ? '#0D68AC' : '#8CA3B5'}
-                      />
-                      <Text style={[styles.checkboxLabel, selectedFilters.Sentences && styles.checkboxLabelActive]}>
-                        Sentences
-                      </Text>
-                    </TouchableOpacity>
+                    {practiceLevels.map((level) => (
+                      <TouchableOpacity key={level} accessibilityRole="checkbox" accessibilityState={{ checked: selectedFilters[level] }}
+                        style={styles.checkboxRow} activeOpacity={0.75} onPress={() => handleToggleFilter(level)}>
+                        <Ionicons name={selectedFilters[level] ? 'checkbox' : 'square-outline'} size={20}
+                          color={selectedFilters[level] ? '#0D68AC' : '#8CA3B5'} />
+                        <Text style={[styles.checkboxLabel, selectedFilters[level] && styles.checkboxLabelActive]}>{level}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </>
               )}
@@ -263,7 +213,7 @@ export default function ParentProgressScreen() {
                   <Text style={styles.heroCardTitle} numberOfLines={1} adjustsFontSizeToFit>
                     Completed
                   </Text>
-                  <Text style={styles.heroCardSubtext}>{totalPending} pending</Text>
+                  <Text style={styles.heroCardSubtext}>{Math.max(0, practiceGoal - totalCompleted)} to practice goal</Text>
                 </View>
 
                 <View style={styles.heroCard}>
@@ -289,11 +239,7 @@ export default function ParentProgressScreen() {
                       <View key={category.id} style={styles.categoryRow}>
                         <View style={styles.categoryHeader}>
                           <View style={[styles.categoryCircle, { backgroundColor: category.circleBg }]}>
-                            <Image
-                              source={ADVENTURE_ICONS[category.iconType] || ADVENTURE_ICONS[category.id]}
-                              style={styles.categoryCircleIcon}
-                              contentFit="contain"
-                            />
+                            <AdventureIcon type={category.iconType} size={22} />
                           </View>
                           <Text style={styles.categoryName}>{category.name}</Text>
                           <Text style={styles.categoryRatio}>
@@ -319,9 +265,8 @@ export default function ParentProgressScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity
+              <PatientPressable
                 style={styles.therapistButton}
-                activeOpacity={0.85}
                 onPress={() => router.push('/parent-therapist-feedback' as any)}
                 accessibilityRole="button"
                 accessibilityLabel="View therapist feedback module"
@@ -336,7 +281,7 @@ export default function ParentProgressScreen() {
                   />
                 </View>
                 <Text style={styles.therapistButtonText}>Therapist Feedback</Text>
-              </TouchableOpacity>
+              </PatientPressable>
             </ScrollView>
 
             <ParentBottomNav activeTab="progress" />
@@ -718,20 +663,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  categoryCircleIcon: {
-    width: 22,
-    height: 22,
-  },
-  categoryAaText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
-  categoryQuotesText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 13,
-    color: '#FFFFFF',
-  },
   categoryName: {
     flex: 1,
     fontFamily: 'SourGummy-Bold',
@@ -761,15 +692,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5A623',
+    backgroundColor: '#D9ECFA',
     borderRadius: 28,
     height: 56,
     paddingHorizontal: 16,
     borderWidth: 2,
-    borderColor: '#E09015',
-    shadowColor: '#C47700',
+    borderColor: '#B6D7F2',
+    shadowColor: '#0D68AC',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.12,
     shadowRadius: 5,
     elevation: 4,
     marginTop: 4,

@@ -25,7 +25,7 @@ export function ChildScreenFrame({ children }: PropsWithChildren) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
-  background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
+  background: { flex: 1, overflow: 'hidden', backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   pattern: { opacity: 0.25 },
   frame: {
     flex: 1,

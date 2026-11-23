@@ -9,7 +9,7 @@
 export interface AdventureCategory {
   id: string;
   name: string;
-  iconType: 'sounds' | 'words' | 'phrases' | 'sentences';
+  iconType: 'sounds' | 'syllables' | 'words' | 'phrases' | 'sentences';
   symbol: string;
   bgColor: string;
   badgeCount?: number;
@@ -18,7 +18,6 @@ export interface AdventureCategory {
 
 export interface PatientDashboardData {
   childName: string;
-  greetingEmoji: string;
   activeBuddy: {
     name: string;
     speechBubbleText: string;
@@ -40,7 +39,6 @@ export interface PatientDashboardData {
 
 export const MOCK_PATIENT_DASHBOARD: PatientDashboardData = {
   childName: 'Mia!',
-  greetingEmoji: '👋',
   activeBuddy: {
     name: 'Chirpy',
     speechBubbleText: "Hi Mia! Let's play with Chirpy!",
@@ -55,10 +53,17 @@ export const MOCK_PATIENT_DASHBOARD: PatientDashboardData = {
   adventures: [
     {
       id: 'sounds',
-      name: 'Sounds',
+      name: 'Sound',
       iconType: 'sounds',
       symbol: 'musical-notes',
       bgColor: '#4DAEEB',
+    },
+    {
+      id: 'syllables',
+      name: 'Syllables',
+      iconType: 'syllables',
+      symbol: 'apps',
+      bgColor: '#338BB5',
     },
     {
       id: 'words',

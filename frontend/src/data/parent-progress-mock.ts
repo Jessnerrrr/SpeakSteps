@@ -18,8 +18,8 @@ import { INITIAL_ASSIGNED_ACTIVITIES } from './parent-tasks-mock';
 
 export interface CategoryProgress {
   id: string;
-  name: 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
-  iconType: 'sounds' | 'words' | 'phrases' | 'sentences';
+  name: 'Sound' | 'Syllables' | 'Words' | 'Phrases' | 'Sentences';
+  iconType: 'sounds' | 'syllables' | 'words' | 'phrases' | 'sentences';
   completedCount: number;
   totalCount: number;
   attempts: number;
@@ -36,7 +36,7 @@ export interface TherapistFeedbackItem {
   displayDate?: string;
   title: string;
   comments: string;
-  category: 'Sounds' | 'Words' | 'Phrases' | 'Sentences' | 'General';
+  category: 'Sound' | 'Syllables' | 'Words' | 'Phrases' | 'Sentences' | 'General';
   recommendations?: string;
   avatarImage?: any;
 }
@@ -59,7 +59,7 @@ export const MOCK_FEEDBACK_ITEMS: TherapistFeedbackItem[] = [
     title: 'Lip Closure & Bilabial Sounds Practice',
     comments:
       'Mia showed tremendous improvement in imitating bilabial sounds like /b/, /p/, and /m/. She is very responsive to interactive visual prompts and playful clapping rhythms.',
-    category: 'Sounds',
+    category: 'Sound',
     recommendations:
       'Practice popping bubbles and saying "Pop!" during play or bath time. Encourage exaggerated lip movements in front of a mirror.',
   },
@@ -98,7 +98,7 @@ export const MOCK_FEEDBACK_ITEMS: TherapistFeedbackItem[] = [
     title: 'Vowel Sound Sustaining & Pitch',
     comments:
       'Practiced sustaining long vowel sounds ("ah", "ee", "oo") with toy cars and animals. Mia demonstrated steady breath support and good vocal loudness.',
-    category: 'Sounds',
+    category: 'Sound',
     recommendations:
       'Sing nursery rhymes emphasizing long vowel sounds (e.g., "Old MacDonald"). Encourage holding the sound for 3 seconds.',
   },
@@ -137,7 +137,7 @@ export const MOCK_FEEDBACK_ITEMS: TherapistFeedbackItem[] = [
     title: 'Initial Consonant Precision (/d/ & /t/)',
     comments:
       'Good progress on alveolar sounds /d/ and /t/. We used tactile tapping on the table to provide multi-sensory feedback.',
-    category: 'Sounds',
+    category: 'Sound',
     recommendations:
       'Tap gently on a table or drum while making the /d/ sound to reinforce the tongue-to-roof contact.',
   },
@@ -161,7 +161,7 @@ export const INITIAL_PROGRESS_DATA: ProgressSummary = {
   categories: [
     {
       id: 'cat-sounds',
-      name: 'Sounds',
+      name: 'Sound',
       iconType: 'sounds',
       completedCount: soundsCompleted, // 1
       totalCount: TARGET_MILESTONES, // 3
@@ -169,6 +169,17 @@ export const INITIAL_PROGRESS_DATA: ProgressSummary = {
       pendingCount: 1,
       barColor: '#0D68AC',
       circleBg: '#4DAEEB',
+    },
+    {
+      id: 'cat-syllables',
+      name: 'Syllables',
+      iconType: 'syllables',
+      completedCount: 0,
+      totalCount: TARGET_MILESTONES,
+      attempts: 0,
+      pendingCount: 0,
+      barColor: '#338BB5',
+      circleBg: '#338BB5',
     },
     {
       id: 'cat-words',

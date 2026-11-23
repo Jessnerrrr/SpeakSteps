@@ -1,5 +1,6 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
+import { maximumStudentAge, minimumStudentAge } from '@/data/calendar-date';
 import * as ImagePicker from 'expo-image-picker';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
@@ -105,8 +106,10 @@ export default function PatientRegistrationScreen() {
 
   const getChildAgeError = () => {
     if (!childAge.trim()) return "Please fill in this field. Child's age is required.";
-    const ageNum = parseInt(childAge, 10);
-    if (isNaN(ageNum) || ageNum < 1 || ageNum > 18) return 'Please enter a valid age between 1 and 18.';
+    const ageNum = Number(childAge);
+    if (!Number.isInteger(ageNum) || ageNum < minimumStudentAge || ageNum > maximumStudentAge) {
+      return `Enter an age from ${minimumStudentAge} to ${maximumStudentAge}.`;
+    }
     return '';
   };
 
@@ -146,8 +149,8 @@ export default function PatientRegistrationScreen() {
       return; 
     }
     
-    setAlertTitle("Success!");
-    setAlertMessage("Registered successfully, wait for the approval of the account.");
+    setAlertTitle('Form checked');
+    setAlertMessage('Account requests are unavailable in this demo. Contact your center to register.');
     setAlertType('success');
     setAlertVisible(true);
   };
@@ -206,10 +209,10 @@ export default function PatientRegistrationScreen() {
                   <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Text style={styles.backIcon}>‹</Text>
                   </TouchableOpacity>
-                  <Text style={styles.headerText}>Patient Account</Text>
+                  <Text style={styles.headerText}>Student Account</Text>
                 </View>
 
-                <Text style={styles.welcomeText}>Create Patient Account</Text>
+                <Text style={styles.welcomeText}>Create Student Account</Text>
                 <Text style={styles.subText}>Fill up the form. Your child's Student ID must be on the Center's records.</Text>
 
                 <View style={styles.sectionContainer}>
@@ -242,6 +245,7 @@ export default function PatientRegistrationScreen() {
                         placeholderTextColor="#999" 
                         secureTextEntry={!showPassword} 
                         value={password} 
+                        maxLength={20}
                         onChangeText={setPassword}
                         onFocus={() => setIsPasswordFocused(true)} 
                         onBlur={() => setIsPasswordFocused(false)} 
