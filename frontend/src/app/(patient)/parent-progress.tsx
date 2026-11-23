@@ -4,7 +4,7 @@ import { AdventureIcon } from '@/components/adventure-icon';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -20,13 +20,11 @@ import {
 // CORRECTED RELATIVE PATHS
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
-import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
+import { usePatientLearning } from '../../components/patient/PatientLearningProvider';
 import {
   CategoryProgress,
   INITIAL_PROGRESS_DATA,
 } from '../../data/parent-progress-mock';
-import { usePracticeSubmissions } from '../../data/practice-submissions';
-import { MOCK_STARS_DATA } from '../../data/stars-mock';
 
 type FilterKey = 'overall' | PracticeLevel;
 
@@ -41,8 +39,8 @@ export default function ParentProgressScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const { progress } = usePatientLearning();
 
   const [selectedFilters, setSelectedFilters] = useState<Record<FilterKey, boolean>>({
     overall: true,
@@ -52,15 +50,6 @@ export default function ParentProgressScreen() {
     Phrases: false,
     Sentences: false,
   });
-
-  const submissions = usePracticeSubmissions();
-
-  useEffect(() => {
-    const unsubscribe = ChildProfileStore.subscribe((updated) => {
-      setChildProfile(updated);
-    });
-    return unsubscribe;
-  }, []);
 
   if (!fontsLoaded) return null;
 
@@ -95,21 +84,20 @@ export default function ParentProgressScreen() {
   const activeCategories: CategoryProgress[] = INITIAL_PROGRESS_DATA.categories
     .filter((category) => selectedFilters.overall || selectedFilters[category.name])
     .map((category) => {
-      const practices = submissions.filter((activity) => activity.category === category.iconType);
-      const totalCount = MOCK_STARS_DATA.categories.find(({ id }) => id === category.iconType)?.total ?? category.totalCount;
+      const totalCount = progress?.assignedByLevel[category.name] ?? 0;
       return {
         ...category,
-        completedCount: practices.length,
+        completedCount: progress?.completedByLevel[category.name] ?? 0,
         totalCount,
-        attempts: practices.reduce((sum, activity) => sum + activity.attempts, 0),
+        attempts: progress?.attemptsByLevel[category.name] ?? 0,
       };
     });
 
   const totalCompleted = activeCategories.reduce((sum, category) => sum + category.completedCount, 0);
-  const totalAttempts = activeCategories.reduce((sum, category) => sum + category.attempts, 0);
-  const practiceGoal = selectedFilters.overall
-    ? MOCK_STARS_DATA.totalActivitiesTarget
-    : activeCategories.reduce((sum, category) => sum + category.totalCount, 0);
+  const totalAttempts = selectedFilters.overall
+    ? progress?.submissionCount ?? 0
+    : activeCategories.reduce((sum, category) => sum + category.attempts, 0);
+  const practiceGoal = activeCategories.reduce((sum, category) => sum + category.totalCount, 0);
 
   const getFilterButtonLabel = () => {
     if (selectedFilters.overall) return 'Filters: Overall';

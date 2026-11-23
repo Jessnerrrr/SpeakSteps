@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { ChildScreenFrame, childScreenColors as playColors } from '@/components/child-screen-frame';
 import { useFonts } from 'expo-font';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   BackHandler,
   ScrollView,
@@ -23,13 +23,13 @@ import { PatientPressable } from '@/components/patient-pressable';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
-import { sampleActivities, therapistPracticePrompts } from '@/Therapist-modules/therapist-activities/data/activityData';
 import { useAssignedActivities } from '@/data/assigned-activities';
 import { assignmentAttribution } from '@/data/learning-workflow';
 import { practiceLevels, type PracticeLevel } from '@/data/practice-levels';
 import { practiceLevelIcons } from '@/components/adventure-icon';
 import { BuddyStore } from '@/data/buddy-store';
-import { usePracticeSubmissions } from '@/data/practice-submissions';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { getPracticeItems } from '@/services/user-api';
 import type { Language } from '@/types/sentences';
 
 const playLanguages: Language[] = ['English', 'Tagalog'];
@@ -37,6 +37,7 @@ const levelColors: Record<PracticeLevel, string> = {
   Sound: '#137DCA', Syllables: '#2764B5', Words: '#26825D', Phrases: '#B25E0C', Sentences: '#C14B60',
 };
 const activitiesPerPage = 4;
+type PracticeItem = Awaited<ReturnType<typeof getPracticeItems>>[number];
 
 function ActivityPages<T extends { id: string }>({ items, renderActivity }: {
   items: readonly T[];
@@ -59,12 +60,15 @@ function ActivityPages<T extends { id: string }>({ items, renderActivity }: {
 export default function SentencesScreen() {
   const assignedActivities = useAssignedActivities().filter((item) => item.linked);
   const buddy = useSyncExternalStore(BuddyStore.subscribe, BuddyStore.getActiveBuddy, BuddyStore.getActiveBuddy);
+  const { progress } = usePatientLearning();
+  const submissions = progress?.recentSubmissions ?? [];
+  const [practiceItems, setPracticeItems] = useState<PracticeItem[]>([]);
+  const [practiceItemsError, setPracticeItemsError] = useState('');
   const [buddyCheered, setBuddyCheered] = useState(false);
   const buddyBounce = useSharedValue(0);
   const buddyMotion = useAnimatedStyle(() => ({
     transform: [{ translateY: -buddyBounce.value * 7 }, { rotate: buddyBounce.value * -9 + 'deg' }],
   }));
-  const submissions = usePracticeSubmissions();
   const [language, setLanguage] = useState<Language>('English');
   const params = useLocalSearchParams<{ category?: string; level?: string }>();
   const requestedLevel = params.level === 'Isolation' ? 'Sound' : params.level;
@@ -72,11 +76,22 @@ export default function SentencesScreen() {
     ?? practiceLevels.find((option) => option.toLowerCase() === params.category)
     ?? 'Sound';
   const category = level === 'Sound' ? 'sounds' : level.toLowerCase();
-  const library = sampleActivities.filter((item) => item.level === level && item.language === language);
+  const library = practiceItems;
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setPracticeItemsError('');
+    void getPracticeItems({ language }).then((items) => {
+      if (active) setPracticeItems(items);
+    }).catch((loadError) => {
+      if (active) setPracticeItemsError(loadError instanceof Error ? loadError.message : 'Could not load practice activities.');
+    });
+    return () => { active = false; };
+  }, [language]);
 
   // FIXED FONT PATH: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
@@ -252,14 +267,19 @@ export default function SentencesScreen() {
                   </View>
                   {library.length === 0 ? <ChildActivityEmpty buddy={buddy} hint="Try another level or language to find something to play." /> : (
                   <ActivityPages key={language + ':' + level}
-                    items={library} renderActivity={(item) => {
-                    const earned = submissions.some((entry) => entry.id === 'library:' + item.id);
-                    const promptCount = therapistPracticePrompts(item).length;
-                    return <PatientPressable key={item.id} accessibilityLabel={item.title + (earned ? ', star earned' : '')} style={styles.libraryCard}
-                      onPress={() => router.push({ pathname: '/practice', params: { catalogActivityId: item.id, category, level } })}>
+                    items={practiceItems} renderActivity={(item) => {
+                    const earned = submissions.some((entry) => entry.practiceItemId === item.id);
+                    const title = level === 'Sentences'
+                      ? item.sentenceText || item.syllable || item.sound
+                      : level === 'Syllables'
+                        ? item.syllable || item.sound
+                        : item.sound;
+                    const promptCount = 1;
+                    return <PatientPressable key={item.id} accessibilityLabel={title + (earned ? ', star earned' : '')} style={styles.libraryCard}
+                      onPress={() => router.push({ pathname: '/practice', params: { practiceItemId: item.id, category, level, sound: item.sound, syllable: item.syllable, position: item.position, language: item.language } })}>
                       <View style={styles.soundBadge}><Text style={styles.soundText}>{item.sound}</Text></View>
                       <View style={styles.activityCopy}>
-                        <Text numberOfLines={1} style={styles.libraryTitle}>{item.title}</Text>
+                        <Text numberOfLines={1} style={styles.libraryTitle}>{title}</Text>
                         <View style={styles.activityMeta}>
                           {earned && <Ionicons name="star" size={14} color="#AD6A09" />}
                           <Text style={styles.promptCount}>{earned ? 'Star earned' : promptCount + (promptCount === 1 ? ' prompt' : ' prompts')}</Text>
@@ -267,7 +287,9 @@ export default function SentencesScreen() {
                       </View>
                       <View style={styles.playBadge}><Ionicons name="play" size={17} color="#FFFFFF" /></View>
                     </PatientPressable>;
-                  }} />)}
+                  }} />
+                  )}
+                  {practiceItemsError ? <Text accessibilityRole="alert" style={styles.libraryMeta}>{practiceItemsError}</Text> : null}
                 </View>
               </View>
           </ScrollView>

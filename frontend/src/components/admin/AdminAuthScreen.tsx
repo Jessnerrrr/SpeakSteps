@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import React, { useRef, useState } from 'react';
+import { AccountSetupRequiredError, loginAccount, requestPasswordReset, resetPassword, TotpRequiredError } from '@/services/user-api';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -43,6 +44,7 @@ export default function AdminAuthScreen({ mode }: { mode: AuthMode }) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formMessage, setFormMessage] = useState('');
   const [focusedField, setFocusedField] = useState<FieldName | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   type InputHandle = React.ElementRef<typeof TextInput>;
   const userIdRef = useRef<InputHandle>(null);
@@ -96,13 +98,7 @@ export default function AdminAuthScreen({ mode }: { mode: AuthMode }) {
     }
   };
 
-  const showUnavailableMessage = () => {
-    setFormMessage(
-      'Administrator authentication is not connected yet. No credentials were sent or changed.',
-    );
-  };
-
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     const nextErrors: FieldErrors = {};
     if (!userId.trim()) nextErrors.userId = 'Enter your User ID.';
     if (!password) nextErrors.password = 'Enter your password.';
@@ -115,35 +111,62 @@ export default function AdminAuthScreen({ mode }: { mode: AuthMode }) {
       return;
     }
 
-    if (userId.trim().toLowerCase() === 'admin@center.org' && password === 'Admin@123') {
+    setIsSubmitting(true);
+    try {
+      await loginAccount(userId.trim(), password, 'admin');
       router.replace('/(admin)/admin-dashboard' as any);
-    } else {
-      setFormMessage('Invalid User ID or Password. Please try again.');
+    } catch (error) {
+      if (error instanceof TotpRequiredError) {
+        router.replace({ pathname: '/otp-verification', params: { role: 'admin' } } as any);
+      } else if (error instanceof AccountSetupRequiredError) {
+        router.replace({ pathname: '/totp-setup', params: { role: 'admin' } } as any);
+      } else {
+        setFormMessage(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     const nextErrors: FieldErrors = {};
-    if (!userId.trim()) nextErrors.userId = 'Enter your User ID.';
-    if (!recoveryKey.trim()) nextErrors.recoveryKey = 'Enter your recovery key.';
-    if (!newPassword) nextErrors.newPassword = 'Enter a new password.';
-    if (!confirmPassword) nextErrors.confirmPassword = 'Confirm your new password.';
-    else if (newPassword !== confirmPassword) {
-      nextErrors.confirmPassword = 'These passwords do not match.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userId.trim())) nextErrors.userId = 'Enter a valid email address.';
+    if (recoveryKey.trim()) {
+      if (!newPassword) nextErrors.newPassword = 'Enter a new password.';
+      if (!confirmPassword) nextErrors.confirmPassword = 'Confirm your new password.';
+      else if (newPassword !== confirmPassword) nextErrors.confirmPassword = 'These passwords do not match.';
     }
-
     setErrors(nextErrors);
     setFormMessage('');
 
     if (Object.keys(nextErrors).length) {
       if (nextErrors.userId) userIdRef.current?.focus();
-      else if (nextErrors.recoveryKey) recoveryKeyRef.current?.focus();
       else if (nextErrors.newPassword) newPasswordRef.current?.focus();
       else confirmPasswordRef.current?.focus();
       return;
     }
 
-    showUnavailableMessage();
+    setIsSubmitting(true);
+    try {
+      if (!recoveryKey.trim()) {
+        const { resetCode } = await requestPasswordReset(userId.trim());
+        setFormMessage(resetCode
+          ? `Reset code: ${resetCode}. Enter it below with your new password.`
+          : 'If an account exists for this email, a reset code has been issued. Check your email.');
+        return;
+      }
+      await resetPassword(userId.trim(), recoveryKey.trim(), newPassword);
+      setFormMessage('Password updated. You can now sign in.');
+      setCurrentMode('sign-in');
+      setPassword('');
+      setRecoveryKey('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      setFormMessage(error instanceof Error ? error.message : 'Could not reset the password.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderFieldError = (name: FieldName) =>
@@ -442,10 +465,13 @@ export default function AdminAuthScreen({ mode }: { mode: AuthMode }) {
                       style={styles.primaryButton}
                       activeOpacity={0.82}
                       onPress={currentMode === 'sign-in' ? handleSignIn : handleReset}
+                      disabled={isSubmitting}
                       accessibilityRole="button"
                     >
                       <Text style={styles.primaryButtonText}>
-                        {currentMode === 'sign-in' ? 'Log In' : 'Reset Password'}
+                        {currentMode === 'sign-in'
+                          ? isSubmitting ? 'Signing in…' : 'Log In'
+                          : 'Reset Password'}
                       </Text>
                     </TouchableOpacity>
 

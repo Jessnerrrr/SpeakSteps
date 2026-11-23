@@ -3,7 +3,9 @@ import React from 'react';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 import {
   ImageBackground,
   StyleSheet,
@@ -17,6 +19,14 @@ import {
 
 export default function SpeechCheckinResult() {
   const router = useRouter();
+  const { checkinId } = useLocalSearchParams<{ checkinId?: string }>();
+  const { checkins, patient, error } = usePatientLearning();
+  const checkin = checkins.find((item) => item.id === checkinId) ?? checkins[0];
+  const responses = checkin?.responses && typeof checkin.responses === 'object' && !Array.isArray(checkin.responses)
+    ? checkin.responses as Record<string, { question?: string; answer?: string }>
+    : {};
+  const answeredCount = Object.values(responses).filter((item) => item && typeof item === 'object' && item.answer).length;
+  const answerFor = (step: number) => responses[String(step)]?.answer || '';
 
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -74,11 +84,11 @@ export default function SpeechCheckinResult() {
                 </Text>
 
                 <Text style={styles.levelTitle}>
-                  Level 4 · Sentences
+                  {checkin?.summaryOutcome || 'Check-in saved'}
                 </Text>
 
                 <Text style={styles.levelDescription}>
-                  Great job! Let's keep learning!
+                  {checkin ? 'Your answers are saved for your therapist.' : error || 'No saved check-in was found.'}
                 </Text>
               </LinearGradient>
             </View>
@@ -91,12 +101,12 @@ export default function SpeechCheckinResult() {
 
               <View style={styles.ageBadge}>
                 <Text style={styles.ageText}>
-                  Meeting expectations for age 5
+                  {patient?.age ? `Age ${patient.age}` : checkin ? 'Speech check-in completed' : 'Check-in unavailable'}
                 </Text>
               </View>
 
               <Text style={styles.description}>
-                You're doing great! Keep practicing a little every day.
+                {answeredCount} question{answeredCount === 1 ? '' : 's'} answered.
               </Text>
             </View>
 
@@ -108,19 +118,19 @@ export default function SpeechCheckinResult() {
 
               <View style={styles.noticedItem}>
                 <View style={styles.itemDot} />
-                <Text style={styles.itemText}>Dog</Text>
+                <Text style={styles.itemText}>{answerFor(1) || 'No answer recorded'}</Text>
 
                 <View style={styles.clearBadge}>
-                  <Text style={styles.clearText}>Clear</Text>
+                  <Text style={styles.clearText}>{answerFor(1) ? 'Answered' : '—'}</Text>
                 </View>
               </View>
 
               <View style={styles.noticedItem}>
                 <View style={styles.itemDot} />
-                <Text style={styles.itemText}>More milk</Text>
+                <Text style={styles.itemText}>{answerFor(2) || 'No answer recorded'}</Text>
 
                 <View style={styles.clearBadge}>
-                  <Text style={styles.clearText}>Clear</Text>
+                  <Text style={styles.clearText}>{answerFor(2) ? 'Answered' : '—'}</Text>
                 </View>
               </View>
             </View>
@@ -132,7 +142,7 @@ export default function SpeechCheckinResult() {
               </Text>
 
               <Text style={styles.goalHighlight}>
-                Speak more clearly
+                {answerFor(7) || 'No goal recorded'}
               </Text>
 
               <Text style={styles.goalDescription}>

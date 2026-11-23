@@ -22,7 +22,8 @@ import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import { ChildModeConfirmModal } from '../../components/child-mode-confirm-modal';
 import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
-import { PARTICIPATION_STARS, usePracticeSubmissions } from '../../data/practice-submissions';
+import { usePatientLearning } from '../../components/patient/PatientLearningProvider';
+import { AudioPlaybackButton } from '../../components/audio/AudioPlaybackButton';
 
 export default function ParentActivityDetailsScreen() {
   // Responsive Hooks
@@ -40,9 +41,10 @@ export default function ParentActivityDetailsScreen() {
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const [isChildModeModalVisible, setIsChildModeModalVisible] = useState(false);
 
+  const { progress, feedback } = usePatientLearning();
   const activity = useAssignedActivities().find(({ id }) => id === params.id);
-  const submissions = usePracticeSubmissions();
-  const practice = submissions.find(({ id }) => id === 'assigned:' + activity?.id);
+  const submissions = progress?.recentSubmissions.filter((item) => item.assignmentId === activity?.id) ?? [];
+  const review = feedback.find((item) => item.assignmentId === activity?.id);
 
   useEffect(() => {
     const unsubscribe = ChildProfileStore.subscribe((updated: ChildProfile) => {
@@ -85,6 +87,8 @@ export default function ParentActivityDetailsScreen() {
         sound: activity.title,
         syllable: '',
         category: activity.category.toLowerCase(),
+        level: activity.level,
+        language: activity.language,
       },
     } as any);
   };
@@ -155,23 +159,25 @@ export default function ParentActivityDetailsScreen() {
                 </Text>
                 {activity.dueDate ? <Text style={styles.assigneeText}>Due {activity.dueDate}</Text> : null}
 
-                <Text style={styles.assigneeText}>No media attached to this activity.</Text>
+                {activity.modelAudioUrls?.[0]
+                  ? <AudioPlaybackButton audioUrl={activity.modelAudioUrls[0]} label="Play model audio" />
+                  : <Text style={styles.assigneeText}>No media attached to this activity.</Text>}
               </View>
 
               {/* 2. THREE METRIC / STAT CARDS ROW */}
               <View style={styles.metricsRow}>
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activity.attempts + (practice?.attempts ?? 0)}</Text>
+                  <Text style={styles.metricValue}>{activity.attempts + submissions.length}</Text>
                   <Text style={styles.metricLabel}>Attempts</Text>
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activity.bestScore ?? '—'}</Text>
+                  <Text style={styles.metricValue}>{review?.averageScore == null ? activity.bestScore ?? '—' : `${Math.round(review.averageScore)}%`}</Text>
                   <Text style={styles.metricLabel}>Best Score</Text>
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{practice ? PARTICIPATION_STARS : 0}</Text>
+                  <Text style={styles.metricValue}>{submissions.reduce((sum, item) => sum + item.starsAwarded, 0)}</Text>
                   <Text style={styles.metricLabel}>Stars</Text>
                 </View>
               </View>

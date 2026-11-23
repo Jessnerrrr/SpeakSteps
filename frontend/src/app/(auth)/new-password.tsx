@@ -5,12 +5,14 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { changeAccountPassword, resetPassword } from '@/services/user-api';
 
 export default function NewPasswordScreen() {
   const insets = useSafeAreaInsets();
 
-  const { role, flow } = useLocalSearchParams();
+  const { role, flow, email } = useLocalSearchParams();
   const currentRole = Array.isArray(role) ? role[0] : role;
+  const resetEmail = Array.isArray(email) ? email[0] : email;
   const isSetupFlow = (Array.isArray(flow) ? flow[0] : flow) === 'setup';
 
   const [oldPassword, setOldPassword] = useState('');
@@ -29,6 +31,7 @@ export default function NewPasswordScreen() {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('error'); // 'error' | 'success'
+  const [isSaving, setIsSaving] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
@@ -47,7 +50,7 @@ export default function NewPasswordScreen() {
 
   const isPasswordValid = isLengthValid && hasLowercase && hasUppercase && hasNumber && hasSpecial;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!oldPassword.trim()) {
       setAlertTitle("Required Field");
       setAlertMessage("Old password is required. Please fill in this field.");
@@ -86,21 +89,47 @@ export default function NewPasswordScreen() {
       return;
     }
 
-    setAlertTitle("Success!");
-    setAlertMessage(
-      isSetupFlow
-        ? "Your password has been updated! Let's finish setting up your account."
-        : "Your password has been changed. You will now be redirected to sign in."
-    );
-    setAlertType('success');
-    setAlertVisible(true);
+    if (!isSetupFlow && !resetEmail) {
+      setAlertTitle('Missing account email');
+      setAlertMessage('Return to password recovery and request a reset code again.');
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (isSetupFlow) {
+        await changeAccountPassword({ currentPassword: oldPassword, newPassword });
+      } else {
+        await resetPassword(resetEmail!, oldPassword, newPassword);
+      }
+      setAlertTitle('Success!');
+      setAlertMessage(
+        isSetupFlow
+          ? "Your password has been updated! Let's finish setting up your account."
+          : 'Your password has been changed. You will now be redirected to sign in.',
+      );
+      setAlertType('success');
+      setAlertVisible(true);
+    } catch (error) {
+      setAlertTitle('Could not update password');
+      setAlertMessage(error instanceof Error ? error.message : 'Please try again.');
+      setAlertType('error');
+      setAlertVisible(true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAlertClose = () => {
     setAlertVisible(false);
     if (alertType === 'success') {
       if (isSetupFlow) {
-        if (currentRole === 'therapist') {
+        if (currentRole === 'admin') {
+          if (router.canDismiss()) router.dismissAll();
+          router.replace('/(admin)/admin-dashboard' as any);
+        } else if (currentRole === 'therapist') {
           if (router.canDismiss()) router.dismissAll();
           router.replace('/therapist' as any);
         } else if (currentRole === 'teacher') {
@@ -159,7 +188,7 @@ export default function NewPasswordScreen() {
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>
-                  {isSetupFlow ? 'Temporary Password' : 'Old Password'}
+                  {isSetupFlow ? 'Temporary Password' : 'Reset Code'}
                 </Text>
                 <View style={styles.passwordWrapper}>
                   <TextInput
@@ -234,7 +263,7 @@ export default function NewPasswordScreen() {
             </View>
 
             <TouchableOpacity accessibilityRole="button" style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>Save</Text>
+              <Text style={styles.saveBtnText}>{isSaving ? 'Saving…' : 'Save'}</Text>
             </TouchableOpacity>
 
             </View>

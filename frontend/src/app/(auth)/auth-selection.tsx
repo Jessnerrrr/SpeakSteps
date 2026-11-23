@@ -75,7 +75,7 @@ export default function AuthSelectionScreen() {
   const handleGetPin = (method: string) => {
     setSelectedMethod(method);
     setPinCode('');
-    setTimeLeft(300); 
+    setTimeLeft(300);
     setShowPinModal(true);
   };
 
@@ -229,8 +229,8 @@ export default function AuthSelectionScreen() {
 
                 {/* DYNAMIC INSTRUCTION TEXT BASED ON SELECTED METHOD */}
                 <Text style={styles.modalInstruction}>
-                  {selectedMethod === 'Email' 
-                    ? `Please check the one-time pin sent to ${maskedEmailToDisplay}` 
+                  {selectedMethod === 'Email'
+                    ? `Please check the one-time pin sent to ${maskedEmailToDisplay}`
                     : 'Enter your Single Sign-On credentials:'}
                 </Text>
 

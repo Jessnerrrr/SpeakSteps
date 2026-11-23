@@ -1,41 +1,36 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { verifyTotpLogin } from '@/services/user-api';
 
 export default function OtpVerificationScreen() {
+  const { role } = useLocalSearchParams();
+  const accountRole = Array.isArray(role) ? role[0] : role;
   // Responsive Hooks
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
 
-  const { email } = useLocalSearchParams();
-  
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const inputRefs = useRef<any[]>([]);
 
   // Timer State (5 minutes = 300 seconds)
-  const [timeLeft, setTimeLeft] = useState(300);
+  const timeLeft = 0;
 
   // Custom Alert States
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('error');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
-
-  useEffect(() => {
-    const timerId = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timerId);
-  }, []);
 
   if (!fontsLoaded) return null; 
 
@@ -57,32 +52,38 @@ export default function OtpVerificationScreen() {
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const handleSubmit = () => {
-    const enteredOtp = otp.join('');
-    
-    if (enteredOtp.length < 6) {
-      setAlertTitle("Incomplete OTP");
-      setAlertMessage("Please enter the full 6-digit verification code before submitting.");
+  const handleSubmit = async () => {
+    const code = otp.join('');
+    if (!/^\d{6}$/.test(code)) {
+      setAlertTitle('Enter your code');
+      setAlertMessage('Enter the 6-digit code from your authenticator app.');
       setAlertType('error');
       setAlertVisible(true);
       return;
     }
-
-    router.push('/new-password' as any);
+    setIsSubmitting(true);
+    try {
+      await verifyTotpLogin(code);
+      setAlertVisible(false);
+      if (accountRole === 'admin') router.replace('/(admin)/admin-dashboard' as any);
+      else if (accountRole === 'teacher') router.replace('/teacher' as any);
+      else if (accountRole === 'therapist') router.replace('/therapist' as any);
+      else router.replace('/user-mode-select' as any);
+    } catch (error) {
+      setAlertTitle('Verification failed');
+      setAlertMessage(error instanceof Error ? error.message : 'Could not verify the authenticator code.');
+      setAlertType('error');
+      setAlertVisible(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleResend = () => {
-    setAlertTitle("OTP Resent!");
-    setAlertMessage(`A new 6-digit OTP has been sent to ${email ? email : 'your email'}.`);
-    setAlertType('success');
+    setAlertTitle('Authenticator code');
+    setAlertMessage('Open your authenticator app to get the current code. Authenticator codes cannot be resent.');
+    setAlertType('error');
     setAlertVisible(true);
-    setTimeLeft(300);
   };
 
   const canResend = timeLeft <= 180; 
@@ -164,13 +165,13 @@ export default function OtpVerificationScreen() {
                 
                 {/* Text color now matches the ring color! */}
                 <Text style={[styles.timerText, { color: getRingColor() }]}>
-                  {formatTime(timeLeft)}
+                  TOTP
                 </Text>
               </View>
 
               <View style={styles.textContainer}>
                 <Text style={styles.subText}>
-                  Enter the OTP sent to {email ? email : 'your email'}:
+                  Enter the current code from your authenticator app.
                 </Text>
               </View>
 
@@ -191,11 +192,11 @@ export default function OtpVerificationScreen() {
                   ))}
                 </View>
 
-                <Text style={styles.timeBasedLabel}>TIME-BASED ONE-TIME-PASSWORD</Text>
+                <Text style={styles.timeBasedLabel}>AUTHENTICATOR CODE</Text>
 
                 <View style={styles.buttonStack}>
-                  <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                    <Text style={styles.submitBtnText}>Submit</Text>
+                  <TouchableOpacity style={styles.submitBtn} onPress={() => void handleSubmit()} disabled={isSubmitting}>
+                    <Text style={styles.submitBtnText}>{isSubmitting ? 'Verifying…' : 'Submit'}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity 

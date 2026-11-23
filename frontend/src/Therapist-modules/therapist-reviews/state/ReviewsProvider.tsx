@@ -1,89 +1,112 @@
-import { useLearningAssignments, saveLearningFeedback } from '@/data/learning-workflow';
-import { useTherapist } from '@/components/therapist/TherapistProvider';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { sampleReviews, type ReviewRecord, type ReviewTarget } from '@/Therapist-modules/therapist-reviews/data/reviewData';
+import type { ReviewRecord } from '@/Therapist-modules/therapist-reviews/data/reviewData';
+import { getReviews, saveReview as saveReviewRequest } from '@/services/user-api';
 
 type ReviewsContextValue = {
   reviews: ReviewRecord[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
   updateReview: (id: string, patch: Partial<ReviewRecord>) => void;
-  updateTarget: (reviewId: string, targetId: string, patch: Partial<ReviewTarget>) => void;
-  saveEvaluation: (id: string) => void;
+  updateTarget: (reviewId: string, targetId: string, patch: Partial<ReviewRecord['targets'][number]>) => void;
+  saveEvaluation: (id: string) => Promise<void>;
 };
 
 const ReviewsContext = createContext<ReviewsContextValue | null>(null);
 
+function mapReview(item: Awaited<ReturnType<typeof getReviews>>[number]): ReviewRecord {
+  return {
+    id: item.id,
+    submissionId: item.submissionId || item.id,
+    assignmentId: item.assignmentId || undefined,
+    student: item.student,
+    initial: item.initial || item.student.charAt(0).toUpperCase(),
+    avatar: '#D7E7C8',
+    activity: item.activity,
+    sound: item.sound,
+    level: item.level,
+    language: item.language || '',
+    status: item.status,
+    targets: item.targets.map((target) => ({ ...target, notesOpen: false })),
+    observations: item.observations,
+    parentFeedback: item.parentFeedback,
+    homePractice: item.homePractice,
+    audioRecordingUrl: item.audioRecordingUrl,
+  };
+}
+
 export function ReviewsProvider({ children }: { children: ReactNode }) {
-  const { profile } = useTherapist();
-  const assignments = useLearningAssignments();
-  const [storedReviews, setReviews] = useState<ReviewRecord[]>(sampleReviews);
-  const reviews = useMemo<ReviewRecord[]>(() => [
-    ...assignments.filter((assignment) => assignment.submittedAt).map((assignment): ReviewRecord => {
-      const id = 'submission:' + assignment.id;
-      const draft = storedReviews.find((item) => item.id === id);
-      return {
-        id,
-        assignmentId: assignment.id,
-        student: assignment.studentName,
-        initial: assignment.studentName.charAt(0),
-        avatar: '#D7E7C8',
-        activity: assignment.title,
-        sound: '',
-        level: assignment.level,
-        language: assignment.language,
-        status: assignment.feedback ? 'Reviewed' : 'Pending',
-        targets: [],
-        practicePrompts: assignment.prompts,
-        observations: draft?.observations ?? assignment.feedback?.observations ?? '',
-        parentFeedback: draft?.parentFeedback ?? assignment.feedback?.message ?? '',
-        homePractice: draft?.homePractice ?? assignment.feedback?.homePractice ?? '',
-      };
-    }),
-    ...storedReviews.filter((review) => !review.assignmentId),
-  ], [assignments, storedReviews]);
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const updateReview = useCallback((id: string, patch: Partial<ReviewRecord>) => {
-    const existing = reviews.find((review) => review.id === id);
-    if (!existing) return;
-    setReviews((current) => current.some((review) => review.id === id)
-      ? current.map((review) => review.id === id ? { ...review, ...patch } : review)
-      : [...current, { ...existing, ...patch }]);
-  }, [reviews]);
-
-  const updateTarget = useCallback((reviewId: string, targetId: string, patch: Partial<ReviewTarget>) => {
-    setReviews((current) =>
-      current.map((review) =>
-        review.id === reviewId
-          ? { ...review, targets: review.targets.map((target) => (target.id === targetId ? { ...target, ...patch } : target)) }
-          : review,
-      ),
-    );
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setReviews((await getReviews()).map(mapReview));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Could not load clinical reviews.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const saveEvaluation = useCallback((id: string) => {
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const updateReview = useCallback((id: string, patch: Partial<ReviewRecord>) => {
+    setReviews((current) => current.map((review) => review.id === id ? { ...review, ...patch } : review));
+  }, []);
+
+  const updateTarget = useCallback((
+    reviewId: string,
+    targetId: string,
+    patch: Partial<ReviewRecord['targets'][number]>,
+  ) => {
+    setReviews((current) => current.map((review) => review.id === reviewId
+      ? {
+        ...review,
+        targets: review.targets.map((target) => target.id === targetId ? { ...target, ...patch } : target),
+      }
+      : review));
+  }, []);
+
+  const saveEvaluation = useCallback(async (id: string) => {
     const review = reviews.find((item) => item.id === id);
-    if (!review) throw new Error('This review is no longer available.');
-    if (review.assignmentId) {
-      if (!review.parentFeedback.trim()) throw new Error('Add written feedback for the guardian before saving.');
-      const saved = saveLearningFeedback(review.assignmentId, {
-        message: review.parentFeedback.trim(),
-        homePractice: review.homePractice.trim(),
-        observations: review.observations.trim(),
-        reviewedBy: profile.fullName,
-        date: new Date().toISOString(),
-      });
-      if (!saved) throw new Error('This submission is no longer available.');
-      return;
-    }
-    if (review.targets.length === 0 || review.targets.some((target) => target.score === null)) {
+    if (!review?.submissionId) throw new Error('This review is no longer available.');
+    if (!review.parentFeedback.trim()) throw new Error('Add written feedback for the guardian before saving.');
+    if (review.targets.some((target) => target.score === null)) {
       throw new Error('Score every target before saving the evaluation.');
     }
-    setReviews((current) => current.map((review) => (review.id === id ? { ...review, status: 'Reviewed' } : review)));
-  }, [reviews, profile.fullName]);
+
+    setError(null);
+    try {
+      await saveReviewRequest({
+        submissionId: review.submissionId,
+        observations: review.observations.trim(),
+        parentFeedback: review.parentFeedback.trim(),
+        homePractice: review.homePractice.trim(),
+        targets: review.targets.map(({ text, position, score, feedback, remarks }) => ({
+          text,
+          position,
+          score,
+          feedback,
+          remarks,
+        })),
+      });
+      setReviews((current) => current.map((item) => item.id === id ? { ...item, status: 'Reviewed' } : item));
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save this clinical review.');
+      throw saveError;
+    }
+  }, [reviews]);
 
   const value = useMemo(
-    () => ({ reviews, updateReview, updateTarget, saveEvaluation }),
-    [reviews, updateReview, updateTarget, saveEvaluation],
+    () => ({ reviews, loading, error, refresh, updateReview, updateTarget, saveEvaluation }),
+    [reviews, loading, error, refresh, updateReview, updateTarget, saveEvaluation],
   );
 
   return <ReviewsContext.Provider value={value}>{children}</ReviewsContext.Provider>;

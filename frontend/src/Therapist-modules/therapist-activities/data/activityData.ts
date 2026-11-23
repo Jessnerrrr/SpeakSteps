@@ -35,6 +35,8 @@ export type BankWord = {
   sound: TargetSound;
   position: WordPosition;
   language: string;
+  isStandard?: boolean;
+  modelAudioUrl?: string;
 };
 
 export type ActivityWord = {
@@ -43,6 +45,7 @@ export type ActivityWord = {
   sound: TargetSound;
   position: WordPosition;
   phrase: string;
+  modelAudioUrl?: string;
 };
 
 export type Activity = {
@@ -82,6 +85,8 @@ export type ActivityDraft = {
   customSound: TargetSound;
   customPosition: WordPosition;
   visualName: string;
+  modelAudioUrls: Record<string, string>;
+  modelAudioUrl?: string;
 };
 
 export const levelColors: Record<PracticeLevel, string> = {
@@ -306,6 +311,8 @@ export function emptyDraft(): ActivityDraft {
     customSound: '/r/',
     customPosition: 'Initial',
     visualName: '',
+    modelAudioUrls: {},
+    modelAudioUrl: '',
   };
 }
 
@@ -331,6 +338,10 @@ export function draftFromActivity(activity: Activity): ActivityDraft {
     customSound: activity.sound,
     customPosition: activity.positions[0] || 'Initial',
     visualName: activity.visualName,
+    modelAudioUrls: Object.fromEntries(activity.words.flatMap((word) =>
+      word.modelAudioUrl ? [[word.id, word.modelAudioUrl]] : [],
+    )),
+    modelAudioUrl: activity.words.find((word) => word.modelAudioUrl)?.modelAudioUrl || '',
   };
 }
 
@@ -338,8 +349,16 @@ export function activityFromDraft(draft: ActivityDraft, wordBank: BankWord[], st
   const positions = positionsFromLabel(draft.positionLabel);
   const bankWords = wordBank
     .filter((word) => draft.selectedWordIds.includes(word.id))
-    .map((word) => ({ ...word, phrase: draft.phrases[word.id] || '' }));
-  const words = draft.origin === 'custom' ? draft.customWords : bankWords;
+    .map((word) => ({
+      ...word,
+      phrase: draft.phrases[word.id] || '',
+      modelAudioUrl: draft.modelAudioUrls[word.id] || draft.modelAudioUrl || word.modelAudioUrl,
+    }));
+  const words = (draft.origin === 'custom' ? draft.customWords : bankWords)
+    .map((word) => ({
+      ...word,
+      modelAudioUrl: draft.modelAudioUrls[word.id] || draft.modelAudioUrl || word.modelAudioUrl,
+    }));
   return {
     id: draft.id || `activity-${Date.now()}`,
     title: draft.title.trim(),

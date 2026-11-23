@@ -2,6 +2,9 @@ import { CheckinHeader } from '../../components/CheckinHeader';
 import React, { useState } from 'react';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { createSpeechCheckin } from '@/services/user-api';
 import {
   Image,
   ImageBackground,
@@ -30,12 +33,16 @@ const soundChecksData = [
 
 export default function SoundCheckScreen() {
   const router = useRouter();
+  const { responses } = useLocalSearchParams<{ responses?: string }>();
+  const { patient, refresh } = usePatientLearning();
   const { width, height } = useWindowDimensions();
   const isTablet = width > 600;
   const isShortScreen = height < 700;
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const [fontsLoaded, fontError] = useFonts({
     SourGummy: require('../../../assets/SourGummy-Regular.ttf'),
@@ -62,12 +69,30 @@ export default function SoundCheckScreen() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (currentIndex < soundChecksData.length - 1) {
       setCurrentIndex((prev) => prev + 1);
       setIsRecording(false);
-    } else {
-      router.push('/speech-checkin-result' as any);
+      return;
+    }
+    if (!patient) {
+      setSaveError('The patient profile could not be loaded. Please try again.');
+      return;
+    }
+    if (!responses) {
+      setSaveError('The check-in answers are missing. Please complete the questions again.');
+      return;
+    }
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      const saved = await createSpeechCheckin({ patientId: patient.id, responses: JSON.parse(responses) });
+      await refresh();
+      router.push({ pathname: '/speech-checkin-result', params: { checkinId: saved.id } } as any);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save this speech check-in.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -158,15 +183,17 @@ export default function SoundCheckScreen() {
                 Long press the mic to record your voice
               </Text>
               <Text style={styles.micPrompt}>Ask your child to say it</Text>
+              {saveError ? <Text accessibilityRole="alert" style={styles.micPrompt}>{saveError}</Text> : null}
             </View>
 
             {/* Submit Button */}
             <TouchableOpacity
               style={styles.submitButton}
               activeOpacity={0.85}
-              onPress={handleSubmit}
+              onPress={() => void handleSubmit()}
+              disabled={isSaving}
             >
-              <Text style={styles.submitButtonText}>Submit</Text>
+              <Text style={styles.submitButtonText}>{isSaving ? 'Saving…' : 'Submit'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

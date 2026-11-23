@@ -3,7 +3,6 @@ import { ProfileEditWarning } from '@/components/profile-edit-warning';
 import { reviewStudentNameChange, useStudentNameRequests, type StudentNameRequest } from '@/data/student-name-requests';
 import { parseCalendarDate, todayCalendarDate } from '@/data/calendar-date';
 import { ListPagination, useListPagination } from '@/components/list-pagination';
-import { useLearningActivity } from '@/data/learning-workflow';
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
@@ -12,6 +11,7 @@ import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore }
 import {
   Animated,
   ActivityIndicator,
+  Alert,
   Easing,
   LayoutChangeEvent,
   Modal,
@@ -58,6 +58,17 @@ import AccountDetailsActionRow from '../../components/admin/AccountDetailsAction
 import AccountDetailsHeader from '../../components/admin/AccountDetailsHeader';
 import ProfessionalDetails from '../../components/admin/ProfessionalDetails';
 import SupportingAttachments from '../../components/admin/SupportingAttachments';
+import {
+  fetchAuditLogs,
+  archiveAdminUser,
+  createAdminUser,
+  getAdminUsers,
+  getPatients,
+  resendAdminInvitation,
+  updateAdminUserStatus,
+  type AdminUser,
+  type AuditLogEntry,
+} from '@/services/user-api';
 
 type Page = 'Dashboard' | 'Accounts' | 'Activity Logs' | 'Settings';
 type AccountView = 'Directory' | 'Student Requests' | 'Archive Center';
@@ -107,9 +118,9 @@ const updateAdminRecords = <K extends keyof AdminSharedRecords>(key: K, update: 
   const current = sharedAdminRecords[key];
   const next = typeof update === 'function' ? (update as (value: AdminSharedRecords[K]) => AdminSharedRecords[K])(current) : update;
   const records = { ...sharedAdminRecords, [key]: next };
-  if (key === 'professionals') records.professionals.filter((person) => professionalAccess(person) === 'Suspended' || professionalMembership(person) === 'Deactivated').forEach((person) => requireArchive(person.archive));
+  if (key === 'professionals') records.professionals.filter((person) => (professionalAccess(person) === 'Suspended' || professionalMembership(person) === 'Deactivated') && person.backendStatus !== 'rejected').forEach((person) => requireArchive(person.archive));
   if (key === 'patients') {
-    records.patients.filter((patient) => studentAccess(patient) === 'Suspended' || studentMembership(patient) === 'Deactivated').forEach((patient) => requireArchive(patient.archive));
+    records.patients.filter((patient) => (studentAccess(patient) === 'Suspended' || studentMembership(patient) === 'Deactivated') && patient.backendStatus !== 'rejected').forEach((patient) => requireArchive(patient.archive));
     if (records.patients.some((patient) => patient.enrollment === 'Archived' && !records.careEpisodes.some((episode) => episode.patientId === patient.id && episode.status === 'Closed' && !episode.restoredAt))) {
       throw new Error('Archived enrollments require a dated closure record.');
     }
@@ -171,6 +182,19 @@ const studentAssignmentStatus = (student: Patient) => student.teacherId || stude
 const isFinalRequestStatus = (status: string) => status === 'Declined' || status === 'Approved' || status.startsWith('Approved &');
 const primaryRequestStatus = (status: string): 'Pending' | 'Approved' | 'Declined' => status === 'Declined' ? 'Declined' : status === 'Approved' || status.startsWith('Approved &') ? 'Approved' : 'Pending';
 const releaseRequestTypeLabel = (request: ReleaseRequest) => request.requestType === 'Transfer' ? 'School transfer' : request.requestType === 'Withdrawal' ? 'Withdrawal' : request.requestType === 'Therapist assignment release' ? 'Therapist assignment release' : 'Enrollment release';
+const auditActivityFromApi = (entry: AuditLogEntry): ActivityEntry => ({
+  id: entry.id,
+  title: entry.action,
+  detail: entry.details,
+  actor: entry.actorName || entry.actorRole,
+  date: entry.createdAt,
+  category: entry.category === 'Account' || entry.category === 'Student' || entry.category === 'Settings'
+    || entry.category === 'Activity' || entry.category === 'Practice' || entry.category === 'Clinical' || entry.category === 'Media'
+    ? entry.category
+    : 'Request',
+  result: entry.action,
+  read: false,
+});
 const requestResolutionTime = (request: SuspensionRequest | ReleaseRequest) => {
   if (request.resolvedAt) return new Date(request.resolvedAt).getTime();
   const event = [...(request.events ?? [])].reverse().find((item) => /suspension approved|request declined|enrollment closed|therapist assignment updated/i.test(item.title));
@@ -350,8 +374,10 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const [menuOpen, setMenuOpen] = useState(false);
   const setSidebarExpanded = (next: boolean) => updateAdminNavigation({ sidebarExpanded: next });
   const { professionals, patients, requests, releaseRequests, careEpisodes, assignmentHistory, activity: adminActivity, notifications, profile } = useSyncExternalStore(subscribeAdminRecords, getAdminRecords, getAdminRecords);
-  const learningActivity = useLearningActivity();
-  const activity = [...learningActivity, ...adminActivity];
+  const activity = adminActivity;
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [accountsError, setAccountsError] = useState('');
+  const [auditLogsError, setAuditLogsError] = useState('');
   const setProfessionals: React.Dispatch<React.SetStateAction<Professional[]>> = (update) => updateAdminRecords('professionals', update);
   const setPatients: React.Dispatch<React.SetStateAction<Patient[]>> = (update) => updateAdminRecords('patients', update);
   const setRequests: React.Dispatch<React.SetStateAction<SuspensionRequest[]>> = (update) => updateAdminRecords('requests', update);
@@ -442,6 +468,93 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [centerSettings, setCenterSettings] = useState(centerProfile);
 
+  useEffect(() => {
+    let active = true;
+    updateAdminRecords('professionals', []);
+    updateAdminRecords('patients', []);
+    updateAdminRecords('activity', []);
+    const loadAccounts = async () => {
+      try {
+        const [users, apiPatients] = await Promise.all([getAdminUsers(), getPatients()]);
+        if (!active) return;
+        setAdminUsers(users);
+        const professionals: Professional[] = users
+          .filter((user) => user.role === 'therapist' || user.role === 'teacher')
+          .map((user) => {
+            const nameParts = user.name.split(/\s+/);
+            return {
+              id: user.profileId || user.id,
+              userId: user.id,
+              backendStatus: user.status,
+              name: user.name,
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' '),
+              email: user.email,
+              role: user.role === 'therapist' ? 'Therapist' : 'Teacher',
+              professionalTitle: user.role === 'therapist' ? 'Speech-Language Pathologist' : undefined,
+              contactNumber: user.contact,
+              status: user.archivedAt ? 'Deactivated' : user.status === 'rejected' ? 'Suspended' : 'Active',
+              access: user.status === 'rejected' ? 'Suspended' : 'Active',
+              invitation: user.status === 'verified' ? 'Completed' : user.status === 'rejected' ? 'Expired' : 'Pending',
+              joined: user.createdAt.slice(0, 10),
+              invitationUpdated: user.createdAt.slice(0, 10),
+              membership: user.archivedAt ? 'Deactivated' : 'Active',
+              archive: user.archivedAt ? {
+                archivedAt: user.archivedAt,
+                reason: user.archiveReason || 'No archive reason was recorded.',
+              } : undefined,
+            };
+          });
+        const parentUsers = users.filter((user) => user.role === 'parent');
+        const apiStudentRecords: Patient[] = apiPatients.map((patient) => {
+          const parent = parentUsers.find((user) => user.email === patient.guardianEmail);
+          const setupStatus = parent?.status ?? 'pending';
+          return {
+            id: patient.id,
+            backendStatus: setupStatus,
+            name: [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' '),
+            studentNumber: patient.patientCode,
+            therapistId: patient.primaryTherapistId || null,
+            teacherId: patient.assignedTeacherId || undefined,
+            access: setupStatus === 'verified' ? 'Active' : setupStatus === 'rejected' ? 'Suspended' : 'Setup pending',
+            membership: parent?.archivedAt ? 'Deactivated' : 'Active',
+            setup: setupStatus === 'verified' ? 'Completed' : 'Pending',
+            enrollment: 'Enrolled',
+            therapyStatus: patient.primaryTherapistId ? 'In progress' : 'On hold',
+            registered: patient.createdAt.slice(0, 10),
+            guardian: patient.guardianName || parent?.name || 'Not recorded',
+            guardianContact: patient.guardianEmail || parent?.email || '',
+            school: 'Not recorded',
+            archive: parent?.archivedAt ? {
+              archivedAt: parent.archivedAt,
+              reason: parent.archiveReason || 'No archive reason was recorded.',
+            } : undefined,
+          };
+        });
+        setProfessionals(professionals);
+        setPatients(apiStudentRecords);
+        setAccountsError('');
+      } catch (error) {
+        if (active) setAccountsError(error instanceof Error ? error.message : 'Could not load admin accounts.');
+      }
+    };
+    void loadAccounts();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchAuditLogs(logSearch, logCategoriesSelected.length === 1 ? logCategoriesSelected[0] : '').then((entries) => {
+      if (active) {
+        setActivity(entries.map(auditActivityFromApi));
+        setAuditLogsError('');
+      }
+    }).catch((error) => {
+      if (active) setAuditLogsError(error instanceof Error ? error.message : 'Could not load audit logs.');
+    });
+    return () => { active = false; };
+  }, [logCategoriesSelected, logSearch]);
+
   const profileName = `${profile.firstName} ${profile.lastName}`.trim();
   const profileHasChanges = adminProfileDraft.firstName !== profile.firstName || adminProfileDraft.lastName !== profile.lastName || adminProfileDraft.contactNumber !== profile.contactNumber;
   const requestProfileClose = useCallback(() => {
@@ -522,6 +635,33 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const flash = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(''), 3200);
+  };
+
+  const showInvitationCredentials = (name: string, email: string, temporaryPassword: string, invitationToken: string) => {
+    const message = `Email: ${email}\nTemporary password: ${temporaryPassword}\nInvitation token: ${invitationToken}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(`${name} account invitation\n\n${message}`);
+    else Alert.alert(`${name} account invitation`, message);
+  };
+
+  const refreshAuditLogs = async () => {
+    try {
+      const entries = await fetchAuditLogs(logSearch, logCategoriesSelected.length === 1 ? logCategoriesSelected[0] : '');
+      setActivity(entries.map(auditActivityFromApi));
+      setAuditLogsError('');
+    } catch (error) {
+      setAuditLogsError(error instanceof Error ? error.message : 'Could not refresh audit logs.');
+    }
+  };
+
+  const persistAccountStatus = async (userId: string, status: 'verified' | 'rejected') => {
+    await updateAdminUserStatus(userId, status);
+    setAdminUsers((current) => current.map((user) => user.id === userId ? {
+      ...user,
+      status,
+      ...(status === 'verified' ? { archivedAt: null, archiveReason: '' } : {}),
+    } : user));
+    setAccountsError('');
+    void refreshAuditLogs();
   };
 
   const closeConfirmation = () => {
@@ -719,6 +859,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     if (entry.category === 'Account') return 'Accounts';
     if (entry.category === 'Request') return 'Requests';
     if (entry.category === 'Settings') return 'Settings';
+    if (entry.category === 'Activity') return 'Assignments';
+    if (entry.category === 'Practice' || entry.category === 'Clinical' || entry.category === 'Media') return 'Students';
     if (/assign/i.test(entry.title)) return 'Assignments';
     if (/enroll|withdraw|transfer/i.test(entry.title)) return 'Enrollment';
     return 'Students';
@@ -739,69 +881,163 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   }).format(new Date(entry.date));
   const visibleLogs = orderedActivity.filter((entry) => (!logCategoriesSelected.length || logCategoriesSelected.includes(activityLogCategory(entry)))
     && (!logSearch.trim() || [entry.title, entry.detail, entry.actor, entry.category, activityLogCategory(entry), activityResult(entry), activityLogTimestamp(entry), activitySubject(entry)?.name ?? '', activitySubject(entry)?.identifier ?? '', activitySubject(entry)?.type ?? ''].some((value) => value.toLocaleLowerCase().includes(logSearch.trim().toLocaleLowerCase()))));
-  const makeProfessional = (draft: ProfessionalDraft) => {
-    const profile = draft.role === 'Teacher' ? (({ lookupStaffId: _lookupStaffId, ...teacherRecord }) => teacherRecord)(draft) : draft;
-    const recordIdentifier = draft.role === 'Therapist' ? draft.staffId : draft.professionalIdentifier;
-    const person: Professional = { id: `pro-${draft.role.toLowerCase()}-${recordIdentifier}`, ...profile, access: 'Active', membership: 'Active', status: 'Active', invitation: 'Pending', joined: new Date().toISOString().slice(0, 10), invitationUpdated: new Date().toISOString().slice(0, 10) };
-    setProfessionals((current) => [person, ...current]);
-    addLog(`${draft.role} account created`, `${person.name} · ${draft.role === 'Therapist' ? `Staff ID ${person.staffId}` : `Professional ID ${person.professionalIdentifier}`} · setup pending`, 'Account');
-    addNotification('Invitation awaiting setup', `${person.name} can complete account setup after receiving an invitation.`);
-    setNewAccountOpen(false); setCreatePatientOpen(false); setAccountRoles([draft.role]); setAccountAccess('All access'); setAccountSetup([]); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); setAccountSearch('');
-    setAccountPage(0);
-    setSelection({ kind: 'professional', id: person.id });
-    flash(`${person.name} added. Account setup is pending.`);
+  const makeProfessional = async (draft: ProfessionalDraft) => {
+    try {
+      const invitation = await createAdminUser({
+        role: draft.role.toLowerCase() as 'therapist' | 'teacher',
+        fullName: draft.name,
+        email: draft.email,
+        contact: 'contactNumber' in draft ? draft.contactNumber : undefined,
+        staffId: 'staffId' in draft ? draft.staffId : undefined,
+        professionalIdentifier: 'professionalIdentifier' in draft ? draft.professionalIdentifier : undefined,
+        professionalTitle: 'professionalTitle' in draft ? draft.professionalTitle : undefined,
+        specialization: 'specialization' in draft ? draft.specialization : undefined,
+        licenseNumber: 'licenseNumber' in draft ? draft.licenseNumber : undefined,
+        school: 'school' in draft ? draft.school : undefined,
+        gradeSections: 'gradeSections' in draft ? draft.gradeSections : undefined,
+      });
+      setAdminUsers((current) => [invitation.user, ...current]);
+      const now = new Date().toISOString();
+      const professional: Professional = {
+        id: invitation.user.profileId || invitation.user.id,
+        userId: invitation.user.id,
+        backendStatus: 'pending',
+        name: draft.name,
+        firstName: draft.firstName,
+        middleName: draft.middleName,
+        lastName: draft.lastName,
+        email: draft.email,
+        role: draft.role,
+        staffId: 'staffId' in draft ? draft.staffId : undefined,
+        professionalIdentifier: 'professionalIdentifier' in draft ? draft.professionalIdentifier : undefined,
+        school: 'school' in draft ? draft.school : undefined,
+        gradeSections: 'gradeSections' in draft ? draft.gradeSections : undefined,
+        professionalTitle: 'professionalTitle' in draft ? draft.professionalTitle : undefined,
+        specialization: 'specialization' in draft ? draft.specialization : undefined,
+        licenseNumber: 'licenseNumber' in draft ? draft.licenseNumber : undefined,
+        contactNumber: 'contactNumber' in draft ? draft.contactNumber : undefined,
+        status: 'Active',
+        access: 'Active',
+        membership: 'Active',
+        invitation: 'Pending',
+        joined: now.slice(0, 10),
+        invitationUpdated: now.slice(0, 10),
+      };
+      setProfessionals((current) => [professional, ...current]);
+      setNewAccountOpen(false);
+      setAccountsError('');
+      void refreshAuditLogs();
+      showInvitationCredentials(draft.name, draft.email, invitation.temporaryPassword, invitation.invitationToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not create the professional account.';
+      setAccountsError(message);
+      flash(message);
+    }
   };
 
-  const makePatient = (record: { studentNumber: string; name: string; grade: string; section: string; guardian: string; guardianEmail: string; guardianPhone: string; school: string }, teacherId: string, therapistId: string) => {
-    const patient: Patient = {
-      id: `pt-${record.studentNumber}`, name: record.name, studentNumber: record.studentNumber, therapistId,
-      access: 'Active', setup: 'Pending', enrollment: 'Enrolled', therapyStatus: 'In progress', registered: new Date().toISOString().slice(0, 10),
-      guardian: record.guardian, guardianContact: record.guardianEmail, school: record.school, grade: record.grade, section: record.section, teacherId,
-    };
-    setPatients((current) => [patient, ...current]);
-    addLog('Student account created', `${patient.name} · ${patient.studentNumber}; invitation pending`, 'Student');
-    addNotification('Student account created', `${patient.name} is assigned to ${activeTherapistFor(therapistId)}. Guardian setup invitation is pending.`);
-    addNotification('New student assignment', `${patient.name} · ${patient.studentNumber} was assigned to ${activeTherapistFor(therapistId)}.`);
-    setAccountSearch(''); setAccountRoles(['Student']); setAccountAccess('All access'); setAccountSetup([]); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment');
-    setAccountPage(0);
-    flash(`${patient.name} added. The setup invitation is simulated.`);
+  const makePatient = async (record: { studentNumber: string; name: string; grade: string; section: string; guardian: string; guardianEmail: string; guardianPhone: string; school: string }, teacherId: string, therapistId: string) => {
+    try {
+      const invitation = await createAdminUser({
+        role: 'parent',
+        fullName: record.guardian,
+        email: record.guardianEmail,
+        contact: record.guardianPhone,
+        childName: record.name,
+        studentId: record.studentNumber,
+        grade: record.grade,
+        section: record.section,
+        school: record.school,
+        assignedTeacherId: teacherId,
+        primaryTherapistId: therapistId,
+      });
+      setAdminUsers((current) => [invitation.user, ...current]);
+      if (invitation.patient) {
+        const patient: Patient = {
+          id: invitation.patient.id,
+          backendStatus: 'pending',
+          name: record.name,
+          studentNumber: invitation.patient.patientCode,
+          therapistId,
+          teacherId,
+          access: 'Setup pending',
+          membership: 'Active',
+          setup: 'Pending',
+          enrollment: 'Enrolled',
+          therapyStatus: 'In progress',
+          registered: new Date().toISOString().slice(0, 10),
+          guardian: record.guardian,
+          guardianContact: record.guardianEmail,
+          school: record.school,
+          grade: record.grade,
+          section: record.section,
+        };
+        setPatients((current) => [patient, ...current]);
+      }
+      setNewAccountOpen(false);
+      setCreatePatientOpen(false);
+      setAccountsError('');
+      void refreshAuditLogs();
+      showInvitationCredentials(record.guardian, record.guardianEmail, invitation.temporaryPassword, invitation.invitationToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not create the student and guardian account.';
+      setAccountsError(message);
+      flash(message);
+    }
   };
 
-  const resendInvitation = (person: Professional) => {
+  const resendInvitation = async (person: Professional) => {
     if (person.invitation === 'Completed') { flash(`${person.name} has already completed account setup.`); return false; }
-    setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, invitation: 'Pending', invitationUpdated: new Date().toISOString().slice(0, 10) } : item));
-    addLog('Invitation simulated', `${person.name} · ${person.email}`, 'Account');
-    flash(`Follow-up recorded for ${person.name}.`);
-    return true;
+    if (!person.userId) { flash('This account is not linked to a backend user.'); return false; }
+    try {
+      const invitation = await resendAdminInvitation(person.userId);
+      setProfessionals((current) => current.map((item) => item.id === person.id
+        ? { ...item, invitation: 'Pending', invitationUpdated: new Date().toISOString().slice(0, 10) }
+        : item));
+      void refreshAuditLogs();
+      showInvitationCredentials(person.name, person.email, invitation.temporaryPassword, invitation.invitationToken);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not resend this invitation.';
+      setAccountsError(message);
+      flash(message);
+      return false;
+    }
   };
 
   const confirmProfessionalFollowup = (person: Professional) => {
-    setConfirmation({
-      title: 'Follow up on setup?',
-      message: `Record a setup follow-up for ${person.name} by marking the invitation as pending. No email will be sent.`,
-      actionLabel: 'Send follow-up',
-      icon: 'mail-outline',
-      run: () => {
-        resendInvitation(person);
-        setConfirmation(null);
-      },
-    });
+    void resendInvitation(person);
   };
 
-  const recordStudentSetupFollowup = (patient: Patient) => {
+  const recordStudentSetupFollowup = async (patient: Patient) => {
     if (studentSetup(patient) === 'Completed') { flash(`${patient.name} has already completed account setup.`); return; }
-    addLog('Student setup follow-up recorded', `${patient.name} · ${patient.studentNumber}; no email was sent`, 'Account');
-    flash(`Setup follow-up recorded for ${patient.name}. No email was sent.`);
+    const guardian = adminUsers.find((user) => user.role === 'parent' && user.email.toLowerCase() === patient.guardianContact.toLowerCase());
+    if (!guardian) { flash('No backend Guardian account is linked to this Student.'); return; }
+    try {
+      const invitation = await resendAdminInvitation(guardian.id);
+      showInvitationCredentials(patient.guardian, guardian.email, invitation.temporaryPassword, invitation.invitationToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not resend this Guardian invitation.';
+      setAccountsError(message);
+      flash(message);
+    }
   };
 
-  const setProfessionalStatus = (person: Professional, next: ProfessionalStatus, suspensionReason = '') => {
+  const setProfessionalStatus = async (person: Professional, next: ProfessionalStatus, suspensionReason = '') => {
     const assignedStudents = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled');
     const hasPatients = assignedStudents.length > 0;
     if (next === 'Suspended') {
       if (!suspensionReason.trim()) { flash('Enter a reason to suspend access.'); return; }
+      if (!person.userId) { flash('This account is not linked to a backend user and cannot be updated.'); return; }
+      try {
+        await persistAccountStatus(person.userId, 'rejected');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not suspend this account.';
+        setAccountsError(message);
+        flash(message);
+        return;
+      }
       const changedAt = new Date().toISOString();
-      setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: 'Suspended', access: 'Suspended', membership: professionalMembership(item), archive: { archivedAt: changedAt, archivedBy: profileName, reason: suspensionReason.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-      addLog('Professional access suspended', `${person.name} · ${person.role} · ${suspensionReason}`, 'Account');
+      setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, backendStatus: 'rejected', status: 'Suspended', access: 'Suspended', membership: professionalMembership(item), lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
       if (person.role === 'Therapist' && hasPatients) addNotification('Students need reassignment', `${person.name} was suspended; assigned students remain linked until reassigned.`);
       setSelection(null);
       flash(`${person.name}’s access is suspended.`);
@@ -828,10 +1064,27 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
           ? `Restore ${person.name}’s center membership. ${accessStillSuspended ? 'Suspended sign-in access remains suspended and needs a separate review. ' : ''}Existing setup and Student relationships remain attached to this record.`
           : `Restore sign-in access for ${person.name}. Existing Student relationships remain unchanged.`,
         actionLabel: restoringMembership ? 'Reinstate account' : 'Reactivate access',
-        run: () => {
+        run: async () => {
+          if (!person.userId) { flash('This account is not linked to a backend user and cannot be updated.'); return; }
+          try {
+            await persistAccountStatus(person.userId, 'verified');
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not reactivate this account.';
+            setAccountsError(message);
+            flash(message);
+            return;
+          }
           const changedAt = new Date().toISOString();
-          setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: restoringMembership && accessStillSuspended ? 'Suspended' : 'Active', access: restoringMembership ? professionalAccess(item) : 'Active', membership: restoringMembership ? 'Active' : professionalMembership(item), lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-          addLog(restoringMembership ? 'Professional account reinstated' : 'Professional access reactivated', `${person.name} · ${person.role}`, 'Account');
+          setProfessionals((current) => current.map((item) => item.id === person.id ? {
+            ...item,
+            backendStatus: 'verified',
+            status: 'Active',
+            access: 'Active',
+            membership: 'Active',
+            ...(restoringMembership ? { archive: undefined } : {}),
+            lifecycleUpdatedAt: changedAt,
+            lifecycleEffectiveDate: localIsoDate(new Date(changedAt)),
+          } : item));
           setConfirmation(null); setSelection(null);
           flash(`${person.name}’s ${restoringMembership ? 'account is reinstated' : 'access is active again'}.`);
         },
@@ -846,13 +1099,36 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       actionLabel: verb,
       danger: true,
       requiresReason: true,
-      run: () => {
+      run: async () => {
         if (!confirmationReasonRef.current.trim()) { flash('Enter a reason to deactivate this account.'); return; }
-        const changedAt = new Date().toISOString();
-        setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: next, access: professionalAccess(item), membership: 'Deactivated', archive: { archivedAt: changedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-        addLog('Professional account deactivated', `${person.name} · ${person.role} · ${confirmationReasonRef.current.trim()}`, 'Account');
-        setConfirmation(null); setSelection(null);
-        flash(`${person.name}’s account is deactivated.`);
+        if (!person.userId) { flash('This account is not linked to a backend user and cannot be archived.'); return; }
+        try {
+          await archiveAdminUser(person.userId, true, confirmationReasonRef.current.trim());
+          const archivedAt = new Date().toISOString();
+          setAdminUsers((current) => current.map((user) => user.id === person.userId
+            ? { ...user, status: 'rejected', archivedAt, archiveReason: confirmationReasonRef.current.trim() }
+            : user));
+          setProfessionals((current) => current.map((item) => item.id === person.id ? {
+            ...item,
+            backendStatus: 'rejected',
+            status: 'Deactivated',
+            membership: 'Deactivated',
+            access: 'Suspended',
+            archive: { archivedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() },
+            lifecycleUpdatedAt: archivedAt,
+            lifecycleEffectiveDate: localIsoDate(new Date(archivedAt)),
+          } : item));
+          setSelection(null);
+          setConfirmation(null);
+          setConfirmationReason('');
+          confirmationReasonRef.current = '';
+          void refreshAuditLogs();
+          flash(`${person.name}’s account was archived.`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Could not archive this account.';
+          setAccountsError(message);
+          flash(message);
+        }
       },
     });
   };
@@ -866,14 +1142,14 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       actionLabel: 'Suspend access',
       danger: true,
       requiresReason: true,
-      run: () => {
-        setProfessionalStatus(person, 'Suspended', confirmationReasonRef.current.trim());
+      run: async () => {
+        await setProfessionalStatus(person, 'Suspended', confirmationReasonRef.current.trim());
         setConfirmation(null); setConfirmationReason(''); confirmationReasonRef.current = '';
       },
     });
   };
 
-  const finalizeOffboarding = () => {
+  const finalizeOffboarding = async () => {
     if (!offboardingId) return;
     if (!offboardingReason.trim()) { flash('Enter a reason to deactivate this account.'); return; }
     const person = professionals.find((item) => item.id === offboardingId);
@@ -881,9 +1157,22 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const missing = assigned.find((patient) => !offboardingChoices[patient.id]);
     if (missing) { setAssignmentChoicesOpen(missing.id); return; }
     const changedAt = new Date().toISOString();
+    if (!person?.userId) { flash('This account is not linked to a backend user and cannot be archived.'); return; }
+    try {
+      await archiveAdminUser(person.userId, true, offboardingReason.trim());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not archive this account.';
+      setAccountsError(message);
+      flash(message);
+      return;
+    }
+    setAdminUsers((current) => current.map((user) => user.id === person.userId
+      ? { ...user, status: 'rejected', archivedAt: changedAt, archiveReason: offboardingReason.trim() }
+      : user));
+    void refreshAuditLogs();
     assigned.forEach((patient) => recordAssignmentEnd(patient, patient.therapistId, 'Therapist', `Therapist reassigned during ${person?.name ?? 'professional'} offboarding: ${offboardingReason.trim()}`, changedAt));
     setPatients((current) => current.map((patient) => offboardingChoices[patient.id] ? { ...patient, therapistId: offboardingChoices[patient.id] } : patient));
-    setProfessionals((current) => current.map((item) => item.id === offboardingId ? { ...item, status: 'Deactivated', membership: 'Deactivated', archive: { archivedAt: changedAt, archivedBy: profileName, reason: offboardingReason.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
+    setProfessionals((current) => current.map((item) => item.id === offboardingId ? { ...item, backendStatus: 'rejected', status: 'Deactivated', access: 'Suspended', membership: 'Deactivated', archive: { archivedAt: changedAt, archivedBy: profileName, reason: offboardingReason.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
     assigned.forEach((patient) => addLog('Student reassigned', `${patient.name} · ${person?.name} → ${activeTherapistFor(offboardingChoices[patient.id])}`, 'Student'));
     addLog('Professional account deactivated', `${person?.name} · ${offboardingReason.trim()}`, 'Account');
     setOffboardingId(null); setOffboardingReason(''); setSelection(null); setAssignmentChoicesOpen(null);
@@ -926,17 +1215,32 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     setConfirmation({
       title: `${actionLabel}: ${patient.name}?`,
       message: next === 'Suspended'
-        ? `This prevents ${patient.name} and their Guardian from signing in. Enrollment, identity details, assignments, and therapy status remain unchanged.`
-        : `This restores sign-in access for ${patient.name}. It does not start or restore therapy enrollment.`,
+        ? `This prevents ${patient.guardian} from signing in. It affects all Students linked to this Guardian account; enrollment and assignments remain unchanged.`
+        : `This restores sign-in access for ${patient.guardian}. It does not start or restore therapy enrollment.`,
       actionLabel,
       danger: next === 'Suspended',
       requiresReason: next === 'Suspended',
-      run: () => {
+      run: async () => {
+        const guardian = adminUsers.find((user) => user.role === 'parent' && user.email.toLowerCase() === patient.guardianContact.toLowerCase());
+        if (!guardian) { flash('No backend Guardian account is linked to this Student.'); return; }
+        try {
+          await persistAccountStatus(guardian.id, next === 'Active' ? 'verified' : 'rejected');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Could not update Guardian sign-in access.';
+          setAccountsError(message);
+          flash(message);
+          return;
+        }
         const changedAt = new Date().toISOString();
-        setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, access: next, archive: next === 'Suspended' ? { archivedAt: changedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() } : item.archive, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-        const reason = confirmationReasonRef.current.trim();
-        addLog(next === 'Suspended' ? 'Student access suspended' : 'Student access reactivated', `${patient.name} · ${patient.studentNumber}${next === 'Suspended' ? ` · ${reason}` : ''}`, 'Student');
-        addNotification(next === 'Suspended' ? 'Student access suspended' : 'Student access reactivated', `${patient.name} · ${next === 'Suspended' ? reason : 'Access restored by Center Admin'}`);
+        const linkedPatientIds = new Set(patients.filter((item) => item.guardianContact.toLowerCase() === guardian.email.toLowerCase()).map((item) => item.id));
+        const backendStatus = next === 'Active' ? 'verified' : 'rejected';
+        setPatients((current) => current.map((item) => linkedPatientIds.has(item.id) ? {
+          ...item,
+          backendStatus,
+          access: next,
+          lifecycleUpdatedAt: changedAt,
+          lifecycleEffectiveDate: localIsoDate(new Date(changedAt)),
+        } : item));
         setConfirmation(null); setConfirmationReason('');  setSelection({ kind: 'patient', id: patient.id });
         flash(`Access ${next === 'Suspended' ? 'suspended' : 'reactivated'} for ${patient.name}.`);
       },
@@ -944,24 +1248,54 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   };
 
   const changePatientMembership = (patient: Patient, next: 'Active' | 'Deactivated') => {
-    const deactivating = next === 'Deactivated';
-    setConfirmationReason(''); confirmationReasonRef.current = '';
+    setConfirmationReason('');
+    confirmationReasonRef.current = '';
     setConfirmation({
-      title: `${deactivating ? 'Deactivate' : 'Reactivate'} ${patient.name}'s account?`,
-      message: deactivating
-        ? `This deactivates ${patient.name}'s account membership and moves the account to Archive Center. Enrollment, assignments, and account access are preserved.`
-        : `This restores ${patient.name}'s account membership and moves it out of Archive Center if access is active.`,
-      actionLabel: deactivating ? 'Deactivate account' : 'Reactivate account',
-      danger: deactivating,
-      requiresReason: deactivating,
-      run: () => {
-        if (deactivating && !confirmationReasonRef.current.trim()) { flash('Enter a reason to deactivate this account.'); return; }
-        const changedAt = new Date().toISOString();
-        setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, membership: next, archive: deactivating ? { archivedAt: changedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() } : item.archive, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-        addLog(deactivating ? 'Student account deactivated' : 'Student account reactivated', `${patient.name} · ${patient.studentNumber}${deactivating ? ` · ${confirmationReasonRef.current.trim()}` : ''}`, 'Account');
-        addNotification(deactivating ? 'Student account deactivated' : 'Student account reactivated', `${patient.name} · ${deactivating ? 'Moved to Archive Center' : 'Membership restored'}`);
-        setConfirmation(null); setConfirmationReason(''); setSelection(null);
-        flash(`${patient.name}'s account ${deactivating ? 'deactivated' : 'reactivated'}.`);
+      title: `${next === 'Deactivated' ? 'Deactivate' : 'Restore'} ${patient.guardian}’s account?`,
+      message: next === 'Deactivated'
+        ? `Archive the Guardian account for ${patient.name}. This does not close the Student’s enrollment.`
+        : `Restore the Guardian account for ${patient.name}.`,
+      actionLabel: next === 'Deactivated' ? 'Archive account' : 'Restore account',
+      danger: next === 'Deactivated',
+      requiresReason: next === 'Deactivated',
+      run: async () => {
+        const guardian = adminUsers.find((user) => user.role === 'parent' && user.email.toLowerCase() === patient.guardianContact.toLowerCase());
+        if (!guardian) { flash('No backend Guardian account is linked to this Student.'); return; }
+        const reason = confirmationReasonRef.current.trim();
+        if (next === 'Deactivated' && !reason) { flash('Enter a reason to deactivate this account.'); return; }
+        try {
+          const updated = await archiveAdminUser(guardian.id, next === 'Deactivated', reason);
+          const changedAt = updated.archivedAt || new Date().toISOString();
+          setAdminUsers((current) => current.map((user) => user.id === guardian.id ? {
+            ...user,
+            status: updated.status as AdminUser['status'],
+            archivedAt: updated.archivedAt,
+            archiveReason: updated.archiveReason,
+          } : user));
+          const linkedPatientIds = new Set(patients.filter((item) => item.guardianContact.toLowerCase() === guardian.email.toLowerCase()).map((item) => item.id));
+          setPatients((current) => current.map((item) => linkedPatientIds.has(item.id) ? {
+            ...item,
+            backendStatus: updated.status as AdminUser['status'],
+            membership: next,
+            access: next === 'Deactivated' ? 'Suspended' : 'Active',
+            archive: next === 'Deactivated' ? {
+              archivedAt: changedAt,
+              archivedBy: profileName,
+              reason,
+            } : undefined,
+            lifecycleUpdatedAt: changedAt,
+            lifecycleEffectiveDate: localIsoDate(new Date(changedAt)),
+          } : item));
+          setConfirmation(null);
+          setConfirmationReason('');
+          confirmationReasonRef.current = '';
+          void refreshAuditLogs();
+          flash(`${guardian.name}’s account membership was ${next === 'Deactivated' ? 'archived' : 'restored'}.`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Could not update Guardian account membership.';
+          setAccountsError(message);
+          flash(message);
+        }
       },
     });
   };
@@ -1356,8 +1690,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 
   const dashboard = () => {
     const metrics = [
-      { label: 'Active Therapists', icon: 'heart-outline' as const, value: professionals.filter((person) => person.role === 'Therapist' && professionalAccess(person) === 'Active' && professionalMembership(person) === 'Active').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Therapist', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
-      { label: 'Active Teachers', icon: 'school-outline' as const, value: professionals.filter((person) => person.role === 'Teacher' && professionalAccess(person) === 'Active' && professionalMembership(person) === 'Active').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Teacher', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
+      { label: 'Active Therapists', icon: 'heart-outline' as const, value: adminUsers.filter((user) => user.role === 'therapist' && user.status === 'verified').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Therapist', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
+      { label: 'Active Teachers', icon: 'school-outline' as const, value: adminUsers.filter((user) => user.role === 'teacher' && user.status === 'verified').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Teacher', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
       { label: 'Registered Students', icon: 'people-outline' as const, value: patients.filter((patient) => patient.enrollment === 'Enrolled').length, foot: 'Currently enrolled', click: () => openDashboardMetric('students') },
       { label: 'Account Setups', icon: 'mail-unread-outline' as const, value: pendingAccountSetups, foot: 'Invitations awaiting setup', click: () => openDashboardMetric('accounts'), attention: pendingInvitations.some((person) => !viewedAlertIds.has(person.id)) || pendingPatientSetups.some((student) => !viewedAlertIds.has(student.id)) },
       { label: 'Administrative Requests', icon: 'document-text-outline' as const, value: pendingRequests.length + pendingReleaseRequests.length, foot: 'Student requests to review', click: () => openDashboardMetric('requests'), attention: pendingRequests.some((request) => !viewedAlertIds.has(request.id)) || pendingReleaseRequests.some((request) => !viewedAlertIds.has(request.id)) },
@@ -1368,6 +1702,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const maxCaseload = Math.max(1, ...therapistCounts.map((person) => person.assigned));
     return <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false} onLayout={onRecentActivityViewportLayout} onScroll={onRecentActivityScroll} scrollEventThrottle={100}>
       <Header title="Dashboard" subtitle="Manage your center's accounts, student access, and recent activity." />
+      {accountsError ? <Text style={styles.secondaryText}>{accountsError}</Text> : null}
       <View style={[styles.metricStrip, compact && styles.metricStripCompact]}>{metrics.map((metric) => <TouchableOpacity key={metric.label} onPress={metric.click} style={[styles.metric, compact && styles.metricCompact]} accessibilityRole="button" accessibilityLabel={metric.label + ': ' + metric.value + '. ' + metric.foot}><View style={styles.metricTop}><Ionicons name={metric.icon} size={17} color={C.blue} /><Text style={styles.metricLabel}>{metric.label}</Text></View><View style={styles.metricValueLine}><Text style={styles.metricValue}>{metric.value}</Text>{metric.attention ? <View style={styles.attentionDot} /> : null}</View><Text style={styles.metricFoot}>{metric.foot}</Text></TouchableOpacity>)}</View>
 
       <View style={styles.attentionPanel}>
@@ -1462,6 +1797,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   </>;
   const accounts = () => accountView === 'Student Requests' ? studentRequestsPage() : <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
     <Header title={accountView} subtitle={accountView === 'Directory' ? 'Manage student and professional accounts across your center.' : 'Review therapy history and accounts with restricted access.'} action={accountView === 'Directory' ? <Button label="Add Account" kind="primary" icon="add" onPress={() => { setCreatePatientOpen(true); setNewAccountOpen(true); }} /> : undefined} />
+    {accountsError ? <Text style={styles.secondaryText}>{accountsError}</Text> : null}
     {accountView === 'Archive Center' ? archiveDirectoryPage() : <>
     <View style={styles.accountSearchArea}>
       <View style={styles.accountSearchRow}>
@@ -1648,6 +1984,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const LogContainer = stacked ? View : ScrollView;
     return <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
       <Header title="Activity Logs" subtitle="A chronological record of account, student, and request decisions." />
+      {auditLogsError ? <Text style={styles.secondaryText}>{auditLogsError}</Text> : null}
       <View style={styles.accountSearchRow}><SearchBox value={logSearch} onChange={setLogSearch} placeholder="Search activity, record, or administrator" fullWidth /></View>
       <View style={[styles.directoryControls, styles.raisedFilterControls]}><MultiFilter label="Category" values={logCategoriesSelected} options={logCategoryOptions} onToggle={(value) => toggleFilterValue(logCategoriesSelected, value, setLogCategoriesSelected)} /></View>
       {logCategoriesSelected.length ? <View style={styles.accountFilterTagRow}>{logCategoriesSelected.map((value) => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`Remove ${value} category filter`} onPress={() => toggleFilterValue(logCategoriesSelected, value, setLogCategoriesSelected)} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>Category: {value}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}<TouchableOpacity accessibilityRole="button" onPress={() => setLogCategoriesSelected([])} style={styles.accountFilterReset}><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity></View> : null}

@@ -2,6 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
+import { AccountSetupRequiredError, loginAccount, TotpRequiredError } from '@/services/user-api';
 import {
   ImageBackground,
   StyleSheet,
@@ -28,6 +29,7 @@ export default function PatientLoginScreen() {
   // Form States
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // TOTP Setup Alert Modal State
   const [showSetupModal, setShowSetupModal] = useState(false);
@@ -40,7 +42,7 @@ export default function PatientLoginScreen() {
 
   if (!fontsLoaded) return null;
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setHasSubmitted(true);
     setLoginError('');
 
@@ -56,22 +58,20 @@ export default function PatientLoginScreen() {
       setLoginError('Password is required. Please fill in this field.');
       return;
     }
-    const emailLower = email.trim().toLowerCase();
-
-    // Account 1: NEW Patient (Temp Pass) -> Show TOTP Setup Alert first
-    if (emailLower === 'new@speaksteps.com' && password === 'Patient@123') {
-      setShowSetupModal(true);
-    }
-    // Account 2: OLD Patient -> Goes to Auth Selection (passing status 'old' and email)
-    else if (emailLower === 'old@speaksteps.com' && password === 'Patient@123') {
-      router.push({
-        pathname: '/auth-selection',
-        params: { role: 'patient', status: 'old', email: emailLower },
-      } as any);
-    }
-    // Invalid Login
-    else {
-      setLoginError('Invalid email or password');
+    setIsLoggingIn(true);
+    try {
+      await loginAccount(email.trim(), password, 'parent');
+      router.replace('/user-mode-select' as any);
+    } catch (error) {
+      if (error instanceof TotpRequiredError) {
+        router.replace({ pathname: '/otp-verification', params: { role: 'parent' } } as any);
+      } else if (error instanceof AccountSetupRequiredError) {
+        router.replace({ pathname: '/totp-setup', params: { role: 'parent' } } as any);
+      } else {
+        setLoginError(error instanceof Error ? error.message : 'Could not sign in.');
+      }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -202,8 +202,8 @@ export default function PatientLoginScreen() {
                   </View>
                 )}
 
-                <TouchableOpacity style={styles.signInBtn} onPress={handleLogin}>
-                  <Text style={styles.signInText}>Sign in</Text>
+                <TouchableOpacity style={styles.signInBtn} onPress={() => void handleLogin()} disabled={isLoggingIn}>
+                  <Text style={styles.signInText}>{isLoggingIn ? 'Signing in…' : 'Sign in'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => router.push('/forgot-password' as any)}>
