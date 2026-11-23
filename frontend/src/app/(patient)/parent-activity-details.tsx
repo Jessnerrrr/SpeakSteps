@@ -1,8 +1,9 @@
+import { useAssignedActivities } from '@/data/assigned-activities';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   ImageBackground,
@@ -19,7 +20,9 @@ import {
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import { ChildModeConfirmModal } from '../../components/child-mode-confirm-modal';
-import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
+import { usePatientLearning } from '../../components/patient/PatientLearningProvider';
+import { AudioPlaybackButton } from '../../components/audio/AudioPlaybackButton';
 
 export default function ParentActivityDetailsScreen() {
   // Responsive Hooks
@@ -34,11 +37,22 @@ export default function ParentActivityDetailsScreen() {
   });
 
   const params = useLocalSearchParams<{ id?: string }>();
-  const { assignments, patient, user, loading, error, refresh } = usePatientLearning();
+  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const [isChildModeModalVisible, setIsChildModeModalVisible] = useState(false);
-  const assignmentId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const assignment = assignments.find((item) => item.id === assignmentId);
-  const activity = assignment?.activity;
+
+  const { progress, feedback } = usePatientLearning();
+  const activity = useAssignedActivities().find(({ id }) => id === params.id);
+  const submissions = progress?.recentSubmissions.filter((item) => item.assignmentId === activity?.id) ?? [];
+  const review = feedback.find((item) => item.assignmentId === activity?.id);
+
+  useEffect(() => {
+    const unsubscribe = ChildProfileStore.subscribe((updated: ChildProfile) => {
+      setChildProfile(updated);
+    });
+    return unsubscribe;
+  }, []);
+
+  if (!fontsLoaded) return null;
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -48,7 +62,15 @@ export default function ParentActivityDetailsScreen() {
     }
   };
 
-  const handleListenOrWatch = () => {};
+  if (!activity) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ParentHeader title="Assigned Activity" showBack onBack={handleBack} />
+        <Text style={styles.assigneeText}>This activity is no longer available.</Text>
+      </SafeAreaView>
+    );
+  }
 
   const handleHelpChildToPractice = () => {
     setIsChildModeModalVisible(true);
@@ -57,34 +79,18 @@ export default function ParentActivityDetailsScreen() {
   const handleConfirmChildPractice = () => {
     setIsChildModeModalVisible(false);
     router.push({
-      pathname: '/sentences',
+      pathname: '/practice',
       params: {
-        assignmentId: assignment?.id,
-        activityId: assignment?.activityId,
-        patientId: patient?.id,
-        patientCode: patient?.patientCode,
-        sound: activity?.sound,
-        level: activity?.level,
+        activityId: activity.id,
+        linkedAssignment: activity.linked ? 'true' : 'false',
+        sound: activity.title,
+        syllable: '',
+        category: activity.category.toLowerCase(),
+        level: activity.level,
+        language: activity.language,
       },
     } as any);
   };
-
-  if (!fontsLoaded) return null;
-  if (!activity || !assignment) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <ParentHeader title="Activity Details" showBack onBack={handleBack} />
-        <View style={styles.mainContainer}>
-          <Text style={styles.emptyState}>{loading ? 'Loading activity…' : error || 'This activity is not assigned to this patient.'}</Text>
-          {!loading ? (
-            <TouchableOpacity onPress={() => void refresh()}>
-              <Text style={styles.emptyStateAction}>Tap to retry</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <>
@@ -121,7 +127,7 @@ export default function ParentActivityDetailsScreen() {
                   <View
                     style={[
                       styles.statusBadge,
-                      assignment.status === 'Completed'
+                      activity.status === 'completed'
                         ? styles.statusBadgeCompleted
                         : styles.statusBadgePending,
                     ]}
@@ -129,54 +135,47 @@ export default function ParentActivityDetailsScreen() {
                     <Text
                       style={[
                         styles.statusBadgeText,
-                        assignment.status === 'Completed'
+                        activity.status === 'completed'
                           ? styles.statusTextCompleted
                           : styles.statusTextPending,
                       ]}
                     >
-                      {assignment.status === 'Completed' ? 'Completed' : 'Pending'}
+                      {activity.status === 'completed' ? 'Reviewed' : activity.submitted ? 'Awaiting review' : 'Pending'}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.illustrationWrapper}>
                   <Image
-                    source={require('../../../assets/images/sheep.png')}
+                    source={activity.thumbnail}
                     style={styles.illustrationImage}
                     contentFit="contain"
                   />
                 </View>
 
                 <Text style={styles.assigneeText}>
-                  Assigned by your therapist
+                  Assigned: {activity.assignedBy}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}
                 </Text>
 
-                <TouchableOpacity
-                  style={styles.listenWatchButton}
-                  activeOpacity={0.85}
-                  onPress={handleListenOrWatch}
-                >
-                  <View style={styles.playIconCircle}>
-                    <Ionicons name="play" size={13} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.listenWatchButtonText}>Listen or Watch</Text>
-                </TouchableOpacity>
+                {activity.modelAudioUrls?.[0]
+                  ? <AudioPlaybackButton audioUrl={activity.modelAudioUrls[0]} label="Play model audio" />
+                  : <Text style={styles.assigneeText}>No media attached to this activity.</Text>}
               </View>
 
               {/* 2. THREE METRIC / STAT CARDS ROW */}
               <View style={styles.metricsRow}>
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>—</Text>
+                  <Text style={styles.metricValue}>{activity.attempts + submissions.length}</Text>
                   <Text style={styles.metricLabel}>Attempts</Text>
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>—</Text>
+                  <Text style={styles.metricValue}>{review?.averageScore == null ? activity.bestScore ?? '—' : `${Math.round(review.averageScore)}%`}</Text>
                   <Text style={styles.metricLabel}>Best Score</Text>
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>—</Text>
+                  <Text style={styles.metricValue}>{submissions.reduce((sum, item) => sum + item.starsAwarded, 0)}</Text>
                   <Text style={styles.metricLabel}>Stars</Text>
                 </View>
               </View>
@@ -184,6 +183,13 @@ export default function ParentActivityDetailsScreen() {
               {/* 3. "HOW TO PRACTICE" SECTION */}
               <View style={styles.practiceSection}>
                 <Text style={styles.practiceSectionTitle}>How to Practice</Text>
+                {activity.description ? <Text style={styles.assigneeText}>{activity.description}</Text> : null}
+                {activity.guidance?.trim() ? (
+                  <>
+                    <Text style={styles.practiceSectionTitle}>{activity.source === 'Therapist' ? 'Therapist guidance' : 'Practice guidance'}</Text>
+                    <Text style={styles.assigneeText}>{activity.guidance}</Text>
+                  </>
+                ) : null}
 
                 <View style={styles.practiceStepsRow}>
                   {/* Step 1: Listen */}
@@ -242,6 +248,7 @@ export default function ParentActivityDetailsScreen() {
               <TouchableOpacity
                 style={styles.helpButton}
                 activeOpacity={0.85}
+                accessibilityRole="button"
                 onPress={handleHelpChildToPractice}
               >
                 <View style={styles.parentAvatarBadge}>
@@ -267,10 +274,10 @@ export default function ParentActivityDetailsScreen() {
           mode="practice"
           onClose={() => setIsChildModeModalVisible(false)}
           onConfirm={handleConfirmChildPractice}
-          childName={user?.childName || patient?.firstName || 'your child'}
+          childName={childProfile.displayName}
           activityTitle={activity?.title}
           activityLevel={activity?.level}
-          activityThumbnail={require('../../../assets/images/sheep.png')}
+          activityThumbnail={activity?.thumbnail}
         />
       </SafeAreaView>
     </>
@@ -278,8 +285,6 @@ export default function ParentActivityDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  emptyState: { textAlign: 'center', color: '#0D68AC', padding: 24, fontFamily: 'SourGummy-Medium' },
-  emptyStateAction: { textAlign: 'center', color: '#F5A623', padding: 12, fontFamily: 'SourGummy-Bold' },
   safeArea: {
     flex: 1,
     backgroundColor: '#CCE5F6',
@@ -468,9 +473,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 5,
-    borderRadius: 12,
+    width: 96,
+    minWidth: 96,
+    maxWidth: 96,
+    height: 32,
+    minHeight: 32,
+    maxHeight: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   statusBadgePending: {
     backgroundColor: '#FFD9D9',
@@ -479,8 +491,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#D7F5E8',
   },
   statusBadgeText: {
+    width: '100%',
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 16,
   },
   statusTextPending: {
     color: '#FF4D4D',
@@ -508,34 +525,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 12,
-  },
-  listenWatchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5A623',
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 22,
-    gap: 8,
-    shadowColor: '#C47700',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  playIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#0D68AC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingLeft: 2,
-  },
-  listenWatchButtonText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 15,
-    color: '#FFFFFF',
   },
 
   /* 2. Metrics Row */

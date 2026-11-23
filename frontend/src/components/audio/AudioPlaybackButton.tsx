@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
@@ -8,29 +8,37 @@ export function AudioPlaybackButton({
   audioUrl,
   label = 'Play audio',
   style,
+  buttonStyle,
+  renderIcon,
   variant = 'button',
   color,
 }: {
   audioUrl?: string | null;
   label?: string;
   style?: StyleProp<ViewStyle>;
+  buttonStyle?: StyleProp<ViewStyle>;
+  renderIcon?: (playing: boolean) => ReactNode;
   variant?: 'button' | 'inline';
   color?: string;
 }) {
   if (!audioUrl) return null;
-  return <AudioPlayerButton audioUrl={audioUrl} label={label} style={style} variant={variant} color={color} />;
+  return <AudioPlayerButton audioUrl={audioUrl} label={label} style={style} buttonStyle={buttonStyle} renderIcon={renderIcon} variant={variant} color={color} />;
 }
 
 function AudioPlayerButton({
   audioUrl,
   label,
   style,
+  buttonStyle,
+  renderIcon,
   variant,
   color,
 }: {
   audioUrl: string;
   label: string;
   style?: StyleProp<ViewStyle>;
+  buttonStyle?: StyleProp<ViewStyle>;
+  renderIcon?: (playing: boolean) => ReactNode;
   variant: 'button' | 'inline';
   color?: string;
 }) {
@@ -59,10 +67,12 @@ function AudioPlayerButton({
         accessibilityRole="button"
         accessibilityLabel={`${status.playing ? 'Pause' : 'Play'} ${label}`}
         onPress={() => void togglePlayback()}
-        style={[styles.button, variant === 'inline' && styles.inlineButton]}
+        style={[styles.button, variant === 'inline' && styles.inlineButton, buttonStyle]}
       >
-        <Text style={[styles.icon, color ? { color } : null]}>{status.playing ? '❚❚' : '▶'}</Text>
-        <Text style={[styles.label, color ? { color } : null]}>{status.playing ? 'Pause' : label}</Text>
+        {renderIcon ? renderIcon(status.playing) : <>
+          <Text style={[styles.icon, color ? { color } : null]}>{status.playing ? '❚❚' : '▶'}</Text>
+          <Text style={[styles.label, color ? { color } : null]}>{status.playing ? 'Pause' : label}</Text>
+        </>}
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>

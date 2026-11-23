@@ -7,26 +7,24 @@ const C = {
   ink: '#17364D',
   muted: '#48657A',
   line: '#D9E5EE',
-  green: '#287A4B',
-  greenBackground: '#E8F5EC',
   yellow: '#8A5B00',
-  yellowBackground: '#FFF4D8',
+  yellowBackground: '#FFF5DB',
   red: '#AD3B42',
-  redBackground: '#FDEBED',
+  redBackground: '#FCEEF0',
   blue: '#0865AD',
-  blueBackground: '#EAF7FF',
+  blueBackground: '#ECF6FD',
   neutral: '#48657A',
-  neutralBackground: '#EDF3F6',
+  neutralBackground: '#F0F4F7',
 };
 
 type Tone = 'green' | 'yellow' | 'red' | 'blue' | 'neutral';
 
 function State({ label, tone }: { label: string; tone: Tone }) {
-  const color = tone === 'green' ? C.green : tone === 'yellow' ? C.yellow : tone === 'red' ? C.red : tone === 'blue' ? C.blue : C.neutral;
-  const backgroundColor = tone === 'green' ? C.greenBackground : tone === 'yellow' ? C.yellowBackground : tone === 'red' ? C.redBackground : tone === 'blue' ? C.blueBackground : C.neutralBackground;
-  return <View style={{ minHeight: 25, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 6, paddingHorizontal: 8, backgroundColor }}>
-    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-    <Text style={{ color, fontFamily: 'Geist-Medium', fontSize: 11 }}>{label}</Text>
+  const color = tone === 'green' ? '#286443' : tone === 'yellow' ? C.yellow : tone === 'red' ? C.red : tone === 'blue' ? C.blue : C.neutral;
+  const backgroundColor = tone === 'green' ? '#EEF7F0' : tone === 'yellow' ? C.yellowBackground : tone === 'red' ? C.redBackground : tone === 'blue' ? C.blueBackground : C.neutralBackground;
+  return <View style={{ alignSelf: 'flex-start', maxWidth: '100%', minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 5, backgroundColor }}>
+    <View style={{ width: 7, height: 7, borderRadius: 4, flexShrink: 0, backgroundColor: color }} />
+    <Text style={{ color, fontFamily: 'Geist-Medium', fontSize: 11, flexShrink: 1, textAlign: 'center' }}>{label}</Text>
   </View>;
 }
 

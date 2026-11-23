@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   ViewStyle,
-  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +15,6 @@ import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
 import { ChildModeConfirmModal } from '@/components/child-mode-confirm-modal';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
-import { clearSession } from '@/services/user-api';
 
 export interface ParentHeaderProps {
   title?: string;
@@ -77,45 +75,42 @@ export function ParentHeader({
     setIsSignOutModalVisible(true);
   };
 
-  const handleConfirmSignOut = async () => {
-    try {
-      await clearSession();
-      setIsSignOutModalVisible(false);
-      router.replace('/patient-login' as any);
-    } catch (error) {
-      Alert.alert('Sign out failed', error instanceof Error ? error.message : 'Could not clear your session.');
+  const handleConfirmSignOut = () => {
+    setIsSignOutModalVisible(false);
+    if (router.canDismiss()) {
+      router.dismissAll();
     }
+    router.replace('/patient-login' as any);
   };
 
   return (
     <>
       <View style={[styles.topHeader, containerStyle]}>
-        {/* Left Action: Back button, custom content, or spacer */}
-        {showBack ? (
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={0.7}
-            onPress={handleBack}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="chevron-back" size={22} color="#0D68AC" />
-          </TouchableOpacity>
-        ) : customLeftContent ? (
-          customLeftContent
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        {/* Left Side: Back button (if enabled) + Title on the left */}
+        <View style={styles.headerLeftGroup}>
+          {showBack && (
+            <TouchableOpacity
+              style={styles.backButton}
+              activeOpacity={0.7}
+              onPress={handleBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="chevron-back" size={22} color="#0D68AC" />
+            </TouchableOpacity>
+          )}
 
-        {/* Center Title */}
-        <Text
-          style={styles.headerTitle}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-        >
-          {title}
-        </Text>
+          {customLeftContent}
+
+          <Text
+            style={styles.headerTitle}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
+            {title}
+          </Text>
+        </View>
 
         {/* Right Actions: Notification Bell + Hamburger Menu */}
         <View style={styles.headerRightActions}>
@@ -226,9 +221,21 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     zIndex: 50,
   },
-  headerSpacer: {
-    width: 40,
-    height: 40,
+  headerLeftGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginRight: 10,
+  },
+  headerTitle: {
+    flex: 1,
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 26,
+    color: '#0D68AC',
+    textAlign: 'left',
+    includeFontPadding: false,
+    letterSpacing: -0.3,
   },
   backButton: {
     width: 40,
@@ -244,20 +251,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 2,
-  },
-  headerTitle: {
-    flex: 1,
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 20,
-    color: '#0D68AC',
-    textAlign: 'center',
-    marginHorizontal: 8,
-    includeFontPadding: false,
+    flexShrink: 0,
   },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   menuButton: {
     width: 36,

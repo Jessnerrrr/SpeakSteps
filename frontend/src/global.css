@@ -6,6 +6,32 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
+  --sign-in-autofill: #fff3c4;
+}
+
+[id^='sign-in-'][id$='-field']:has(> input:focus) {
+  outline: 2px solid #0865ad;
+  outline-offset: 1px;
+}
+
+@supports selector(:has(> input:focus)) {
+  [id^='sign-in-'][id$='-field'] > input:focus {
+    outline: none;
+  }
+}
+
+[id^='sign-in-'][id$='-field']:has(> input:is(:autofill, :-webkit-autofill)) {
+  background-color: var(--sign-in-autofill);
+  overflow: hidden;
+}
+
+[id^='sign-in-'][id$='-field'] > input:is(:autofill, :-webkit-autofill) {
+  box-shadow: inset 0 0 0 100vmax var(--sign-in-autofill);
+  -webkit-text-fill-color: #333;
+}
+
+[id^='sign-in-'][id$='-password-field'] > input:is(:autofill, :-webkit-autofill) + [role='button'] {
+  background-color: var(--sign-in-autofill);
 }
 
 /* Suppress Microsoft Edge / IE duplicate password reveal eye and clear icons */
@@ -26,10 +52,7 @@ input::-ms-clear {
   outline: none;
 }
 
-#admin-auth-root input:-webkit-autofill,
-#admin-auth-root input:-webkit-autofill:hover,
-#admin-auth-root input:-webkit-autofill:focus,
-#admin-auth-root input:-webkit-autofill:active {
+#admin-auth-root input:-webkit-autofill:not([id^='sign-in-'][id$='-field'] > input) {
   -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
   background-color: #ffffff !important;
   background-image: none !important;

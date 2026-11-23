@@ -14,7 +14,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "server"
+      "output": "single"
     },
     "plugins": [
       [
@@ -30,13 +30,8 @@
       "expo-font",
       "@react-native-community/datetimepicker",
       "expo-web-browser",
-      "expo-secure-store",
-      [
-        "expo-audio",
-        {
-          "microphonePermission": "SpeakSteps uses the microphone to record speech practice."
-        }
-      ]
+      "expo-status-bar",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

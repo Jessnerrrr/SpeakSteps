@@ -79,7 +79,8 @@ const PatientAssignment = makeModel(
   {
     activity_id: { type: objectId, required: true },
     patient_id: { type: objectId, required: true },
-    therapist_id: { type: objectId, required: true },
+    therapist_id: objectId,
+    assigned_by_teacher_id: objectId,
     status: {
       type: String,
       required: true,
@@ -96,6 +97,7 @@ const PatientAssignment = makeModel(
     [{ patient_id: 1, status: 1, due_date: 1 }, { name: 'patient_id_1_status_1_due_date_1' }],
     [{ activity_id: 1 }, { name: 'activity_id_1' }],
     [{ therapist_id: 1 }, { name: 'therapist_id_1' }],
+    [{ assigned_by_teacher_id: 1 }, { name: 'assigned_by_teacher_id_1' }],
   ],
 );
 

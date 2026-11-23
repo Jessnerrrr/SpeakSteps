@@ -15,7 +15,7 @@ import {
 import { homeStyles } from '@/Therapist-modules/therapist-homepage/styles/homepage.styles';
 
 export default function TherapistHomePage() {
-  const { palette, profile, notificationsOpen, setAddPatientOpen } = useTherapist();
+  const { palette, profile, notificationsOpen } = useTherapist();
   const openReviews = (_submission?: Submission) => {
     router.push('/therapist/reviews' as never);
   };
@@ -35,7 +35,6 @@ export default function TherapistHomePage() {
         <View style={homeStyles.block}>
           <QuickActions
             onAssign={() => router.push('/therapist/activities/assign?id=ready-set-r' as never)}
-            onAddPatient={() => setAddPatientOpen(true)}
           />
         </View>
         <View style={homeStyles.block}>

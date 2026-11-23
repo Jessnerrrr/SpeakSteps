@@ -1,3 +1,4 @@
+import { PatientPressable } from '@/components/patient-pressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -9,13 +10,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
   useWindowDimensions,
 } from 'react-native';
 
 import { ParentBottomNav } from '@/components/parent-bottom-nav';
 import { ParentHeader } from '@/components/parent-header';
+import { ChildProfileStore } from '@/data/child-profile-store';
 import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 export default function ParentDashboardScreen() {
@@ -29,20 +31,19 @@ export default function ParentDashboardScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const { user, patient, assignments, progress, feedback, loading, error, refresh } = usePatientLearning();
-  const childName = patient
-    ? [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ')
-    : user?.childName || 'Child';
-  const activities = assignments;
+  const { patient, progress, assignments, feedback, error } = usePatientLearning();
+  const childProfile = ChildProfileStore.getProfile();
 
   if (!fontsLoaded) return null;
 
-  const totalActivities = activities.length;
-  const completedActivities = activities.filter((task) => task.status === 'Completed').length;
-  const pendingActivities = activities.filter((task) => task.status !== 'Completed').length;
-  const totalAttempts = progress?.submissionCount || 0;
-  const latestFeedback = feedback[0];
-  const progressPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
+  const displayName = patient
+    ? [patient.firstName, patient.lastName].filter(Boolean).join(' ')
+    : childProfile.displayName;
+  const completedActivities = progress?.completedCount ?? 0;
+  const pendingActivities = assignments.filter((assignment) => assignment.status === 'Assigned').length;
+  const totalAttempts = progress?.submissionCount ?? 0;
+  const totalAssigned = progress?.assignedCount ?? 0;
+  const progressPercentage = totalAssigned ? Math.min(100, (completedActivities / totalAssigned) * 100) : 0;
 
   return (
     <>
@@ -59,12 +60,6 @@ export default function ParentDashboardScreen() {
             <ParentHeader title="Parent / Guardian" showBack={false} />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-              {loading ? <Text style={styles.therapistBodyText}>Loading saved progress…</Text> : null}
-              {error ? (
-                <TouchableOpacity onPress={() => void refresh()}>
-                  <Text style={styles.therapistBodyText}>{error} Tap to retry.</Text>
-                </TouchableOpacity>
-              ) : null}
               <LinearGradient
                 colors={['#106AB0', '#2A8AC8', '#4DB3E9']}
                 locations={[0, 0.45, 1]}
@@ -72,46 +67,46 @@ export default function ParentDashboardScreen() {
                 end={{ x: 0, y: 1 }}
                 style={styles.progressHeroCard}
               >
-                <Text style={styles.heroTitle}>{childName}'s Progress</Text>
+                <Text style={styles.heroTitle}>{displayName}'s Progress</Text>
                 <View style={styles.starRow}>
-                  <Text style={styles.starCountText}>{progress?.stars || 0}</Text>
+                  <Text style={styles.starCountText}>{progress?.stars ?? 0}</Text>
                   {/* FIXED IMAGE PATH */}
-                  <Image source={require('../../../assets/images/star-3d.png')} style={styles.starIcon} contentFit="contain" />
+                  <Image source={require('../../../assets/images/speaksteps_star_3d.gif')} style={styles.starIcon} contentFit="contain" />
                 </View>
                 <View style={styles.progressTrackContainer}>
                   <View style={[styles.progressBarFill, { width: `${progressPercentage}%` }]} />
                 </View>
                 <Text style={styles.heroSubText}>
-                  {completedActivities} of {totalActivities} activities done | {totalAttempts} Attempts
+                  {completedActivities} {completedActivities === 1 ? 'activity' : 'activities'} done · {totalAttempts} {totalAttempts === 1 ? 'attempt' : 'attempts'}
                 </Text>
               </LinearGradient>
 
               <View style={styles.twoColumnGrid}>
-                <TouchableOpacity activeOpacity={0.85} style={styles.childProfileCard} onPress={() => router.push('/child-profile' as any)}>
-                  <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.childProfileAvatar} contentFit="cover" />
+                <PatientPressable style={styles.childProfileCard} onPress={() => router.push('/child-profile' as any)}>
+                  <Image source={childProfile.avatar} style={styles.childProfileAvatar} contentFit="cover" />
                   <Text style={styles.cardTitle}>Child Profile</Text>
-                  <Text style={styles.cardSubText}>{childName}</Text>
-                </TouchableOpacity>
+                  <Text style={styles.cardSubText}>{displayName}</Text>
+                </PatientPressable>
 
-                <TouchableOpacity activeOpacity={0.85} style={styles.assignedCard} onPress={() => router.push('/parent-tasks' as any)}>
+                <PatientPressable style={styles.assignedCard} onPress={() => router.push('/parent-tasks' as any)}>
                   <View style={styles.assignedIconBadge}>
                     <Ionicons name="list" size={24} color="#FFFFFF" />
                   </View>
                   <Text style={styles.cardTitle}>Assigned</Text>
                   <Text style={styles.cardSubText}>{pendingActivities} Pending</Text>
-                </TouchableOpacity>
+                </PatientPressable>
               </View>
 
-              <TouchableOpacity activeOpacity={0.85} style={styles.progressReportBanner} onPress={() => router.push('/parent-progress' as any)}>
+              <PatientPressable style={styles.progressReportBanner} onPress={() => router.push('/parent-progress' as any)}>
                 <View style={styles.progressReportIconBadge}>
                   <Ionicons name="file-tray-full" size={22} color="#FFFFFF" />
                 </View>
                 <View style={styles.progressReportTextWrapper}>
                   <Text style={styles.progressReportTitle}>Progress</Text>
-                  <Text style={styles.progressReportSubtitle}>View {childName}'s progress report</Text>
+                  <Text style={styles.progressReportSubtitle}>View {displayName}'s progress report</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={22} color="#3EA88A" />
-              </TouchableOpacity>
+              </PatientPressable>
 
               <View style={styles.therapistFeedbackCard}>
                 <View style={styles.therapistHeaderRow}>
@@ -122,7 +117,7 @@ export default function ParentDashboardScreen() {
                 </View>
                 <View style={styles.therapistBodyBox}>
                   <Text style={styles.therapistBodyText}>
-                    {latestFeedback?.parentFeedback || latestFeedback?.homePractice || 'No feedback yet. Your therapist’s comments will show here after reviewing a recording.'}
+                    {error || feedback[0]?.parentFeedback || 'No feedback yet. Your therapist’s comments will show up here as soon as they review a recording.'}
                   </Text>
                 </View>
               </View>
@@ -140,16 +135,16 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   parentCardContainer: { flex: 1, width: '100%', backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6, position: 'relative' },
-  
+
   parentCardTablet: { maxWidth: 600, alignSelf: 'center', width: '100%' },
-  
+
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, gap: 14 },
-  
+
   progressHeroCard: { borderRadius: 22, paddingVertical: 18, paddingHorizontal: 18, shadowColor: '#0865AD', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 5 },
   heroTitle: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#FFFFFF', textAlign: 'center', marginBottom: 6 },
   starRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 12 },
   starCountText: { fontFamily: 'SourGummy-Bold', fontSize: 38, color: '#FFFFFF' },
-  starIcon: { width: 34, height: 34 },
+  starIcon: { width: 50, height: 50, marginTop: -2, },
   progressTrackContainer: { height: 12, backgroundColor: '#FFFFFF', borderRadius: 6, overflow: 'hidden', marginBottom: 10 },
   progressBarFill: { height: '100%', backgroundColor: '#F5A623', borderRadius: 6 },
   heroSubText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#FFFFFF', textAlign: 'center' },

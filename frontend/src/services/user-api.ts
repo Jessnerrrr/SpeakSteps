@@ -135,11 +135,14 @@ export type ApiReviewTarget = {
 
 export type ApiReview = {
   id: string;
+  submissionId: string;
+  assignmentId?: string;
   student: string;
   initial: string;
   activity: string;
   sound: string;
   level: string;
+  language: string;
   status: 'Pending' | 'Reviewed';
   observations: string;
   parentFeedback: string;
@@ -193,6 +196,9 @@ export type RegistrationResult = {
 export type PatientSearchResult = {
   id: string;
   patientCode: string;
+  createdAt: string;
+  primaryTherapistId: string;
+  assignedTeacherId: string;
   firstName: string;
   middleName: string;
   lastName: string;
@@ -216,6 +222,7 @@ export type PatientSearchResult = {
 
 export type AdminUser = {
   id: string;
+  profileId?: string;
   name: string;
   email: string;
   role: AccountRole;
@@ -591,8 +598,8 @@ export async function createSubmission(input: {
   audioRecordingUrl: string;
   waveformSample?: number[];
   durationSeconds?: number;
-}): Promise<{ id: string; patientId: string; status: string }> {
-  const result = await request<{ id: string; patientId: string; status: string }>('/submissions', {
+}): Promise<{ id: string; patientId: string; status: string; starsAwarded: number }> {
+  const result = await request<{ id: string; patientId: string; status: string; starsAwarded: number }>('/submissions', {
     method: 'POST',
     body: input,
   });
@@ -716,6 +723,7 @@ export async function getParentFeedback() {
   const result = await request<{
     id: string;
     submissionId: string;
+    assignmentId?: string;
     therapistName: string;
     specialty: string;
     title: string;
@@ -725,6 +733,7 @@ export async function getParentFeedback() {
     homePractice: string;
     observations: string;
     reviewedAt: string;
+    averageScore: number | null;
   }>('/feedback');
   return requireArray(result.feedback, 'therapist feedback');
 }
@@ -741,7 +750,16 @@ export async function getProgress(patientId?: string) {
     completedByLevel: Record<string, number>;
     assignedByLevel: Record<string, number>;
     attemptsByLevel: Record<string, number>;
-    recentSubmissions: Array<{ id: string; status: string; submittedAt: string }>;
+    recentSubmissions: Array<{
+      id: string;
+      assignmentId: string;
+      status: string;
+      submittedAt: string;
+      practiceItemId: string;
+      starsAwarded: number;
+      activityTitle: string;
+      level: string;
+    }>;
   }>(`/progress${query}`);
   if (!result.progress) throw new Error('The backend response did not include progress.');
   return result.progress;

@@ -1,12 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
 
 import type { TherapistNotification, TherapistProfile } from '@/Therapist-modules/therapist-homepage/data/sampleData';
-import type { NewPatientInput, PatientRecord, SoapNote } from '@/Therapist-modules/therapist-patients/data/samplePatients';
+import {
+  type NewPatientInput,
+  type PatientRecord,
+  type SoapNote,
+} from '@/Therapist-modules/therapist-patients/data/samplePatients';
+import { phonemePositions, type PhonemePosition } from '@/Therapist-modules/therapist-patients/data/options';
 import { darkPalette, lightPalette, type ThemeMode, type TherapistPalette } from '@/styles/therapistPalette';
 import {
   changeAccountPassword,
   createSoapNote,
+  createTherapistPatient,
   getAccomplishments,
   getNotifications,
   getPatients,
@@ -20,11 +25,13 @@ import {
 
 type TherapistContextValue = {
   palette: TherapistPalette;
+  actionNotice: { message: string } | null;
+  showActionNotice: (message: string) => void;
   isDark: boolean;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   profile: TherapistProfile;
-  updateProfile: (patch: Pick<TherapistProfile, 'fullName' | 'clinic' | 'contact' | 'role' | 'license'>) => Promise<void>;
+  updateProfile: (patch: Partial<Pick<TherapistProfile, 'fullName' | 'role' | 'license' | 'clinic' | 'contact' | 'photoUri'>>) => Promise<void>;
   notifications: TherapistNotification[];
   unreadCount: number;
   notificationsOpen: boolean;
@@ -45,16 +52,20 @@ type TherapistContextValue = {
   refreshPatients: () => Promise<void>;
   addPatientOpen: boolean;
   setAddPatientOpen: (open: boolean) => void;
-  addPatient: (input: NewPatientInput, patientCode: string) => Promise<void>;
+  addPatient: (input: NewPatientInput) => Promise<PatientSearchResult>;
   addSoapNote: (patientId: string, note: SoapNote) => Promise<void>;
 };
 
 const TherapistContext = createContext<TherapistContextValue | null>(null);
 
-function formatDob(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US');
-}
+const emptyProfile: TherapistProfile = {
+  fullName: '',
+  role: '',
+  license: '',
+  clinic: '',
+  contact: '',
+  email: '',
+};
 
 function mapSoapNote(note: ApiSoapNote): SoapNote {
   return {
@@ -90,17 +101,19 @@ function mapPatient(item: PatientSearchResult, notes: ApiSoapNote[], accomplishm
   const firstName = item.firstName || '';
   const middleName = item.middleName || '';
   const lastName = item.lastName || '';
-  const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'P';
+  const positions = (item.phonemePositions || []).filter((position): position is PhonemePosition =>
+    (phonemePositions as readonly string[]).includes(position),
+  );
   return {
     id: item.id,
     patientCode: item.patientCode,
-    initials,
+    initials: `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase() || 'P',
     avatar: '#0EA5E9',
     firstName,
     middleName,
     lastName,
     suffix: '',
-    dateOfBirth: item.dateOfBirth ? formatDob(item.dateOfBirth) : '',
+    dateOfBirth: item.dateOfBirth ? new Date(item.dateOfBirth).toLocaleDateString('en-US') : '',
     age: item.age || '',
     languageProfile: item.languageProfile || '',
     diagnosis: item.diagnosis || '',
@@ -110,7 +123,7 @@ function mapPatient(item: PatientSearchResult, notes: ApiSoapNote[], accomplishm
     guardianEmail: item.guardianEmail || '',
     targetSound: item.targetSound || '',
     hierarchyLevel: item.hierarchyLevel || '',
-    phonemePositions: (item.phonemePositions || []) as PatientRecord['phonemePositions'],
+    phonemePositions: positions,
     secondaryTargets: item.secondaryTargets || '',
     dominantErrorPattern: item.dominantErrorPattern || '',
     dominantErrorOther: item.dominantErrorOther || '',
@@ -132,16 +145,16 @@ function mapPatient(item: PatientSearchResult, notes: ApiSoapNote[], accomplishm
 }
 
 export function TherapistProvider({ children }: { children: ReactNode }) {
-  const systemScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState<ThemeMode>('auto');
-  const [profile, setProfile] = useState<TherapistProfile>({
-    fullName: '',
-    role: 'Speech-Language Pathologist',
-    license: '',
-    clinic: '',
-    contact: '',
-    email: '',
-  });
+  const [actionNotice, setActionNotice] = useState<{ message: string } | null>(null);
+  const showActionNotice = useCallback((message: string) => setActionNotice({ message }), []);
+  useEffect(() => {
+    if (!actionNotice) return;
+    const timer = setTimeout(() => setActionNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [actionNotice]);
+
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
+  const [profile, setProfile] = useState<TherapistProfile>(emptyProfile);
   const [notifications, setNotifications] = useState<TherapistNotification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -166,8 +179,10 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
         return mapPatient(patient, notes, accomplishments);
       }));
       setPatients(records);
-    } catch (loadError) {
-      setPatientsError(loadError instanceof Error ? loadError.message : 'Could not load patient records.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load therapist patient records.';
+      setPatientsError(message);
+      throw error;
     } finally {
       setPatientsLoading(false);
     }
@@ -175,46 +190,38 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    getTherapistProfile()
-      .then((savedProfile) => {
-        if (active) {
-          setProfile((current) => ({
-            ...current,
-            fullName: savedProfile.fullName,
-            email: savedProfile.email,
-            contact: savedProfile.contact,
-            role: savedProfile.title,
-            license: savedProfile.license,
-            clinic: savedProfile.clinic,
-          }));
-        }
+    Promise.all([getTherapistProfile(), getNotifications()])
+      .then(([savedProfile, savedNotifications]) => {
+        if (!active) return;
+        setProfile({
+          fullName: savedProfile.fullName,
+          email: savedProfile.email,
+          contact: savedProfile.contact,
+          role: savedProfile.title,
+          license: savedProfile.license,
+          clinic: savedProfile.clinic,
+        });
+        setNotifications(savedNotifications.map((item) => ({
+          id: item.id,
+          title: `${item.name} ${item.action}`,
+          body: item.detail,
+          time: new Date(item.time).toLocaleString(),
+          read: !item.unread,
+        })));
       })
       .catch((error: unknown) => {
-        if (active) setPatientsError(error instanceof Error ? error.message : 'Could not load the therapist profile.');
+        if (active) setPatientsError(error instanceof Error ? error.message : 'Could not load therapist profile.');
       });
-    void refreshPatients();
-    getNotifications()
-      .then((items) => {
-        if (active) {
-          setNotifications(items.map((item) => ({
-            id: item.id,
-            title: `${item.name} ${item.action}`,
-            body: item.detail,
-            time: new Date(item.time).toLocaleString(),
-            read: !item.unread,
-          })));
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) setPatientsError(error instanceof Error ? error.message : 'Could not load therapist notifications.');
-      });
+    void refreshPatients().catch(() => undefined);
     return () => {
       active = false;
     };
   }, [refreshPatients]);
 
-  const addPatient = useCallback(async (_input: NewPatientInput, _patientCode: string) => {
+  const addPatient = useCallback(async (input: NewPatientInput) => {
+    const patient = await createTherapistPatient(input);
     await refreshPatients();
+    return patient;
   }, [refreshPatients]);
 
   const addSoapNote = useCallback(async (patientId: string, note: SoapNote) => {
@@ -229,28 +236,31 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
     await refreshPatients();
   }, [refreshPatients]);
 
-  const isDark = themeMode === 'auto' ? systemScheme === 'dark' : themeMode === 'dark';
+  const isDark = themeMode === 'dark';
   const palette = isDark ? darkPalette : lightPalette;
 
-  const updateProfile = useCallback(async (patch: Pick<TherapistProfile, 'fullName' | 'clinic' | 'contact' | 'role' | 'license'>) => {
+  const updateProfile = useCallback(async (
+    patch: Partial<Pick<TherapistProfile, 'fullName' | 'role' | 'license' | 'clinic' | 'contact' | 'photoUri'>>,
+  ) => {
+    const next = { ...profile, ...patch };
     const saved = await updateTherapistProfile({
-      fullName: patch.fullName,
-      contact: patch.contact,
-      title: patch.role,
-      license: patch.license,
-      clinic: patch.clinic,
+      fullName: next.fullName,
+      contact: next.contact,
+      title: next.role,
+      license: next.license,
+      clinic: next.clinic,
     });
     setProfile((current) => ({
       ...current,
-      ...patch,
       fullName: saved.fullName,
       email: saved.email,
       contact: saved.contact,
       role: saved.title,
       license: saved.license,
       clinic: saved.clinic,
+      photoUri: next.photoUri,
     }));
-  }, []);
+  }, [profile]);
 
   const markNotificationRead = useCallback((id: string) => {
     setNotifications((current) => current.map((item) => (item.id === id ? { ...item, read: true } : item)));
@@ -279,6 +289,8 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
   const unreadCount = notifications.filter((item) => !item.read).length;
   const value = useMemo(() => ({
     palette,
+    actionNotice,
+    showActionNotice,
     isDark,
     themeMode,
     setThemeMode,
@@ -308,6 +320,8 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
     addSoapNote,
   }), [
     palette,
+    actionNotice,
+    showActionNotice,
     isDark,
     themeMode,
     profile,
@@ -336,8 +350,6 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
 
 export function useTherapist() {
   const value = useContext(TherapistContext);
-  if (!value) {
-    throw new Error('useTherapist must be used inside TherapistProvider');
-  }
+  if (!value) throw new Error('useTherapist must be used inside TherapistProvider');
   return value;
 }

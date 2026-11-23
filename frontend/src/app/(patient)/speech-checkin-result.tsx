@@ -1,8 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { CheckinHeader } from '../../components/CheckinHeader';
+import React from 'react';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 import {
   ImageBackground,
   StyleSheet,
@@ -12,28 +15,18 @@ import {
   SafeAreaView,
   StatusBar,
   useWindowDimensions,
-  Modal,
 } from 'react-native';
-import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 export default function SpeechCheckinResult() {
   const router = useRouter();
   const { checkinId } = useLocalSearchParams<{ checkinId?: string }>();
-  const { checkins, refresh, loading, error } = usePatientLearning();
-
-  // State to control the custom alert modal
-  const [showSetupAlert, setShowSetupAlert] = useState(false);
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-  const savedCheckin = useMemo(
-    () => checkins.find((item) => item.id === checkinId) || null,
-    [checkins, checkinId],
-  );
-  const responses = savedCheckin?.responses && typeof savedCheckin.responses === 'object'
-    ? Object.values(savedCheckin.responses as Record<string, { question?: string; answer?: string }>)
-    : [];
-  const mainGoal = responses.find((item) => item.question?.toLowerCase().includes('main goal'))?.answer;
+  const { checkins, patient, error } = usePatientLearning();
+  const checkin = checkins.find((item) => item.id === checkinId) ?? checkins[0];
+  const responses = checkin?.responses && typeof checkin.responses === 'object' && !Array.isArray(checkin.responses)
+    ? checkin.responses as Record<string, { question?: string; answer?: string }>
+    : {};
+  const answeredCount = Object.values(responses).filter((item) => item && typeof item === 'object' && item.answer).length;
+  const answerFor = (step: number) => responses[String(step)]?.answer || '';
 
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -46,15 +39,11 @@ export default function SpeechCheckinResult() {
 
   if (!fontsLoaded) return null;
 
-  // Function to show the custom alert modal before routing
-  const handleContinueToSetup = () => {
-    setShowSetupAlert(true);
-  };
-
-  // Continue without claiming that an unsupported MFA setup was completed.
-  const proceedToSetup = () => {
-    setShowSetupAlert(false);
-    router.replace('/patient-dashboard' as any);
+  const handleGoToDashboard = () => {
+    if (router.canDismiss()) {
+      router.dismissAll();
+    }
+    router.replace('/user-mode-select' as any);
   };
 
   return (
@@ -72,23 +61,7 @@ export default function SpeechCheckinResult() {
           <View style={styles.card}>
 
             {/* HEADER */}
-            <View style={styles.headerRow}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-                activeOpacity={0.7}
-              >
-                <Image
-                  source={require('../../../assets/images/back.png')}
-                  style={styles.backIcon}
-                  contentFit="contain"
-                />
-              </TouchableOpacity>
-
-              <Text style={styles.headerTitle}>
-                Check-in Result
-              </Text>
-            </View>
+            <CheckinHeader title="Check-in Result" onBack={() => router.back()} />
 
             {/* RECOMMENDED STARTING POINT */}
             <View style={styles.levelCardWrapper}>
@@ -107,15 +80,15 @@ export default function SpeechCheckinResult() {
                 </View>
 
                 <Text style={styles.recommendedSub}>
-                  Check-in saved
+                  Your recommended starting point
                 </Text>
 
                 <Text style={styles.levelTitle}>
-                  No score assigned
+                  {checkin?.summaryOutcome || 'Check-in saved'}
                 </Text>
 
                 <Text style={styles.levelDescription}>
-                  Your therapist will set the practice level.
+                  {checkin ? 'Your answers are saved for your therapist.' : error || 'No saved check-in was found.'}
                 </Text>
               </LinearGradient>
             </View>
@@ -128,14 +101,13 @@ export default function SpeechCheckinResult() {
 
               <View style={styles.ageBadge}>
                 <Text style={styles.ageText}>
-                  {loading ? 'Loading saved responses…' : savedCheckin ? 'Responses saved successfully' : 'No saved responses found'}
+                  {patient?.age ? `Age ${patient.age}` : checkin ? 'Speech check-in completed' : 'Check-in unavailable'}
                 </Text>
               </View>
 
               <Text style={styles.description}>
-                This check-in is not scored automatically. Your therapist controls practice progression.
+                {answeredCount} question{answeredCount === 1 ? '' : 's'} answered.
               </Text>
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
 
             {/* WHAT WE NOTICED */}
@@ -144,14 +116,23 @@ export default function SpeechCheckinResult() {
                 What We Noticed
               </Text>
 
-              {responses.length > 0
-                ? responses.map((item, index) => (
-                  <View key={`${item.question || 'response'}-${index}`} style={styles.responseItem}>
-                    <Text style={styles.itemText}>{item.question || `Response ${index + 1}`}</Text>
-                    <Text style={styles.responseAnswer}>{item.answer || 'No answer provided'}</Text>
-                  </View>
-                ))
-                : <Text style={styles.description}>Saved answers will appear here when available.</Text>}
+              <View style={styles.noticedItem}>
+                <View style={styles.itemDot} />
+                <Text style={styles.itemText}>{answerFor(1) || 'No answer recorded'}</Text>
+
+                <View style={styles.clearBadge}>
+                  <Text style={styles.clearText}>{answerFor(1) ? 'Answered' : '—'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.noticedItem}>
+                <View style={styles.itemDot} />
+                <Text style={styles.itemText}>{answerFor(2) || 'No answer recorded'}</Text>
+
+                <View style={styles.clearBadge}>
+                  <Text style={styles.clearText}>{answerFor(2) ? 'Answered' : '—'}</Text>
+                </View>
+              </View>
             </View>
 
             {/* MINIMAL MAIN GOAL */}
@@ -161,7 +142,7 @@ export default function SpeechCheckinResult() {
               </Text>
 
               <Text style={styles.goalHighlight}>
-                {mainGoal || 'Discuss goals with your therapist'}
+                {answerFor(7) || 'No goal recorded'}
               </Text>
 
               <Text style={styles.goalDescription}>
@@ -169,49 +150,21 @@ export default function SpeechCheckinResult() {
               </Text>
             </View>
 
-            {/* BUTTONS */}
+            {/* BUTTON */}
             <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={styles.doneButton}
                 activeOpacity={0.85}
-                onPress={() => router.replace('/sentences' as any)}
+                onPress={handleGoToDashboard}
               >
                 <Text style={styles.doneButtonText}>
-                  Start Practicing
+                  Go to Dashboard
                 </Text>
               </TouchableOpacity>
             </View>
 
           </View>
         </View>
-
-        {/* CUSTOM ALERT MODAL */}
-        <Modal
-          visible={showSetupAlert}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowSetupAlert(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.alertModalBox}>
-              <View style={styles.alertIconContainer}>
-                <Text style={styles.alertIcon}>🔒</Text>
-              </View>
-              <Text style={styles.alertTitle}>Multi-factor setup unavailable</Text>
-              <Text style={styles.alertMessage}>
-                TOTP setup is not connected to the backend. No authenticator was enrolled or verification performed.
-              </Text>
-              <TouchableOpacity
-                style={styles.alertButton}
-                onPress={proceedToSetup}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.alertButtonText}>Continue to dashboard</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
       </ImageBackground>
     </SafeAreaView>
   );
@@ -257,37 +210,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
     justifyContent: 'flex-start',
-  },
-
-  // HEADER
-  headerRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 4,
-    flexShrink: 0,
-  },
-
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#0C66AD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-
-  backIcon: {
-    width: 50,
-    height: 40,
-  },
-
-  headerTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 23,
-    color: '#0C66AD',
   },
 
   // BLUE CARD
@@ -454,22 +376,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#2E6F40',
   },
-  responseItem: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D6E8F4',
-  },
-  responseAnswer: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 14,
-    color: '#0C66AD',
-    marginTop: 2,
-  },
-  errorText: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 13,
-    color: '#B91C1C',
-  },
 
   // MINIMAL MAIN GOAL
   goalCard: {
@@ -528,69 +434,5 @@ const styles = StyleSheet.create({
     fontFamily: 'SourGummy-Bold',
     color: '#FFFFFF',
     fontSize: 15,
-  },
-
-  // Custom Alert Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  alertModalBox: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#B0D5EC',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  alertIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EAF6FC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  alertIcon: {
-    fontSize: 32,
-  },
-  alertTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 22,
-    color: '#0C66AD',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  alertMessage: {
-    fontFamily: 'SourGummy-Medium',
-    fontSize: 15,
-    color: '#444444',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  alertButton: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#0C66AD',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  alertButtonText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 16,
-    color: '#FFFFFF',
   },
 });

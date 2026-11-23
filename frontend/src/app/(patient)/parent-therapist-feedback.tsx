@@ -1,3 +1,6 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { PatientPressable } from '@/components/patient-pressable';
 import React, { useState, useMemo } from 'react';
 import {
   View,
@@ -22,14 +25,22 @@ import { ParentHeader } from '../../components/parent-header';
 import {
   TherapistFeedbackItem,
 } from '../../data/parent-progress-mock';
-import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
-type FilterCategory = 'All' | 'Sounds' | 'Words' | 'Phrases' | 'Sentences';
+type FilterCategory = 'All' | 'Sound' | 'Syllables' | 'Words' | 'Phrases' | 'Sentences';
 
 interface TherapistAvatarProps {
   imageUri?: any;
   size?: number;
   style?: any;
+}
+
+function feedbackCategory(category: string): TherapistFeedbackItem['category'] {
+  if (/syllable/i.test(category)) return 'Syllables';
+  if (/phrase/i.test(category)) return 'Phrases';
+  if (/sentence|conversation/i.test(category)) return 'Sentences';
+  if (/word/i.test(category)) return 'Words';
+  if (/sound/i.test(category)) return 'Sound';
+  return 'General';
 }
 
 export function TherapistAvatarPlaceholder({
@@ -87,28 +98,28 @@ export default function ParentTherapistFeedbackScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [activeFilter, setActiveFilter] = useState<FilterCategory>('All');
+  const [activeFilters, setActiveFilters] = useState<Exclude<FilterCategory, 'All'>[]>([]);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-  const { feedback, loading, error, refresh } = usePatientLearning();
 
   const [selectedFeedback, setSelectedFeedback] = useState<TherapistFeedbackItem | null>(null);
 
-  const feedbackItems: TherapistFeedbackItem[] = feedback.map((item) => ({
-    id: item.id,
-    therapistName: item.therapistName,
-    specialty: item.specialty,
-    date: new Date(item.date).toLocaleDateString(),
-    displayDate: new Date(item.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-    title: item.title,
-    comments: item.parentFeedback || item.observations || 'No written observations were included.',
-    category: item.category as TherapistFeedbackItem['category'],
-    recommendations: item.homePractice || undefined,
-  }));
-
+  const { feedback, error } = usePatientLearning();
   const filteredFeedback = useMemo(() => {
-    if (activeFilter === 'All') return feedbackItems;
-    return feedbackItems.filter((item) => item.category === activeFilter);
-  }, [activeFilter, feedbackItems]);
+    const delivered: TherapistFeedbackItem[] = feedback.map((item) => ({
+      id: item.id,
+      therapistName: item.therapistName,
+      specialty: item.specialty,
+      date: item.reviewedAt,
+      displayDate: new Date(item.reviewedAt).toLocaleDateString(),
+      title: item.title,
+      comments: item.parentFeedback,
+      category: feedbackCategory(item.category),
+      recommendations: item.homePractice,
+    }));
+    if (activeFilters.length === 0) return delivered;
+    return delivered.filter((item) => item.category !== 'General' && activeFilters.includes(item.category));
+  }, [activeFilters, feedback]);
+  const pagination = useListPagination(filteredFeedback.length, 8, JSON.stringify(activeFilters));
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -142,12 +153,14 @@ export default function ParentTherapistFeedbackScreen() {
             <View style={styles.filterSection}>
               <TouchableOpacity
                 style={styles.filterPillButton}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isFilterDropdownOpen }}
                 activeOpacity={0.8}
                 onPress={() => setIsFilterDropdownOpen((prev) => !prev)}
               >
                 <Ionicons name="options-outline" size={16} color="#0D68AC" />
                 <Text style={styles.filterButtonText}>
-                  {activeFilter === 'All' ? 'Filters' : `Filters: ${activeFilter}`}
+                  {activeFilters.length === 0 ? 'Filters' : activeFilters.length === 1 ? 'Filters: ' + activeFilters[0] : 'Filters: ' + activeFilters.length + ' selected'}
                 </Text>
                 <View style={styles.filterChevronBadge}>
                   <Ionicons
@@ -160,21 +173,23 @@ export default function ParentTherapistFeedbackScreen() {
 
               {isFilterDropdownOpen && (
                 <View style={styles.filterDropdownPopover}>
-                  {(['All', 'Sounds', 'Words', 'Phrases', 'Sentences'] as FilterCategory[]).map(
+                  {(['All', 'Sound', 'Syllables', 'Words', 'Phrases', 'Sentences'] as FilterCategory[]).map(
                     (cat) => {
-                      const isSelected = activeFilter === cat;
+                      const isSelected = cat === 'All' ? activeFilters.length === 0 : activeFilters.includes(cat);
                       return (
                         <TouchableOpacity
                           key={cat}
                           style={styles.filterOptionRow}
                           activeOpacity={0.7}
-                          onPress={() => {
-                            setActiveFilter(cat);
-                            setIsFilterDropdownOpen(false);
-                          }}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: isSelected }}
+                          onPress={() => setActiveFilters((current) => {
+                            if (cat === 'All') return [];
+                            return current.includes(cat) ? current.filter((value) => value !== cat) : [...current, cat];
+                          })}
                         >
                           <Ionicons
-                            name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                            name={isSelected ? 'checkbox' : 'square-outline'}
                             size={18}
                             color={isSelected ? '#0D68AC' : '#98BDDA'}
                           />
@@ -195,26 +210,19 @@ export default function ParentTherapistFeedbackScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-              {loading ? <Text style={styles.emptyStateSubtitle}>Loading therapist feedback…</Text> : null}
-              {error ? (
-                <TouchableOpacity onPress={() => void refresh()}>
-                  <Text style={styles.emptyStateSubtitle}>{error} Tap to retry.</Text>
-                </TouchableOpacity>
-              ) : null}
               {filteredFeedback.length === 0 ? (
                 <View style={styles.emptyStateContainer}>
                   <Ionicons name="chatbubbles-outline" size={48} color="#98BDDA" />
                   <Text style={styles.emptyStateTitle}>No Feedback Yet</Text>
                   <Text style={styles.emptyStateSubtitle}>
-                    Feedback for this category will appear here after sessions.
+                    {error || 'Feedback for this category will appear here after sessions.'}
                   </Text>
                 </View>
               ) : (
-                filteredFeedback.map((item) => (
-                  <TouchableOpacity
+                filteredFeedback.slice(pagination.start, pagination.end).map((item) => (
+                  <PatientPressable
                     key={item.id}
                     style={styles.feedbackCard}
-                    activeOpacity={0.8}
                     onPress={() => setSelectedFeedback(item)}
                     accessibilityRole="button"
                     accessibilityLabel={`View feedback from ${item.therapistName}`}
@@ -231,16 +239,13 @@ export default function ParentTherapistFeedbackScreen() {
                       <Text style={styles.feedbackDate}>{item.date}</Text>
                     </View>
 
-                    <TouchableOpacity
-                      style={styles.viewButton}
-                      activeOpacity={0.85}
-                      onPress={() => setSelectedFeedback(item)}
-                    >
+                    <View style={styles.viewButton}>
                       <Text style={styles.viewButtonText}>View</Text>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
+                    </View>
+                  </PatientPressable>
                 ))
               )}
+              <ListPagination {...pagination} total={filteredFeedback.length} noun="feedback entries" />
             </ScrollView>
 
             <ParentBottomNav activeTab="progress" />
@@ -318,13 +323,12 @@ export default function ParentTherapistFeedbackScreen() {
                   </ScrollView>
 
                   <View style={styles.modalFooter}>
-                    <TouchableOpacity
+                    <PatientPressable
                       style={styles.closeModalPill}
-                      activeOpacity={0.85}
                       onPress={() => setSelectedFeedback(null)}
                     >
                       <Text style={styles.closeModalPillText}>Close Feedback</Text>
-                    </TouchableOpacity>
+                    </PatientPressable>
                   </View>
                 </>
               )}
@@ -485,15 +489,17 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   viewButton: {
-    backgroundColor: '#F5A623',
+    backgroundColor: '#EDF7FE',
+    borderWidth: 1,
+    borderColor: '#B6D7F2',
     borderRadius: 16,
     paddingVertical: 7,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F5A623',
+    shadowColor: '#0D68AC',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.16,
+    shadowOpacity: 0.10,
     shadowRadius: 3,
     elevation: 2,
   },

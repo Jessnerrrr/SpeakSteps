@@ -1,180 +1,85 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { ChildScreenFrame, childScreenColors as playColors } from '@/components/child-screen-frame';
 import { useFonts } from 'expo-font';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   BackHandler,
-  FlatList,
+  ScrollView,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { PatientPressable } from '@/components/patient-pressable';
+import { NotificationBellButton } from '@/components/notification-popover';
+import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
+import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
+import { useAssignedActivities } from '@/data/assigned-activities';
+import { practiceLevels } from '@/data/practice-levels';
+import { practiceLevelIcons } from '@/components/adventure-icon';
+import { BuddyStore } from '@/data/buddy-store';
 import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 import { getPracticeItems } from '@/services/user-api';
-import type { Language, Position, Sentence } from '@/types/sentences';
-import { POSITIONS } from '@/types/sentences';
+import type { Language } from '@/types/sentences';
 
-// ─── Language Toggle ──────────────────────────────────────────────────────────
-function LanguageToggle({
-  value,
-  onChange,
-}: {
-  value: Language;
-  onChange: (l: Language) => void;
+const playLanguages: Language[] = ['English', 'Tagalog'];
+const activitiesPerPage = 4;
+type PracticeItem = Awaited<ReturnType<typeof getPracticeItems>>[number];
+
+function ActivityPages<T>({ items, renderActivity }: {
+  items: readonly T[];
+  renderActivity: (item: T) => ReactNode;
 }) {
-  const langs: Language[] = ['English', 'Tagalog'];
+  const pagination = useListPagination(items.length, activitiesPerPage, '');
+
   return (
-    <View style={styles.toggleRow}>
-      {langs.map((l) => (
-        <TouchableOpacity
-          key={l}
-          style={[styles.toggleBtn, value === l && styles.toggleBtnActive]}
-          onPress={() => onChange(l)}
-        >
-          <Text style={[styles.toggleText, value === l && styles.toggleTextActive]}>
-            {l}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
+    <>
+      {items.slice(pagination.start, pagination.end).map(renderActivity)}
+      <ListPagination {...pagination} total={items.length} noun="activities" />
+    </>
   );
 }
 
-// ─── Position Tabs ────────────────────────────────────────────────────────────
-function PositionTabs({
-  value,
-  onChange,
-}: {
-  value: Position;
-  onChange: (p: Position) => void;
-}) {
-  return (
-    <View style={styles.tabRow}>
-      {POSITIONS.map((p) => (
-        <TouchableOpacity
-          key={p}
-          style={[styles.tab, value === p && styles.tabActive]}
-          onPress={() => onChange(p)}
-        >
-          <Text style={[styles.tabText, value === p && styles.tabTextActive]}>
-            {p}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
-// ─── Star Rating ──────────────────────────────────────────────────────────────
-function StarRating({ stars }: { stars: 0 | 1 | 2 | 3 }) {
-  return (
-    <View style={styles.starRow}>
-      {[1, 2, 3].map((i) => (
-        <Text key={i} style={i <= stars ? styles.starFilled : styles.starEmpty}>
-          ★
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-// ─── Sentence Card ────────────────────────────────────────────────────────────
-function SentenceCard({
-  sentence,
-  index,
-  onSelect,
-  cardWidth,
-}: {
-  sentence: Sentence;
-  index: number;
-  onSelect: (s: Sentence) => void;
-  cardWidth: number | string;
-}) {
-  return (
-    <TouchableOpacity style={[styles.card, { width: cardWidth }]} onPress={() => onSelect(sentence)}>
-      <View style={styles.cardTopline}>
-        <Text style={styles.cardNumber}>{String(index + 1).padStart(2, '0')}</Text>
-        <Text style={styles.cardAction}>PRACTICE</Text>
-      </View>
-      <View style={styles.cardInner}>
-        <Text style={styles.cardSound}>{sentence.sound}</Text>
-        <Text style={styles.cardSyllable}>{sentence.syllable}</Text>
-      </View>
-      <StarRating stars={sentence.stars} />
-    </TouchableOpacity>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function SentencesScreen() {
-  const [language, setLanguage] = useState<Language>('English');
-  const [position, setPosition] = useState<Position>('Initial');
-  const params = useLocalSearchParams<{
-    assignmentId?: string;
-    activityId?: string;
-    patientId?: string;
-    patientCode?: string;
-  }>();
-  const { assignments, loading, error, refresh } = usePatientLearning();
-  const [practiceItems, setPracticeItems] = useState<Awaited<ReturnType<typeof getPracticeItems>>>([]);
-  const [practiceItemsLoading, setPracticeItemsLoading] = useState(false);
+  const assignedActivities = useAssignedActivities().filter((item) => item.linked);
+  const buddy = useSyncExternalStore(BuddyStore.subscribe, BuddyStore.getActiveBuddy, BuddyStore.getActiveBuddy);
+  const { progress } = usePatientLearning();
+  const submissions = progress?.recentSubmissions ?? [];
+  const [practiceItems, setPracticeItems] = useState<PracticeItem[]>([]);
   const [practiceItemsError, setPracticeItemsError] = useState('');
-  const assignmentId = Array.isArray(params.assignmentId) ? params.assignmentId[0] : params.assignmentId;
-  const assignment = assignments.find((item) => item.id === assignmentId);
+  const [language, setLanguage] = useState<Language>('English');
+  const params = useLocalSearchParams<{ category?: string; level?: string }>();
+  const requestedLevel = params.level === 'Isolation' ? 'Sound' : params.level;
+  const level = practiceLevels.find((option) => option === requestedLevel)
+    ?? practiceLevels.find((option) => option.toLowerCase() === params.category)
+    ?? 'Sound';
+  const category = level === 'Sound' ? 'sounds' : level.toLowerCase();
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
+  const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   useEffect(() => {
-    if (assignment) {
-      const savedLanguage = assignment.activity.language.toLowerCase();
-      setLanguage(savedLanguage.includes('tagalog') && !savedLanguage.includes('english') ? 'Tagalog' : 'English');
-      const firstPosition = assignment.activity.positions[0] as Position | undefined;
-      if (firstPosition && POSITIONS.includes(firstPosition)) setPosition(firstPosition);
-    }
-  }, [assignment]);
-
-  useEffect(() => {
-    const hasAssignedWords = (assignment?.activity.words || []).some((word) => word.position === position);
-    if (!assignment || hasAssignedWords) {
-      setPracticeItems([]);
-      setPracticeItemsError('');
-      setPracticeItemsLoading(false);
-      return;
-    }
     let active = true;
-    setPracticeItemsLoading(true);
     setPracticeItemsError('');
-    getPracticeItems({
-      sound: assignment.activity.sound,
-      position,
-      language,
-    })
-      .then((items) => {
-        if (active) setPracticeItems(items);
-      })
-      .catch((loadError: unknown) => {
-        if (active) setPracticeItemsError(loadError instanceof Error ? loadError.message : 'Could not load practice items.');
-      })
-      .finally(() => {
-        if (active) setPracticeItemsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [assignment, language, position]);
-
-  // Responsive Hooks
-  const { width } = useWindowDimensions();
-  // We constrain the central content to 760px on wide screens.
-  // The grid padding is 16*2 = 32px. We calculate exactly how wide each of the two cards should be.
-  const contentWidth = Math.min(width, 760); 
-  const availableGridWidth = contentWidth - 32; 
-  // Subtracting 14 for the gap between the two columns
-  const cardWidth = (availableGridWidth - 14) / 2;
+    void getPracticeItems({ language }).then((items) => {
+      if (active) setPracticeItems(items);
+    }).catch((loadError) => {
+      if (active) setPracticeItemsError(loadError instanceof Error ? loadError.message : 'Could not load practice activities.');
+    });
+    return () => { active = false; };
+  }, [language]);
 
   // FIXED FONT PATH: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../../assets/SourGummy.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
   // Handle back button: explicitly returns to the Child Dashboard (/patient-dashboard)
@@ -183,7 +88,7 @@ export default function SentencesScreen() {
   };
 
   // Intercept hardware back button on Android so it safely remains in Child Mode
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     const onBackPress = () => {
       handleBack();
       return true;
@@ -193,233 +98,303 @@ export default function SentencesScreen() {
       onBackPress
     );
     return () => subscription.remove();
-  }, []);
+  }, []));
 
   if (!fontsLoaded) return null;
-
-  const assignedItems: Sentence[] = (assignment?.activity.words || [])
-    .filter((word) => word.position === position)
-    .map((word) => ({
-      id: word.id,
-      sound: word.sound || assignment?.activity.sound || '',
-      syllable: word.phrase || word.text,
-      stars: 0,
-      modelAudioUrl: word.modelAudioUrl,
-    }));
-  const items: Sentence[] = assignedItems.length > 0
-    ? assignedItems
-    : practiceItems
-      .filter((item) => item.sentenceText || item.syllable)
-      .map((item) => ({
-        id: item.id,
-        practiceItemId: item.id,
-        sound: item.sound,
-        syllable: item.sentenceText || item.syllable,
-        stars: 0,
-      }));
-
-  const handleSelect = (sentence: Sentence) => {
-    router.push({
-      pathname: '/practice',
-      params: {
-        sentenceId: sentence.id,
-        sound: sentence.sound,
-        syllable: sentence.syllable,
-        modelAudioUrl: sentence.modelAudioUrl,
-        stars: sentence.stars,
-        position,
-        assignmentId: assignment?.id,
-        practiceItemId: sentence.practiceItemId,
-        patientId: Array.isArray(params.patientId) ? params.patientId[0] : params.patientId,
-        patientCode: Array.isArray(params.patientCode) ? params.patientCode[0] : params.patientCode,
-      },
-    } as any);
-  };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
+      <ChildScreenFrame>
+        <View style={styles.topHeader}>
+          <Text accessibilityRole="header" style={styles.headerTitle}>Play</Text>
+
+          <View style={styles.headerRightActions}>
+            <NotificationBellButton
+              audience="child"
+              onBeforeOpen={() => setIsMenuOpen(false)}
+            />
+
             <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backBtn}
+              style={styles.menuButton}
               accessibilityRole="button"
-              accessibilityLabel="Back to child dashboard"
+              accessibilityLabel={isMenuOpen ? 'Close menu' : 'Open menu'}
+              accessibilityState={{ expanded: isMenuOpen }}
+              activeOpacity={0.7}
+              onPress={() => setIsMenuOpen(!isMenuOpen)}
             >
-              <Text style={styles.backIcon}>‹</Text>
+              <Ionicons
+                name={isMenuOpen ? 'close' : 'menu'}
+                size={34}
+                color="#0D68AC"
+              />
             </TouchableOpacity>
-            <View>
-              <Text style={styles.eyebrow}>SPEECH PRACTICE</Text>
-              <Text style={styles.headerTitle}>Sentence library</Text>
-            </View>
           </View>
         </View>
 
-        {/* Central Content Wrapper limits width on tablets */}
-        <View style={styles.centerWrapper}>
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={styles.grid}
-            columnWrapperStyle={styles.gridRow}
-            ListHeaderComponent={
-              <View style={styles.contentHeader}>
-                <Text style={styles.pageTitle}>Choose a sound to practice</Text>
-                <Text style={styles.pageSubtitle}>
-                  {assignment ? `Practice targets from ${assignment.activity.title}.` : 'Choose an assigned activity to get started.'}
-                </Text>
-                {loading ? <Text style={styles.pageSubtitle}>Loading assigned practice…</Text> : null}
-                {error ? (
-                  <TouchableOpacity onPress={() => void refresh()}>
-                    <Text style={styles.pageSubtitle}>{error} Tap to retry.</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {practiceItemsLoading ? <Text style={styles.pageSubtitle}>Loading standard practice items…</Text> : null}
-                {practiceItemsError ? <Text style={styles.pageSubtitle}>{practiceItemsError}</Text> : null}
-                <Text style={styles.controlLabel}>Language</Text>
-                <LanguageToggle value={language} onChange={setLanguage} />
-                <View style={styles.positionHeading}>
-                  <Text style={styles.controlLabel}>Sound position</Text>
-                  <Text style={styles.promptCount}>{items.length} prompts</Text>
+        {isMenuOpen && (
+          <>
+            <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
+              <View style={styles.menuBackdrop} />
+            </TouchableWithoutFeedback>
+
+            <View style={styles.menuDropdownCard}>
+              <TouchableOpacity
+                style={styles.menuItemRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setIsGrownUpModalVisible(true);
+                }}
+              >
+                <Image
+                  source={require('../../../assets/images/parent-mode-icon.png')}
+                  style={styles.menuParentIcon}
+                  contentFit="cover"
+                />
+                <Text style={styles.menuItemText}>Parent mode</Text>
+                <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+              </TouchableOpacity>
+
+              <View style={styles.menuDivider} />
+
+              <TouchableOpacity
+                style={styles.menuItemRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setIsSignOutModalVisible(true);
+                }}
+              >
+                <View style={styles.logoutIconBadge}>
+                  <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
                 </View>
-                <PositionTabs value={position} onChange={setPosition} />
+                <Text style={styles.menuItemText}>Sign out</Text>
+                <Ionicons name="chevron-forward" size={16} color="#F5A623" />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+        <View style={styles.centerWrapper}>
+          <ScrollView contentContainerStyle={styles.grid}>
+              <View style={styles.contentHeader}>
+                <View style={styles.playIntro}>
+                  <View style={styles.introCopy}>
+                    <Text accessibilityRole="header" style={styles.pageTitle}>Let’s practice!</Text>
+                    <Text style={styles.introText}>Your buddy is ready!</Text>
+                  </View>
+                  <Image source={buddy.image} style={styles.introBuddy} contentFit="contain" />
+                </View>
+                <Text style={styles.controlLabel}>Language</Text>
+                <View style={styles.languageRow}>
+                  {playLanguages.map((option) => (
+                    <PatientPressable key={option} accessibilityState={{ selected: option === language }}
+                      onPress={() => setLanguage(option)} style={[styles.languageTab, option === language && styles.languageActive]}>
+                      <Text style={[styles.categoryText, option === language && styles.languageActiveText]}>{option}</Text>
+                    </PatientPressable>
+                  ))}
+                </View>
+                <Text style={styles.controlLabel}>Practice level</Text>
+                <View style={styles.categoryRow}>
+                  {practiceLevels.map((option) => {
+                    const selected = option === level;
+                    return (
+                      <PatientPressable key={option} accessibilityState={{ selected }} onPress={() => router.setParams({ level: option })} style={[styles.categoryTab, selected && styles.categoryTabActive]}>
+                        <Ionicons name={practiceLevelIcons[option]} size={18} color={selected ? '#0865AD' : '#567F9A'} />
+                        <Text style={[styles.categoryText, selected && styles.categoryTextActive]}>{option}</Text>
+                      </PatientPressable>
+                    );
+                  })}
+                </View>
+                {assignedActivities.some((item) => item.linked) && (
+                  <View style={styles.librarySection}>
+                    <Text style={styles.controlLabel}>Assigned to you</Text>
+                    <ActivityPages items={assignedActivities} renderActivity={(item) => (
+                      <PatientPressable key={item.id} accessibilityLabel={[item.title, item.level, item.submitted ? 'Submitted' : item.dueDate && 'Due ' + item.dueDate].filter(Boolean).join(', ')} style={styles.libraryCard}
+                        onPress={() => router.push({ pathname: '/practice', params: { activityId: item.id, linkedAssignment: 'true', category: item.category.toLowerCase(), level: item.level } })}>
+                        <View style={styles.soundBadge}><Ionicons name="clipboard" size={20} color="#0865AD" /></View>
+                        <Text numberOfLines={1} style={styles.libraryTitle}>{item.title}</Text>
+                        <Text numberOfLines={1} style={styles.libraryMeta}>{item.submitted ? 'Submitted' : item.dueDate ? 'Due ' + item.dueDate.slice(0, 5) : item.level}</Text>
+                        <Ionicons name="chevron-forward" size={18} color="#0D68AC" />
+                      </PatientPressable>
+                    )} />
+                  </View>
+                )}
+                <View style={styles.librarySection}>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>Pick an activity</Text>
+                  <ActivityPages key={language + ':' + level}
+                    items={practiceItems} renderActivity={(item) => {
+                    const earned = submissions.some((entry) => entry.practiceItemId === item.id);
+                    const title = level === 'Sentences'
+                      ? item.sentenceText || item.syllable || item.sound
+                      : level === 'Syllables'
+                        ? item.syllable || item.sound
+                        : item.sound;
+                    return <PatientPressable key={item.id} accessibilityLabel={title + (earned ? ', submitted' : '')} style={styles.libraryCard}
+                      onPress={() => router.push({ pathname: '/practice', params: { practiceItemId: item.id, category, level, sound: item.sound, syllable: item.syllable, position: item.position, language: item.language } })}>
+                      <View style={styles.soundBadge}><Text style={styles.soundText}>{item.sound}</Text></View>
+                      <Text numberOfLines={1} style={styles.libraryTitle}>{title}</Text>
+                      {earned && <Ionicons name="star" size={17} color="#AD6A09" />}
+                      <View style={styles.playBadge}><Ionicons name="play" size={14} color="#0865AD" /></View>
+                    </PatientPressable>;
+                  }} />
+                  {practiceItemsError ? <Text style={styles.libraryMeta}>{practiceItemsError}</Text> : null}
+                  {!practiceItemsError && practiceItems.length === 0 ? <Text style={styles.libraryMeta}>No practice activities are available yet.</Text> : null}
+                </View>
               </View>
-            }
-            renderItem={({ item, index }) => (
-              <SentenceCard sentence={item} index={index} onSelect={handleSelect} cardWidth={cardWidth} />
-            )}
-          />
+          </ScrollView>
         </View>
 
         {/* Global Child Bottom Navigation Bar */}
         <ChildBottomNav activeTab="play" />
-      </View>
+      </ChildScreenFrame>
+
+      <GrownUpCheckModal
+        visible={isGrownUpModalVisible}
+        onClose={() => setIsGrownUpModalVisible(false)}
+        onSuccess={() => {
+          setIsGrownUpModalVisible(false);
+          router.push('/parent-dashboard' as any);
+        }}
+      />
+
+      <SignOutConfirmModal
+        visible={isSignOutModalVisible}
+        onClose={() => setIsSignOutModalVisible(false)}
+        onConfirm={() => {
+          setIsSignOutModalVisible(false);
+          router.replace('/patient-login' as any);
+        }}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  
-  // Centering wrapper for tablets
-  centerWrapper: {
-    flex: 1,
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-  },
+  librarySection: { gap: 8 },
+  libraryCard: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 9, borderRadius: 16, borderWidth: 1, borderBottomWidth: 2, borderColor: '#BBD9EC', backgroundColor: '#FFFFFF' },
+  soundBadge: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#DFEFF9', alignItems: 'center', justifyContent: 'center' },
+  soundText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 18 },
+  playBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EAF4FA', alignItems: 'center', justifyContent: 'center' },
+  grid: { paddingHorizontal: 16, paddingBottom: 30 },
+  libraryTitle: { flex: 1, minWidth: 0, fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#183B56' },
+  libraryMeta: { flexShrink: 1, maxWidth: '36%', color: '#436780', fontFamily: 'SourGummy-Medium', fontSize: 13 },
+  // Tablet Responsive Constraint
 
-  header: {
-    backgroundColor: '#0865AD',
-    paddingTop: 56,
-    paddingBottom: 22,
-  },
-  headerContent: {
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  backBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold', textAlign: 'center' },
-  eyebrow: {
-    color: '#FFB923',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.4,
-    marginBottom: 3,
-  },
-  headerTitle: { fontFamily: 'SourGummy', color: '#fff', fontSize: 25 },
-
-  contentHeader: {
-    width: '100%',
-    paddingTop: 28,
-  },
-  pageTitle: {
-    color: '#0865AD',
-    fontFamily: 'SourGummy',
-    fontSize: 27,
-    lineHeight: 32,
-    marginBottom: 8,
-  },
-  pageSubtitle: { color: '#666', fontSize: 14, marginBottom: 22 },
-  controlLabel: {
-    color: '#0865AD',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  positionHeading: {
+  /* Top Header */
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: playColors.canvas,
   },
-  promptCount: { color: '#999', fontSize: 12, marginBottom: 8 },
-
-  toggleRow: {
+  headerTitle: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 26,
+    color: '#0D68AC',
+    letterSpacing: -0.5,
+  },
+  headerRightActions: {
     flexDirection: 'row',
-    backgroundColor: '#E8F4FB',
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 22,
-  },
-  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
-  toggleBtnActive: { backgroundColor: '#0865AD' },
-  toggleText: { fontFamily: 'SourGummy', color: '#0865AD', fontSize: 14 },
-  toggleTextActive: { color: '#fff' },
-
-  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: '#E8F4FB',
+    gap: 12,
   },
-  tabActive: { backgroundColor: '#FFB923' },
-  tabText: { fontFamily: 'SourGummy', color: '#0865AD', fontSize: 13 },
-  tabTextActive: { color: '#fff' },
+  menuButton: {
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-  grid: { paddingHorizontal: 16, paddingBottom: 30 },
-  gridRow: { justifyContent: 'space-between', marginBottom: 14 },
-
-  card: {
-    // Dynamic width applied inline via props
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#CBE6F6',
-    elevation: 2,
+  /* Dropdown Backdrop & Floating Menu Card */
+  menuBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    zIndex: 30,
+  },
+  menuDropdownCard: {
+    position: 'absolute',
+    top: 66,
+    right: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: '#D4E7F5',
+    zIndex: 40,
+    minWidth: 190,
   },
-  cardTopline: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
-  cardNumber: { color: '#9AA4AA', fontSize: 11, fontWeight: '700' },
-  cardAction: { color: '#0865AD', fontSize: 9, fontWeight: '700', letterSpacing: 0.8 },
-  cardInner: { marginBottom: 18 },
-  cardSound: { fontFamily: 'SourGummy', fontSize: 28, color: '#0865AD' },
-  cardSyllable: { fontFamily: 'SourGummy', fontSize: 16, color: '#555', marginTop: 3 },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  menuParentIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  menuItemText: {
+    flex: 1,
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 13,
+    color: '#0D68AC',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#EDF4F9',
+    marginVertical: 4,
+  },
+  logoutIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0D68AC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  starRow: { flexDirection: 'row', gap: 2 },
-  starFilled: { color: '#FFB923', fontSize: 16 },
-  starEmpty: { color: '#DDD', fontSize: 16 },
+  centerWrapper: { flex: 1 },
+  contentHeader: {
+    width: '100%',
+    paddingTop: 12,
+  },
+  playIntro: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, backgroundColor: '#D5EAF7', paddingHorizontal: 14, paddingVertical: 8, marginBottom: 14 },
+  introCopy: { flex: 1, minWidth: 0 },
+  introBuddy: { width: 60, height: 60 },
+  introText: { color: '#365F7C', fontFamily: 'SourGummy-Medium', fontSize: 15 },
+  pageTitle: {
+    color: '#0865AD',
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  sectionTitle: { color: '#0865AD', fontFamily: 'SourGummy-Bold', fontSize: 19 },
+  controlLabel: {
+    color: '#0865AD',
+    fontSize: 15,
+    fontFamily: 'SourGummy-Bold',
+    marginBottom: 6,
+  },
+
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
+  languageRow: { flexDirection: 'row', gap: 4, backgroundColor: '#D5EAF7', padding: 4, borderRadius: 13, marginBottom: 14 },
+  languageTab: { flex: 1, minHeight: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  categoryTab: { flexGrow: 1, minWidth: 84, minHeight: 44, flexDirection: 'row', gap: 4, borderWidth: 1, borderColor: '#D4E7F4', borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 5 },
+  categoryTabActive: { backgroundColor: '#D5EAF7', borderColor: '#81B9DF' },
+  languageActive: { backgroundColor: '#0865AD' },
+  languageActiveText: { color: '#FFFFFF', fontFamily: 'SourGummy-Bold' },
+  categoryText: { fontFamily: 'SourGummy-Medium', fontSize: 13, color: '#365F7C', textAlign: 'center' },
+  categoryTextActive: { fontFamily: 'SourGummy-Bold', color: '#0865AD' },
+
 });

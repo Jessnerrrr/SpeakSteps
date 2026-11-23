@@ -109,7 +109,7 @@ export const samplePatients: PatientRecord[] = [
     contactNumber: '+63 900 000 0001',
     guardianEmail: 'parent.sude@email.com',
     targetSound: '/r/ Sound',
-    hierarchyLevel: 'Isolation',
+    hierarchyLevel: 'Sound',
     phonemePositions: ['Initial'],
     secondaryTargets: '/l/, /w/',
     dominantErrorPattern: 'Substitution',
@@ -285,26 +285,34 @@ export const samplePatients: PatientRecord[] = [
   },
 ];
 
-export function patientName(patient: Pick<PatientRecord, 'firstName' | 'middleName' | 'lastName' | 'suffix'>) {
-  return [patient.firstName, patient.middleName, patient.lastName, patient.suffix && patient.lastName !== patient.suffix ? patient.suffix : '']
+export function patientName(patient?: Partial<Pick<PatientRecord, 'firstName' | 'middleName' | 'lastName' | 'suffix'>>) {
+  if (!patient) return '';
+  const parts = [
+    patient.firstName,
+    patient.middleName,
+    patient.lastName,
+    patient.suffix && patient.lastName !== patient.suffix ? patient.suffix : '',
+  ];
+  return parts
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
     .map((part) => part.trim())
-    .filter(Boolean)
     .join(' ');
 }
 
-export function patientMeta(patient: Pick<PatientRecord, 'age' | 'languageProfile' | 'targetSound' | 'hierarchyLevel'>) {
-  const languageMatch = patient.languageProfile.match(/^(?:Bilingual|Multilingual)\s+([A-Za-z]+)/);
+export function patientMeta(patient?: Partial<Pick<PatientRecord, 'age' | 'languageProfile' | 'targetSound' | 'hierarchyLevel'>>) {
+  if (!patient) return '';
+  const languageMatch = patient.languageProfile?.match?.(/^(?:Bilingual|Multilingual)\s+([A-Za-z]+)/);
   const language = languageMatch?.[1] || 'Multilingual';
-  const sound = patient.targetSound.replace(' Sound', '');
+  const sound = patient.targetSound ? patient.targetSound.replace(' Sound', '') : '';
   const stage =
-    patient.hierarchyLevel === 'Isolation'
-      ? 'Isolated Sounds'
+    patient.hierarchyLevel === 'Sound'
+      ? 'Sound'
       : patient.hierarchyLevel === 'Syllable'
         ? 'Syllables'
         : patient.hierarchyLevel === 'Sentence Level'
           ? 'Sentences'
-          : patient.hierarchyLevel;
-  return `${patient.age} yrs old · ${language} · ${sound} Target · ${stage}`;
+          : patient.hierarchyLevel || '';
+  return `${patient.age ?? ''} yrs old · ${language} · ${sound} Target · ${stage}`;
 }
 
 export function createPatient(input: NewPatientInput, patientCode?: string): PatientRecord {

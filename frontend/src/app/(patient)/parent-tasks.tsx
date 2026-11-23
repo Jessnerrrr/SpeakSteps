@@ -1,8 +1,11 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { useAssignedActivities } from '@/data/assigned-activities';
+import { PatientPressable } from '@/components/patient-pressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -18,9 +21,10 @@ import {
 // FIXED IMPORTS: 2 levels up to reach src/components and src/data
 import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
-import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
+import type { AssignedActivity } from '../../data/parent-tasks-mock';
 
-type FilterType = 'all' | 'pending' | 'completed';
+type FilterType = 'all' | 'pending' | 'submitted' | 'completed';
 
 export default function ParentTasksScreen() {
   const { width } = useWindowDimensions();
@@ -33,57 +37,35 @@ export default function ParentTasksScreen() {
       'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
     });
 
-  const { assignments, loading, error, refresh } = usePatientLearning();
-  const activities = assignments.map((assignment) => {
-    const level = assignment.activity.level;
-    const category = /phrase/i.test(level)
-      ? 'Phrases'
-      : /sentence|conversation/i.test(level)
-        ? 'Sentences'
-        : /word/i.test(level)
-          ? 'Words'
-          : 'Sounds';
-    return {
-      id: assignment.id,
-      title: assignment.activity.title,
-      level,
-      category,
-      assignedBy: 'Therapist',
-      status: assignment.status === 'Completed' ? 'completed' : 'pending',
-      thumbnail: require('../../../assets/images/sheep.png'),
-      attempts: 0,
-      bestScore: '—',
-      stars: '—',
-    } as const;
-  });
+  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
+  const activities = useAssignedActivities();
 
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
+  useEffect(() => {
+    const unsubscribe = ChildProfileStore.subscribe((updated: ChildProfile) => {
+      setChildProfile(updated);
+    });
+    return unsubscribe;
+  }, []);
+
+  const filteredActivities = activities.filter((task: AssignedActivity) => {
+    if (activeFilter === 'all') return true;
+    return activeFilter === 'submitted' ? task.status === 'pending' && task.submitted :
+      task.status === activeFilter && (activeFilter !== 'pending' || !task.submitted);
+  });
+  const pagination = useListPagination(filteredActivities.length, 8, activeFilter);
   if (!fontsLoaded) return null;
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.push('/parent-dashboard' as any);
-    }
-  };
-
-  const filteredActivities = activities.filter((task) => {
-    if (activeFilter === 'all') return true;
-    return task.status === activeFilter;
-  });
-
-  const pendingCount = activities.filter((t) => t.status === 'pending').length;
-  const completedCount = activities.filter((t) => t.status === 'completed').length;
-  const allCount = activities.length;
-
-  const getFilterLabel = () => {
-    if (activeFilter === 'pending') return `Pending (${pendingCount})`;
-    if (activeFilter === 'completed') return `Completed (${completedCount})`;
-    return `All (${allCount})`;
-  };
+  const filters = [
+    { id: 'all', label: 'All activities', count: activities.length, pill: styles.countPillNeutral, text: styles.countPillTextNeutral },
+    { id: 'pending', label: 'Pending', count: activities.filter((item) => item.status === 'pending' && !item.submitted).length, pill: styles.countPillPending, text: styles.countPillTextPending },
+    { id: 'submitted', label: 'Awaiting review', count: activities.filter((item) => item.status === 'pending' && item.submitted).length, pill: styles.countPillNeutral, text: styles.countPillTextNeutral },
+    { id: 'completed', label: 'Reviewed', count: activities.filter((item) => item.status === 'completed').length, pill: styles.countPillCompleted, text: styles.countPillTextCompleted },
+  ] as const;
+  const currentFilter = filters.find(({ id }) => id === activeFilter) ?? filters[0];
+  const getFilterLabel = () => currentFilter.label + ' (' + currentFilter.count + ')';
 
   return (
     <>
@@ -101,8 +83,7 @@ export default function ParentTasksScreen() {
             
             <ParentHeader
               title="Assigned Activities"
-              showBack={true}
-              onBack={handleBack}
+              showBack={false}
             />
 
             <View style={styles.filterSection}>
@@ -137,81 +118,17 @@ export default function ParentTasksScreen() {
                   </TouchableWithoutFeedback>
 
                   <View style={styles.filterDropdownCard}>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterOptionRow,
-                        activeFilter === 'all' && styles.filterOptionRowActive,
-                      ]}
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setActiveFilter('all');
-                        setIsFilterDropdownOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterOptionLabel,
-                          activeFilter === 'all' && styles.filterOptionLabelActive,
-                        ]}
-                      >
-                        All Activities
-                      </Text>
-                      <View style={styles.countPillNeutral}>
-                        <Text style={styles.countPillTextNeutral}>{allCount}</Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    <View style={styles.filterOptionDivider} />
-
-                    <TouchableOpacity
-                      style={[
-                        styles.filterOptionRow,
-                        activeFilter === 'pending' && styles.filterOptionRowActive,
-                      ]}
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setActiveFilter('pending');
-                        setIsFilterDropdownOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterOptionLabel,
-                          activeFilter === 'pending' && styles.filterOptionLabelActive,
-                        ]}
-                      >
-                        Pending
-                      </Text>
-                      <View style={styles.countPillPending}>
-                        <Text style={styles.countPillTextPending}>{pendingCount}</Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    <View style={styles.filterOptionDivider} />
-
-                    <TouchableOpacity
-                      style={[
-                        styles.filterOptionRow,
-                        activeFilter === 'completed' && styles.filterOptionRowActive,
-                      ]}
-                      activeOpacity={0.75}
-                      onPress={() => {
-                        setActiveFilter('completed');
-                        setIsFilterDropdownOpen(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterOptionLabel,
-                          activeFilter === 'completed' && styles.filterOptionLabelActive,
-                        ]}
-                      >
-                        Completed
-                      </Text>
-                      <View style={styles.countPillCompleted}>
-                        <Text style={styles.countPillTextCompleted}>{completedCount}</Text>
-                      </View>
-                    </TouchableOpacity>
+                    {filters.map(({ id, label, count, pill, text }, index) => (
+                      <Fragment key={id}>
+                        {index > 0 && <View style={styles.filterOptionDivider} />}
+                        <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected: activeFilter === id }}
+                          style={[styles.filterOptionRow, activeFilter === id && styles.filterOptionRowActive]}
+                          onPress={() => { setActiveFilter(id); setIsFilterDropdownOpen(false); }}>
+                          <Text style={[styles.filterOptionLabel, activeFilter === id && styles.filterOptionLabelActive]}>{label}</Text>
+                          <View style={pill}><Text style={text}>{count}</Text></View>
+                        </TouchableOpacity>
+                      </Fragment>
+                    ))}
                   </View>
                 </>
               )}
@@ -221,26 +138,20 @@ export default function ParentTasksScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
-              {loading ? <Text style={styles.emptySub}>Loading assigned activities…</Text> : null}
-              {error ? (
-                <TouchableOpacity onPress={() => void refresh()}>
-                  <Text style={styles.emptySub}>{error} Tap to retry.</Text>
-                </TouchableOpacity>
-              ) : null}
               {filteredActivities.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="checkbox-outline" size={48} color="#A0BED4" />
                   <Text style={styles.emptyTitle}>No Activities Found</Text>
                   <Text style={styles.emptySub}>
-                    There are no {activeFilter} activities at the moment.
+                    No activities in this view.
                   </Text>
                 </View>
               ) : (
-                filteredActivities.map((activity) => (
-                  <TouchableOpacity
+                filteredActivities.slice(pagination.start, pagination.end).map((activity) => (
+                  <PatientPressable
                     key={activity.id}
-                    activeOpacity={0.8}
                     style={styles.taskCard}
+                    accessibilityRole="button"
                     onPress={() => {
                       router.push({
                         pathname: '/parent-activity-details',
@@ -258,7 +169,7 @@ export default function ParentTasksScreen() {
 
                     <View style={styles.taskInfoContainer}>
                       <Text style={styles.taskTitle}>{activity.title}</Text>
-                      <Text style={styles.taskLevel}>{activity.level}</Text>
+                      <Text style={styles.taskLevel}>{activity.level}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}</Text>
                       <Text style={styles.taskAssignee}>
                         Assigned : {activity.assignedBy}
                       </Text>
@@ -280,12 +191,13 @@ export default function ParentTasksScreen() {
                             : styles.statusTextPending,
                         ]}
                       >
-                        {activity.status === 'completed' ? 'Completed' : 'Pending'}
+                        {activity.status === 'completed' ? 'Reviewed' : activity.submitted ? 'Awaiting review' : 'Pending'}
                       </Text>
                     </View>
-                  </TouchableOpacity>
+                  </PatientPressable>
                 ))
               )}
+              <ListPagination {...pagination} total={filteredActivities.length} noun="activities" />
             </ScrollView>
 
             <ParentBottomNav activeTab="tasks" />
@@ -559,36 +471,51 @@ const styles = StyleSheet.create({
   },
   countPillNeutral: {
     backgroundColor: '#E8F2FA',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    minWidth: 28,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   countPillTextNeutral: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11,
     color: '#0D68AC',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   countPillPending: {
     backgroundColor: '#FFEBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    minWidth: 28,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   countPillTextPending: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11,
     color: '#FF4D4D',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   countPillCompleted: {
     backgroundColor: '#E5F9EF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    minWidth: 28,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   countPillTextCompleted: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11,
     color: '#27AE60',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 
   /* Scrollable Content */
@@ -631,6 +558,7 @@ const styles = StyleSheet.create({
   taskInfoContainer: {
     flex: 1,
     marginLeft: 14,
+    marginRight: 10,
     justifyContent: 'center',
   },
   taskTitle: {
@@ -653,11 +581,17 @@ const styles = StyleSheet.create({
 
   /* Status Badges */
   statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 14,
+    width: 96,
+    minWidth: 96,
+    maxWidth: 96,
+    height: 32,
+    minHeight: 32,
+    maxHeight: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    marginLeft: 8,
   },
   statusBadgePending: {
     backgroundColor: '#FFD9D9',
@@ -666,8 +600,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#D7F5E8',
   },
   statusBadgeText: {
+    width: '100%',
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 16,
   },
   statusTextPending: {
     color: '#FF4D4D',

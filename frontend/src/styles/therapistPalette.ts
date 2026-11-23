@@ -73,4 +73,4 @@ export const darkPalette: TherapistPalette = {
   input: '#121C27',
 };
 
-export type ThemeMode = 'auto' | 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark';

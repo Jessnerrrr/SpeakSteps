@@ -20,7 +20,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
   if (!patient) {
     return (
       <View style={styles.missing}>
-        <Text style={{ color: palette.muted }}>This patient is no longer on the list.</Text>
+        <Text style={{ color: palette.muted }}>This student is no longer on the list.</Text>
       </View>
     );
   }
@@ -56,7 +56,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-      <Pressable accessibilityLabel="Back to patients" onPress={() => router.push('/therapist/patients' as never)} style={[styles.back, { borderColor: palette.line, backgroundColor: palette.card }]}>
+      <Pressable accessibilityLabel="Back to students" onPress={() => router.push('/therapist/patients' as never)} style={[styles.back, { borderColor: palette.line, backgroundColor: palette.card }]}>
         <ChevronLeftIcon color={palette.text} size={18} />
       </Pressable>
 
@@ -82,7 +82,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
           />
           <StatCard
             label="Current Stage"
-            value={patient.hierarchyLevel === 'Isolation' ? 'Isolated Sounds' : patient.hierarchyLevel}
+            value={patient.hierarchyLevel === 'Sound' ? 'Sound' : patient.hierarchyLevel}
             caption="Target Mode"
             background="#E7F6FD"
             color="#0EA5E9"

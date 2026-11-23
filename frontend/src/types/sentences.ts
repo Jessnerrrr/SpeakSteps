@@ -1,5 +1,10 @@
 export type Position = 'Initial' | 'Medial' | 'Final';
 export type Language = 'English' | 'Tagalog';
+export const PRACTICE_LANGUAGES = ['English', 'Tagalog'] as const;
+
+export function matchesPracticeLanguage(source: string | undefined, language: string | undefined) {
+  return !language || Boolean(source?.includes(language));
+}
 export type NavTab = 'Home' | 'Play' | 'Stars' | 'Buddy';
 
 export interface Sentence {

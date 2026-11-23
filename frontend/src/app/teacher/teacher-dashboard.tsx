@@ -1,4 +1,34 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { ChecklistFilter } from '@/components/therapist/TherapistChecklistFilter';
+import { matchesPracticeLanguage, PRACTICE_LANGUAGES } from '@/types/sentences';
+import { INITIAL_ACTIVITIES, getTeacherActivityPrompts, type ActivityItem } from '@/data/teacher-activities';
+import { practiceLevels } from '@/data/practice-levels';
+import { AssignmentCalendar } from '@/components/assignment-calendar';
+import { ProfileEditWarning } from '@/components/profile-edit-warning';
+import { todayCalendarDate } from '@/data/calendar-date';
+import { isAssignmentDate } from '@/Therapist-modules/therapist-activities/data/activityData';
+import { SessionRevokeWarning } from '@/components/session-revoke-warning';
+import { CENTER_NAME } from '@/data/center-name';
+import { AudioPlaybackButton } from '@/components/audio/AudioPlaybackButton';
+import {
+  createAssignment,
+  changeAccountPassword,
+  clearSession,
+  getAccountProfile,
+  getActivities,
+  getAssignments,
+  getNotifications,
+  getPatients,
+  getProgress,
+  getSubmissions,
+  getWordBank,
+  updateAccountProfile,
+  type ApiActivity,
+  type ApiAssignment,
+  type PatientSearchResult,
+  type ApiSubmission,
+} from '@/services/user-api';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,36 +42,12 @@ import {
   StatusBar,
   Switch,
   Pressable,
-  useColorScheme,
+  useWindowDimensions,
   Image,
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useFonts } from 'expo-font';
-import { AudioPlaybackButton } from '@/components/audio/AudioPlaybackButton';
-import { clearSession } from '@/services/user-api';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
-import {
-  changeAccountPassword,
-  getActivities,
-  getAccountProfile,
-  getAccomplishments,
-  getAssignments,
-  getNotifications,
-  getPatients,
-  getProgress,
-  getSoapNotes,
-  getSubmissions,
-  getWordBank,
-  searchPatients,
-  updateAccountProfile,
-  type ApiAccomplishment,
-  type ApiActivity,
-  type ApiAssignment,
-  type ApiSoapNote,
-  type ApiSubmission,
-  type ApiWordBankEntry,
-  type PatientSearchResult,
-} from '@/services/user-api';
 import {
   Menu,
   ArrowLeft,
@@ -76,6 +82,14 @@ import {
   Trash2,
   Pencil,
   ArrowUpDown,
+  BookOpen,
+  Sparkles,
+  Layers,
+  Volume2,
+  Video,
+  FileText,
+  Send,
+  Edit3,
 } from 'lucide-react-native';
 
 // ==========================================
@@ -88,7 +102,7 @@ interface Patient {
   name: string;
   age: number;
   targetDescription: string;
-  accuracy: number | null;
+  accuracy: number;
   accuracyColor: string;
   progressColor: string;
   badgeBg: string;
@@ -102,10 +116,6 @@ interface Patient {
     errorPattern: string;
     languageProfile: string;
   };
-  assignedCount?: number;
-  completedCount?: number;
-  submissionCount?: number;
-  accomplishments?: ApiAccomplishment[];
 }
 
 interface SoapNote {
@@ -127,25 +137,6 @@ interface Accomplishment {
   audioDuration: string;
 }
 
-interface ActivityItem {
-  id: string;
-  sound: string;
-  soundBg: string;
-  soundColor: string;
-  category: 'Words' | 'Phrases' | 'Syllables' | 'Isolation' | 'Sentences';
-  title: string;
-  subtitle: string;
-  instructions: string;
-  articulatoryGuide: string;
-  language: string;
-  targetSound: string;
-  practiceLevel: string;
-  wordPositions: string[];
-  words: ApiActivity['words'];
-  initialWords: string[];
-  phrases: string[];
-}
-
 interface ReviewItem {
   id: string;
   initials: string;
@@ -159,8 +150,100 @@ interface ReviewItem {
   targetWord: string;
   audioDuration: string;
   audioRecordingUrl?: string;
-  observations?: string;
 }
+
+function activityFromApi(activity: ApiActivity): ActivityItem {
+  const category = (practiceLevels.includes(activity.level as typeof practiceLevels[number])
+    ? activity.level
+    : activity.level === 'Isolation' ? 'Sound' : 'Words') as ActivityItem['category'];
+  const template = INITIAL_ACTIVITIES.find((item) => item.category === category) ?? INITIAL_ACTIVITIES[0];
+  return {
+    id: activity.id,
+    sound: activity.sound,
+    soundBg: template.soundBg,
+    soundColor: template.soundColor,
+    category,
+    title: activity.title,
+    subtitle: `${activity.language} · Therapist library`,
+    instructions: activity.instructions,
+    articulatoryGuide: activity.guide,
+    language: activity.language === 'Tagalog' ? 'Tagalog' : 'English',
+    targetSound: activity.sound,
+    practiceLevel: category,
+    wordPositions: activity.positions,
+    targetPositions: Object.fromEntries(activity.words.map((word) => [word.text, word.position])),
+    initialWords: activity.words.map((word) => word.text),
+    phrases: activity.words.map((word) => word.phrase),
+  };
+}
+
+function patientFromApi(
+  patient: PatientSearchResult,
+  progress: Awaited<ReturnType<typeof getProgress>> | null,
+): Patient {
+  const completion = progress?.assignedCount
+    ? Math.round((progress.completedCount / progress.assignedCount) * 100)
+    : 0;
+  const theme = completion >= 75
+    ? { color: '#16A34A', bg: '#DCFCE7' }
+    : completion >= 40
+      ? { color: '#D97706', bg: '#FEF3C7' }
+      : { color: '#DC2626', bg: '#FEE2E2' };
+  const name = [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ');
+  return {
+    id: patient.id,
+    patientCode: patient.patientCode,
+    initials: name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase(),
+    name,
+    age: Number(patient.age) || 0,
+    targetDescription: `${patient.hierarchyLevel || 'Speech goals'} · target ${patient.targetSound || 'not set'}`,
+    accuracy: completion,
+    accuracyColor: theme.color,
+    progressColor: theme.color,
+    badgeBg: theme.bg,
+    badgeTextColor: theme.color,
+    stage: patient.hierarchyLevel || 'Not set',
+    compliance: progress
+      ? `${progress.completedCount}/${progress.assignedCount} activities completed`
+      : 'No progress data',
+    complianceDays: progress ? `${progress.submissionCount} submissions` : 'Not available',
+    phonemeTarget: {
+      primary: patient.targetSound || 'Not set',
+      secondary: patient.secondaryTargets || 'None',
+      errorPattern: patient.dominantErrorPattern || patient.dominantErrorOther || 'Not recorded',
+      languageProfile: patient.languageProfile || 'Not recorded',
+    },
+  };
+}
+
+function reviewFromSubmission(submission: ApiSubmission): ReviewItem {
+  const name = submission.student || 'Student';
+  return {
+    id: submission.id,
+    initials: name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase(),
+    avatarBg: '#DCFCE7',
+    avatarColor: '#166534',
+    studentName: name,
+    activityTitle: submission.activity || 'Practice activity',
+    phonemeDesc: [submission.sound, submission.level].filter(Boolean).join(' · '),
+    status: submission.status,
+    submittedDate: new Date(submission.submittedAt).toLocaleString(),
+    targetWord: submission.initial || '—',
+    audioDuration: submission.durationSeconds == null
+      ? '—'
+      : `${Math.floor(submission.durationSeconds / 60)}:${String(Math.floor(submission.durationSeconds % 60)).padStart(2, '0')}`,
+    audioRecordingUrl: submission.audioRecordingUrl,
+  };
+}
+
+// ==========================================
+// --- Options & Constants ---
+// ==========================================
+const TARGET_SOUND_OPTIONS = [
+  '/s/', '/r/', '/l/', '/t/', '/k/', '/p/', '/m/',
+  '/b/', '/d/', '/f/', '/v/', '/th/', '/ch/', '/sh/'
+];
+const PRACTICE_LEVEL_OPTIONS = ['Words', 'Phrases', 'Sentences', 'Sound', 'Syllables'];
 
 // ==========================================
 // --- Initial Mock Data ---
@@ -171,13 +254,13 @@ const INITIAL_PATIENTS: Patient[] = [
     initials: 'KS',
     name: 'Khyl Shervin Sude',
     age: 5,
-    targetDescription: 'isolated sounds • target /r/ initial',
+    targetDescription: 'Sound • target /r/ initial',
     accuracy: 35,
     accuracyColor: '#DC2626',
     progressColor: '#F87171',
     badgeBg: '#FEE2E2',
     badgeTextColor: '#DC2626',
-    stage: 'Isolated sounds',
+    stage: 'Sound',
     compliance: '85%',
     complianceDays: '5/7 days',
     phonemeTarget: {
@@ -229,6 +312,22 @@ const INITIAL_PATIENTS: Patient[] = [
       languageProfile: 'Bilingual Tagalog & English',
     },
   },
+  {
+    id: 'demo-student',
+    initials: 'MS',
+    name: 'Mia Santos',
+    age: 5,
+    targetDescription: 'Individual sounds',
+    accuracy: 0,
+    accuracyColor: '#0284C7',
+    progressColor: '#38BDF8',
+    badgeBg: '#E0F2FE',
+    badgeTextColor: '#0865AD',
+    stage: 'Sound',
+    compliance: '—',
+    complianceDays: '',
+    phonemeTarget: { primary: '/s/', secondary: '', errorPattern: '', languageProfile: 'Bilingual Tagalog & English' },
+  },
 ];
 
 const INITIAL_SUBMISSIONS = [
@@ -278,6 +377,97 @@ const SAMPLE_ACCOMPLISHMENTS: Accomplishment[] = [
     audioDuration: '0:06',
   },
 ];
+
+// Helper: Get student accuracy badge colors preserving Red, Yellow, Green in Dark & Light Modes
+const getStudentBadgeTheme = (item: Patient, isDark: boolean) => {
+  if (!isDark) return { bg: item.badgeBg, color: item.badgeTextColor };
+  if (item.badgeBg === '#FEE2E2' || item.badgeTextColor === '#DC2626') {
+    return { bg: '#4C0519', color: '#FB7185' };
+  }
+  if (item.badgeBg === '#FEF3C7' || item.badgeTextColor === '#D97706') {
+    return { bg: '#451A03', color: '#FBBF24' };
+  }
+  return { bg: '#064E3B', color: '#4ADE80' };
+};
+
+// Helper: Get sound header & category colors preserving Orange, Yellow, Blue, Red, Green in Dark & Light Modes
+const getActivitySoundColors = (act: ActivityItem, isDark: boolean) => {
+  if (!isDark) {
+    return {
+      bg: act.soundBg,
+      color: act.soundColor,
+      categoryColor: act.soundColor === '#CA8A04' ? '#D97706' : act.soundColor,
+    };
+  }
+
+  // Dark Mode: Rich, vibrant dark mode palettes preserving the signature color of each sound card
+  // 1. Green (act-1: Sunny Sounds, #DCFCE7 / #16A34A)
+  if (act.soundBg === '#DCFCE7' || act.soundColor === '#16A34A' || act.category === 'Words') {
+    return { bg: '#064E3B', color: '#4ADE80', categoryColor: '#4ADE80' };
+  }
+  // 2. Orange (act-2: Ready, set, /r/, #FFEDD5 / #EA580C)
+  if (act.soundBg === '#FFEDD5' || act.soundColor === '#EA580C' || act.category === 'Phrases') {
+    return { bg: '#431407', color: '#FB923C', categoryColor: '#FB923C' };
+  }
+  // 3. Yellow (act-3: Little /l/ steps, #FEF9C3 / #CA8A04)
+  if (act.soundBg === '#FEF9C3' || act.soundColor === '#CA8A04' || act.category === 'Syllables') {
+    return { bg: '#451A03', color: '#FACC15', categoryColor: '#FACC15' };
+  }
+  // 4. Blue (act-4: Sound explorers, #E0F2FE / #0284C7)
+  if (act.soundBg === '#E0F2FE' || act.soundColor === '#0284C7' || act.category === 'Sound') {
+    return { bg: '#082F49', color: '#38BDF8', categoryColor: '#38BDF8' };
+  }
+  // 5. Red (act-5: Say it in a sentence, #FFE4E6 / #E11D48)
+  if (act.soundBg === '#FFE4E6' || act.soundColor === '#E11D48' || act.category === 'Sentences') {
+    return { bg: '#4C0519', color: '#FB7185', categoryColor: '#FB7185' };
+  }
+
+  return { bg: '#1E293B', color: '#38BDF8', categoryColor: '#38BDF8' };
+};
+
+// Helper: Get category & level theme colors preserving Green (Words), Yellow (Syllables), Blue (Isolation), Red (Sentences), Orange (Phrases)
+const getCategoryLevelColors = (levelOrCategory: string, isDark: boolean) => {
+  const norm = (levelOrCategory || '').toLowerCase();
+  if (norm.includes('word')) {
+    // Words: Green
+    return {
+      bg: isDark ? '#064E3B' : '#DCFCE7',
+      color: isDark ? '#4ADE80' : '#16A34A',
+    };
+  }
+  if (norm.includes('syllable')) {
+    // Syllables: Yellow
+    return {
+      bg: isDark ? '#451A03' : '#FEF9C3',
+      color: isDark ? '#FACC15' : '#CA8A04',
+    };
+  }
+  if (norm === 'sound' || norm.includes('isolation')) {
+    // Sound: Blue
+    return {
+      bg: isDark ? '#082F49' : '#E0F2FE',
+      color: isDark ? '#38BDF8' : '#0284C7',
+    };
+  }
+  if (norm.includes('sentence')) {
+    // Sentences: Red
+    return {
+      bg: isDark ? '#4C0519' : '#FFE4E6',
+      color: isDark ? '#FB7185' : '#E11D48',
+    };
+  }
+  if (norm.includes('phrase')) {
+    // Phrases: Orange
+    return {
+      bg: isDark ? '#431407' : '#FFEDD5',
+      color: isDark ? '#FB923C' : '#EA580C',
+    };
+  }
+  return {
+    bg: isDark ? '#082F49' : '#E0F2FE',
+    color: isDark ? '#38BDF8' : '#0284C7',
+  };
+};
 
 // Mock Reviews matching Image 2 ("Teacher - Reviews")
 const INITIAL_REVIEWS: ReviewItem[] = [
@@ -380,7 +570,7 @@ const INITIAL_NOTIFICATIONS = [
     id: 'notif-1',
     name: 'Khyll',
     action: 'submitted an audio recording',
-    detail: '/r/ Isolated Sounds (Target: 35% accuracy)',
+    detail: '/r/ Sound (Target: 35% accuracy)',
     time: '5m ago',
     unread: true,
   },
@@ -418,6 +608,15 @@ interface WordBankEntry {
   language: string;
 }
 
+const INITIAL_WORD_BANK_ENTRIES: WordBankEntry[] = [
+  { id: 'wb-1', text: 'rabbit', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-2', text: 'red', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-3', text: 'run', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-4', text: 'rain', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-5', text: 'rice', sound: '/r/', position: 'Initial', language: 'English' },
+  { id: 'wb-6', text: 'rock', sound: '/r/', position: 'Initial', language: 'English' },
+];
+
 // Theme Colors Palette Generator
 const getThemeColors = (isDark: boolean) => ({
   isDark,
@@ -442,13 +641,14 @@ const getThemeColors = (isDark: boolean) => ({
   divider: isDark ? '#334155' : '#F1F5F9',
   modalOverlay: isDark ? 'rgba(0, 0, 0, 0.75)' : 'rgba(15, 23, 42, 0.65)',
   menuOverlay: isDark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(15, 23, 42, 0.25)',
-  peachCardBg: isDark ? '#2D1B11' : '#FFF7ED',
-  peachCardBorder: isDark ? '#7C2D12' : '#FED7AA',
-  peachPillBg: isDark ? '#431407' : '#FFEDD5',
-  peachPillText: isDark ? '#FDBA74' : '#C2410C',
-  peachText: isDark ? '#FB923C' : '#C2410C',
-  yellowCardBg: isDark ? '#2D2305' : '#FFFBEB',
-  yellowCardBorder: isDark ? '#78350F' : '#FEF3C7',
+  peachCardBg: isDark ? '#082F49' : '#FFF7ED',
+  peachCardBorder: isDark ? '#0284C7' : '#FED7AA',
+  peachPillBg: isDark ? '#0C4A6E' : '#FFEDD5',
+  peachPillText: isDark ? '#38BDF8' : '#C2410C',
+  peachText: isDark ? '#38BDF8' : '#C2410C',
+  peachAccent: isDark ? '#38BDF8' : '#EA580C',
+  yellowCardBg: isDark ? '#082F49' : '#FFFBEB',
+  yellowCardBorder: isDark ? '#0369A1' : '#FEF3C7',
   bottomNavBg: isDark ? '#1E293B' : '#FFFFFF',
   bottomNavBorder: isDark ? '#334155' : '#E2E8F0',
 });
@@ -464,80 +664,11 @@ const SPECIALTY_PALETTE = [
   { border: '#94A3B8', text: '#475569', darkText: '#CBD5E1', darkBg: 'rgba(148, 163, 184, 0.14)' },
 ];
 
-function mapTeacherPatient(
-  item: PatientSearchResult,
-  assignments: ApiAssignment[],
-  submissions: ApiSubmission[],
-): Patient {
-  const patientAssignments = assignments.filter((assignment) => assignment.patientId === item.id);
-  const completedCount = patientAssignments.filter((assignment) => assignment.status === 'Completed').length;
-  const patientSubmissions = submissions.filter((submission) => submission.patientId === item.id);
-  const name = [item.firstName, item.middleName, item.lastName].filter(Boolean).join(' ');
-  const primaryTarget = item.targetSound || '';
-  return {
-    id: item.id,
-    patientCode: item.patientCode,
-    initials: `${item.firstName?.[0] || ''}${item.lastName?.[0] || ''}`.toUpperCase() || 'P',
-    name: name || 'Unnamed patient',
-    age: Number(item.age) || 0,
-    targetDescription: [item.hierarchyLevel || 'No level set', primaryTarget ? `target ${primaryTarget}` : 'No target recorded'].join(' • '),
-    accuracy: null,
-    accuracyColor: '#64748B',
-    progressColor: '#94A3B8',
-    badgeBg: '#F1F5F9',
-    badgeTextColor: '#475569',
-    stage: item.hierarchyLevel || patientAssignments[0]?.activity.level || 'Not set',
-    compliance: `${completedCount}/${patientAssignments.length} tasks`,
-    complianceDays: `${patientSubmissions.length} submissions`,
-    phonemeTarget: {
-      primary: primaryTarget || 'Not recorded',
-      secondary: item.secondaryTargets || 'Not recorded',
-      errorPattern: item.dominantErrorPattern || item.errorPatternTaxonomy || 'Not recorded',
-      languageProfile: item.languageProfile || 'Not recorded',
-    },
-    assignedCount: patientAssignments.length,
-    completedCount,
-    submissionCount: patientSubmissions.length,
-  };
-}
-
-function mapTeacherActivity(activity: ApiActivity): ActivityItem {
-  const level = activity.level.toLowerCase();
-  const category: ActivityItem['category'] =
-    level === 'word' || level === 'words' ? 'Words'
-      : level === 'phrase' || level === 'phrases' ? 'Phrases'
-        : level === 'syllable' || level === 'syllables' ? 'Syllables'
-          : level === 'isolation' ? 'Isolation'
-            : 'Sentences';
-  const soundColors: Record<string, [string, string]> = {
-    '/s/': ['#DCFCE7', '#16A34A'],
-    '/r/': ['#FFEDD5', '#EA580C'],
-    '/l/': ['#FEF9C3', '#CA8A04'],
-    '/t/': ['#FFE4E6', '#E11D48'],
-  };
-  const [soundBg, soundColor] = soundColors[activity.sound] || ['#E0F2FE', '#0284C7'];
-  const phrases = activity.words.map((word) => word.phrase).filter(Boolean);
-  return {
-    id: activity.id,
-    sound: activity.sound,
-    soundBg,
-    soundColor,
-    category,
-    title: activity.title,
-    subtitle: `${activity.language} · Therapist assigned`,
-    instructions: activity.instructions,
-    articulatoryGuide: activity.guide,
-    language: activity.language,
-    targetSound: activity.sound,
-    practiceLevel: activity.level,
-    wordPositions: activity.positions,
-    words: activity.words,
-    initialWords: activity.words.map((word) => word.text),
-    phrases: [...phrases, ...activity.customLines],
-  };
-}
-
 export default function TeacherDashboardScreen() {
+  const { width } = useWindowDimensions();
+  const wide = width > 430;
+  const columnWidth = Math.min(width, 430);
+
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
@@ -545,12 +676,14 @@ export default function TeacherDashboardScreen() {
   });
 
   // --- Main Navigation Tabs ---
+  const [teacherSubmissions, setTeacherSubmissions] = useState<Array<{
+    id: string;
+    name: string;
+    initials: string;
+    phrase: string;
+    time: string;
+  }>>([]);
   const [activeTab, setActiveTab] = useState<'home' | 'patients' | 'activities' | 'reviews'>('home');
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [assignments, setAssignments] = useState<ApiAssignment[]>([]);
-  const [submissions, setSubmissions] = useState<ApiSubmission[]>([]);
-  const [teacherLoading, setTeacherLoading] = useState(true);
-  const [teacherError, setTeacherError] = useState<string | null>(null);
   const routeParams = useLocalSearchParams<{ tab?: string; view?: string }>();
 
   // Sync route params with dashboard tab/view
@@ -568,35 +701,34 @@ export default function TeacherDashboardScreen() {
   // --- Three Lines (Hamburger) Menu, Profile, Settings & Notifications State ---
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
-  const [notifications, setNotifications] = useState<Array<typeof INITIAL_NOTIFICATIONS[number]>>([]);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    name: string;
+    action: string;
+    detail: string;
+    time: string;
+    unread: boolean;
+  }>>([]);
 
   // Therapist / Teacher Profile Data
   const [therapistProfile, setTherapistProfile] = useState({
-    name: 'Dr. Ameer Andres',
-    credentials: 'SLP-CCC',
-    fullName: 'Dr. Ameer Andres, SLP-CCC',
-    title: 'Speech-Language Pathologist',
-    license: 'PRC #0048291',
-    clinic: 'LittleVoices Pediatric Speech Center',
-    contact: '+63 9000 000 000',
-    email: 'ameer@speakstep.com',
+    name: '',
+    credentials: '',
+    fullName: '',
+    title: 'Teacher',
+    license: '',
+    clinic: CENTER_NAME,
+    contact: '',
+    email: '',
     photoUri: null as string | null,
-    specializations: [
-      'Articulation',
-      'Phonological',
-      'Fluency',
-      'Language',
-      'Voice',
-      'Early intervention',
-      'Bilingual',
-      'AAC',
-    ],
+    specializations: [] as string[],
   });
   const [editProfileForm, setEditProfileForm] = useState({ ...therapistProfile });
 
@@ -606,19 +738,22 @@ export default function TeacherDashboardScreen() {
   const [readyToLevelUpToggle, setReadyToLevelUpToggle] = useState(false);
   const [teacherUpdatesToggle, setTeacherUpdatesToggle] = useState(true);
   const [missedExercisesToggle, setMissedExercisesToggle] = useState(true);
-  const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(true);
-  const [themeMode, setThemeMode] = useState<'Auto' | 'Light' | 'Dark'>('Auto');
-  const [activeSessions, setActiveSessions] = useState([
-    { id: '1', device: 'Redmi 15', isCurrent: true, location: 'Quezon City', lastActive: 'Active now' },
-    { id: '2', device: 'Samsung Galaxy Tab S9 FE', isCurrent: false, location: 'Android App', lastActive: 'Yesterday' },
-    { id: '3', device: 'Samsung Galaxy S24', isCurrent: false, location: 'Chrome', lastActive: 'Nov 10' },
-  ]);
+  const [twoFactorAuthToggle] = useState(false);
+  const [themeMode, setThemeMode] = useState<'Light' | 'Dark'>('Light');
+  const [sessionToRevoke, setSessionToRevoke] = useState<{ id: string; device: string } | null>(null);
+  const [sessionNotice, setSessionNotice] = useState('');
+  const [activeSessions] = useState<Array<{
+    id: string;
+    device: string;
+    isCurrent: boolean;
+    location: string;
+    lastActive: string;
+  }>>([]);
   const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
   const [profileOpenedFromSettings, setProfileOpenedFromSettings] = useState(false);
 
   // --- Dynamic Color Theme Resolution (Functional Light & Dark) ---
-  const systemColorScheme = useColorScheme();
-  const isDark = themeMode === 'Auto' ? systemColorScheme === 'dark' : themeMode === 'Dark';
+  const isDark = themeMode === 'Dark';
   const colors = useMemo(() => getThemeColors(isDark), [isDark]);
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -626,99 +761,21 @@ export default function TeacherDashboardScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [passwordSaving, setPasswordSaving] = useState(false);
 
   // --- Patients Tab State ---
   const [patientSearch, setPatientSearch] = useState('');
-  const [livePatientResults, setLivePatientResults] = useState<PatientSearchResult[] | null>(null);
-  const [livePatientError, setLivePatientError] = useState<string | null>(null);
-  const [livePatientLoading, setLivePatientLoading] = useState(false);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [assignments, setAssignments] = useState<ApiAssignment[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [soapNotes, setSoapNotes] = useState<SoapNote[]>([]);
-  const [patientDetailLoading, setPatientDetailLoading] = useState(false);
+  const [showSoapForm, setShowSoapForm] = useState(false);
+  const [soapNotes] = useState<SoapNote[]>([]);
+  const [soapInputs, setSoapInputs] = useState({ s: '', o: '', a: '', p: '' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    const query = patientSearch.trim();
-    if (!query) {
-      setLivePatientResults(null);
-      setLivePatientError(null);
-      setLivePatientLoading(false);
-      return;
-    }
-
-    let active = true;
-    setLivePatientResults(null);
-    setLivePatientLoading(true);
-    setLivePatientError(null);
-    const timeout = setTimeout(() => {
-      searchPatients(query)
-        .then((results) => {
-          if (active) setLivePatientResults(results);
-        })
-        .catch((error: unknown) => {
-          if (active) setLivePatientError(error instanceof Error ? error.message : 'Patient search failed.');
-        })
-        .finally(() => {
-          if (active) setLivePatientLoading(false);
-        });
-    }, 250);
-
-    return () => {
-      active = false;
-      clearTimeout(timeout);
-    };
-  }, [patientSearch]);
-
-  useEffect(() => {
-    const patientId = selectedPatient?.id;
-    if (!patientId) {
-      setSoapNotes([]);
-      return;
-    }
-    let active = true;
-    setSoapNotes([]);
-    setPatientDetailLoading(true);
-    Promise.all([
-      getProgress(patientId),
-      getSoapNotes(patientId),
-      getAccomplishments(patientId),
-    ])
-      .then(([progress, savedNotes, accomplishments]) => {
-        if (!active) return;
-        setSelectedPatient((current) => current?.id === patientId
-          ? {
-            ...current,
-            assignedCount: progress.assignedCount,
-            completedCount: progress.completedCount,
-            submissionCount: progress.submissionCount,
-            accomplishments,
-          }
-          : current);
-        setSoapNotes(savedNotes.map((note: ApiSoapNote) => ({
-          sessionNumber: note.number,
-          date: new Date(note.date).toLocaleDateString(),
-          s: note.subjective,
-          o: note.objective,
-          a: note.assessment,
-          p: note.plan,
-        })));
-      })
-      .catch((error: unknown) => {
-        if (active) setTeacherError(error instanceof Error ? error.message : 'Could not load student progress and notes.');
-      })
-      .finally(() => {
-        if (active) setPatientDetailLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [selectedPatient?.id]);
+  const [dashboardError, setDashboardError] = useState('');
 
   // --- Activities Sub-View State ---
   const [activitiesView, setActivitiesView] = useState<'library' | 'preview' | 'edit' | 'assign' | 'wordbank'>('library');
-  const [activityCategoryFilter, setActivityCategoryFilter] = useState<'ALL' | 'Words' | 'Phrases' | 'Syllables' | 'Isolation' | 'Sentences'>('ALL');
+  const [activityCategoryFilter, setActivityCategoryFilter] = useState<ActivityItem['category'][]>([]);
   const [activitySearch, setActivitySearch] = useState('');
   const [showActivityFilterPanel, setShowActivityFilterPanel] = useState(false);
   const [activitySortBy, setActivitySortBy] = useState<'default' | 'title-asc' | 'title-desc' | 'sound'>('default');
@@ -729,17 +786,24 @@ export default function TeacherDashboardScreen() {
     showActivityFilterPanel ||
     activitySortBy !== 'default' ||
     activitySoundFilter.length > 0 ||
-    activityLanguageFilter !== 'ALL';
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [currentActivity, setCurrentActivity] = useState<ActivityItem | null>(null);
+    activityLanguageFilter !== 'ALL' ||
+    activityCategoryFilter.length > 0;
+  const [activitiesList, setActivitiesList] = useState<ActivityItem[]>([]);
+  const [currentActivity, setCurrentActivity] = useState<ActivityItem>(INITIAL_ACTIVITIES[0]);
 
   // --- Word Bank Tab State ---
   const [wordBankEntries, setWordBankEntries] = useState<WordBankEntry[]>([]);
   const [wordBankQuery, setWordBankQuery] = useState('');
   const [wordBankFiltersOpen, setWordBankFiltersOpen] = useState(false);
+  const [wordBankAdding, setWordBankAdding] = useState(false);
+  const [wordBankEditing, setWordBankEditing] = useState(false);
   const [wordBankFilterSounds, setWordBankFilterSounds] = useState<string[]>([]);
   const [wordBankFilterPositions, setWordBankFilterPositions] = useState<('Initial' | 'Medial' | 'Final')[]>([]);
   const [wordBankFilterLanguages, setWordBankFilterLanguages] = useState<string[]>([]);
+  const [newWordText, setNewWordText] = useState('');
+  const [newWordSound, setNewWordSound] = useState('/r/');
+  const [newWordPosition, setNewWordPosition] = useState<'Initial' | 'Medial' | 'Final'>('Initial');
+  const [newWordLanguage, setNewWordLanguage] = useState('English');
 
   const filteredWordBank = useMemo(() => {
     const q = wordBankQuery.trim().toLowerCase();
@@ -778,26 +842,83 @@ export default function TeacherDashboardScreen() {
     return chips;
   }, [wordBankFilterSounds, wordBankFilterPositions, wordBankFilterLanguages]);
 
+  const handleAddWordBankEntry = () => {
+    const trimmed = newWordText.trim().toLowerCase();
+    if (!trimmed) {
+      triggerToast('Please enter a target word.');
+      return;
+    }
+    const exists = wordBankEntries.some((w) => w.text.toLowerCase() === trimmed);
+    if (exists) {
+      triggerToast(`"${trimmed}" is already in the word bank.`);
+      return;
+    }
+    triggerToast('Only therapists can add words to the shared Word Bank.');
+  };
+
+  const handleRemoveWordBankEntry = (id: string) => {
+    if (!wordBankEntries.some((item) => item.id === id)) return;
+    triggerToast('Only therapists can remove words from the shared Word Bank.');
+  };
+
   // --- Edit Activity Wizard State (3 Steps) ---
   const [editStep, setEditStep] = useState<1 | 2 | 3>(1);
-  const [editTitle, setEditTitle] = useState('Ready, set, /r/');
-  const [editTargetSound, setEditTargetSound] = useState('/r/');
-  const [editPracticeLevel, setEditPracticeLevel] = useState('Phrases');
-  const [editPositions, setEditPositions] = useState<string[]>(['Initial', 'Medial']);
+  const [editTitle, setEditTitle] = useState('Sunny Sounds');
+  const [editTargetSound, setEditTargetSound] = useState('/s/');
+  const [editPracticeLevel, setEditPracticeLevel] = useState('Words');
+  const [editPositions, setEditPositions] = useState<string[]>(['Initial']);
   const [editLanguage, setEditLanguage] = useState<'English' | 'Tagalog'>('English');
   const [editInstructions, setEditInstructions] = useState('Listen to the model. Say each target slowly, then try it on your own.');
-  const [editArticulatoryGuide, setEditArticulatoryGuide] = useState('Pull tongue tip back, lips slightly relaxed.');
+  const [editArticulatoryGuide, setEditArticulatoryGuide] = useState('Place tongue behind front teeth, blow gentle air.');
 
   // Step 2 Content State
   const [wordOrigin, setWordOrigin] = useState<'wordBank' | 'custom'>('wordBank');
   const [wordBankPositionTab, setWordBankPositionTab] = useState<'Initial' | 'Medial' | 'Final'>('Initial');
   const [wordBankSearch, setWordBankSearch] = useState('');
-  const [checkedWords, setCheckedWords] = useState<string[]>(['rabbit', 'red', 'run']);
+  const [checkedWords, setCheckedWords] = useState<string[]>(['sun', 'sand', 'soup']);
   const [wordPhrases, setWordPhrases] = useState<{ [key: string]: string }>({
-    rabbit: 'The little rabbit hid.',
-    red: 'I see a red apple.',
-    run: 'See the dog run fast.',
+    sun: 'Warm sunny day.',
+    sand: 'Sand on the beach.',
+    soup: 'Hot soup is good.',
   });
+
+  const handleBeginEditActivity = (act: ActivityItem) => {
+    setEditStep(1);
+    setEditTitle(act.title);
+    setEditTargetSound(act.targetSound || act.sound);
+    setEditPracticeLevel(act.practiceLevel || act.category);
+    setEditPositions(act.wordPositions || ['Initial']);
+    setEditLanguage(act.language || 'English');
+    setEditInstructions(act.instructions || '');
+    setEditArticulatoryGuide(act.articulatoryGuide || '');
+    setCheckedWords(act.initialWords || []);
+    const pMap: Record<string, string> = {};
+    if (act.initialWords && act.phrases) {
+      act.initialWords.forEach((w, idx) => {
+        pMap[w] = act.phrases[idx] || '';
+      });
+    }
+    setWordPhrases(pMap);
+    setActivitiesView('edit');
+  };
+
+  const handleBeginNewActivity = () => {
+    setEditStep(1);
+    setEditTitle('');
+    setEditTargetSound('/s/');
+    setEditPracticeLevel('Words');
+    setEditPositions(['Initial']);
+    setEditLanguage('English');
+    setEditInstructions('Listen to the model. Say each target slowly, then try it on your own.');
+    setEditArticulatoryGuide('');
+    setCheckedWords([]);
+    setWordPhrases({});
+    setActivitiesView('edit');
+  };
+
+  const handleSaveEditedActivity = () => {
+    triggerToast('Only therapists can save changes to the shared activity library.');
+  };
 
   // Custom Word State
   const [newCustomWordInput, setNewCustomWordInput] = useState('');
@@ -811,112 +932,124 @@ export default function TeacherDashboardScreen() {
 
   // Assign Activity View State
   const [assignStudent, setAssignStudent] = useState('Mc Grady Andrea Andres');
-  const [assignActivityName, setAssignActivityName] = useState('Ready, set, /r/');
-  const [assignDueDate, setAssignDueDate] = useState('01/11/2026');
+  const [assignActivityId, setAssignActivityId] = useState('ready-set-r');
+  const [assignDueDate, setAssignDueDate] = useState('');
   const [assignInstructions, setAssignInstructions] = useState('Listen to the model. Say each target slowly, then try it on your own.');
   const [assignPreviewExpanded, setAssignPreviewExpanded] = useState(false);
+
+  // Target Sound & Practice Level Dropdowns
+  const [showTargetSoundDropdown, setShowTargetSoundDropdown] = useState(false);
+  const [showPracticeLevelDropdown, setShowPracticeLevelDropdown] = useState(false);
+  const [playingStudentId, setPlayingStudentId] = useState<string | null>(null);
+  const [playingAccId, setPlayingAccId] = useState<string | null>(null);
+
+  // Multi-select Assign state
+  const [assignSelectedStudents, setAssignSelectedStudents] = useState<string[]>([]);
+  const [showAssignStudentDropdown, setShowAssignStudentDropdown] = useState(false);
+  const [showAssignActivityDropdown, setShowAssignActivityDropdown] = useState(false);
+
+  // Student list filter state
+  const [studentFilter, setStudentFilter] = useState('ALL');
+  const [showStudentFilterDropdown, setShowStudentFilterDropdown] = useState(false);
 
   // --- Reviews Tab State (Image 2) ---
   const [reviewsList, setReviewsList] = useState<ReviewItem[]>([]);
   const [reviewsFilter, setReviewsFilter] = useState<'All' | 'Pending' | 'Reviewed'>('All');
+  const [reviewActivities, setReviewActivities] = useState<string[]>([]);
+  const [reviewStudents, setReviewStudents] = useState<string[]>([]);
+  const [reviewLanguage, setReviewLanguage] = useState<string[]>([]);
+  const [reviewStudentSort, setReviewStudentSort] = useState<'A–Z' | 'Z–A'>('A–Z');
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null);
+  const [reviewEvaluation, setReviewEvaluation] = useState<'Correct' | 'Approximate' | 'Incorrect' | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
 
-  useEffect(() => {
-    let active = true;
-    const loadTeacherDashboard = async () => {
-      setTeacherLoading(true);
-      setTeacherError(null);
-      try {
-        const [profile, savedPatients, savedAssignments, savedSubmissions, savedNotifications, savedActivities, savedWordBank] = await Promise.all([
-          getAccountProfile(),
-          getPatients(),
-          getAssignments(),
-          getSubmissions(),
-          getNotifications(),
-          getActivities(),
-          getWordBank(),
-        ]);
-        if (!active) return;
-        setTherapistProfile((current) => ({
-          ...current,
-          name: profile.fullName,
-          fullName: profile.fullName,
-          email: profile.email,
-          contact: profile.contact,
-        }));
-        setEditProfileForm((current) => ({
-          ...current,
-          name: profile.fullName,
-          fullName: profile.fullName,
-          email: profile.email,
-          contact: profile.contact,
-        }));
-        setAssignments(savedAssignments);
-        setSubmissions(savedSubmissions);
-        setActivities(savedActivities.map(mapTeacherActivity));
-        setWordBankEntries(savedWordBank.map((word: ApiWordBankEntry) => ({
-          id: word.id,
-          text: word.text,
-          sound: word.sound,
-          position: word.position,
-          language: word.language,
-        })));
-        setPatients(savedPatients.map((patient) => mapTeacherPatient(patient, savedAssignments, savedSubmissions)));
-        setReviewsList(savedSubmissions.map((submission) => ({
-          id: submission.id,
-          initials: submission.initial,
-          avatarBg: '#E0F2FE',
-          avatarColor: '#0369A1',
-          studentName: submission.student,
-          activityTitle: submission.activity,
-          phonemeDesc: submission.sound || 'Speech practice',
-          status: submission.status,
-          submittedDate: new Date(submission.submittedAt).toLocaleDateString(),
-          targetWord: submission.activity,
-          audioDuration: submission.durationSeconds == null ? '' : `${Math.round(submission.durationSeconds)} sec`,
-          audioRecordingUrl: submission.audioRecordingUrl,
-          observations: submission.review?.observations || '',
-        })));
-        setNotifications(savedNotifications.map((item) => ({
-          id: item.id,
-          name: item.name,
-          action: item.action,
-          detail: item.detail,
-          time: item.time,
-          unread: item.unread,
-        })));
-      } catch (error) {
-        if (active) setTeacherError(error instanceof Error ? error.message : 'Could not load teacher data.');
-      } finally {
-        if (active) setTeacherLoading(false);
+  const loadDashboardData = useCallback(async () => {
+    setDashboardError('');
+    try {
+      const [apiPatients, apiActivities, apiAssignments, apiSubmissions, apiNotifications, apiWordBank, profile] = await Promise.all([
+        getPatients(),
+        getActivities(),
+        getAssignments(),
+        getSubmissions(),
+        getNotifications(),
+        getWordBank(),
+        getAccountProfile(),
+      ]);
+      const progressErrors: string[] = [];
+      const progressResults = await Promise.all(apiPatients.map(async (patient) => {
+        try {
+          return await getProgress(patient.id);
+        } catch (error) {
+          progressErrors.push(error instanceof Error ? error.message : `Could not load progress for ${patient.firstName}.`);
+          return null;
+        }
+      }));
+      setPatients(apiPatients.map((patient, index) => patientFromApi(patient, progressResults[index])));
+      setActivitiesList(apiActivities.map(activityFromApi));
+      setAssignments(apiAssignments);
+      setWordBankEntries(apiWordBank.map(({ id, text, sound, position, language }) => ({
+        id, text, sound, position, language,
+      })));
+      const mappedReviews = apiSubmissions.map(reviewFromSubmission);
+      setReviewsList(mappedReviews);
+      setTeacherSubmissions(apiSubmissions.map((submission) => ({
+        id: submission.id,
+        name: submission.student,
+        initials: submission.student.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase(),
+        phrase: submission.activity,
+        time: new Date(submission.submittedAt).toLocaleDateString(),
+      })));
+      setNotifications(apiNotifications);
+      setTherapistProfile((current) => ({
+        ...current,
+        name: profile.fullName.split(',')[0] || profile.fullName,
+        fullName: profile.fullName,
+        email: profile.email,
+        contact: profile.contact,
+        title: 'Teacher',
+      }));
+      setEditProfileForm((current) => ({
+        ...current,
+        name: profile.fullName.split(',')[0] || profile.fullName,
+        fullName: profile.fullName,
+        email: profile.email,
+        contact: profile.contact,
+        title: 'Teacher',
+      }));
+      if (apiActivities.length) {
+        const nextActivity = activityFromApi(apiActivities[0]);
+        setCurrentActivity(nextActivity);
+        setAssignActivityId(nextActivity.id);
       }
-    };
-    void loadTeacherDashboard();
-    return () => {
-      active = false;
-    };
+      if (progressErrors.length) setDashboardError(progressErrors.join(' '));
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : 'Could not load teacher dashboard data.');
+    }
   }, []);
 
-  if (!fontsLoaded) return null;
+  useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
 
   // Dynamic Pending count
   const pendingReviewsCount = reviewsList.filter((r) => r.status === 'Pending').length;
 
-  // Filtered Patients
-  const searchResultIds = livePatientResults ? new Set(livePatientResults.map((item) => item.id)) : null;
-  const filteredPatients = patients.filter((p) =>
-    (!searchResultIds || searchResultIds.has(p.id)) && (
+  // Filtered Students
+  const filteredPatients = patients.filter((p) => {
+    const matchesTarget =
+      studentFilter === 'ALL' ||
+      p.targetDescription.toLowerCase().includes(studentFilter.toLowerCase().replace(/\//g, ''));
+    const matchesSearch =
       p.name.toLowerCase().includes(patientSearch.toLowerCase()) ||
-      (p.patientCode || '').toLowerCase().includes(patientSearch.toLowerCase()) ||
-      p.targetDescription.toLowerCase().includes(patientSearch.toLowerCase())
-    )
-  );
+      p.targetDescription.toLowerCase().includes(patientSearch.toLowerCase());
+    return matchesTarget && matchesSearch;
+  });
 
   // Filtered Activities
   const filteredActivities = useMemo(() => {
-    let list = activities.filter((act) => {
+    let list = activitiesList.filter((act) => {
       const matchesCategory =
-        activityCategoryFilter === 'ALL' || act.category === activityCategoryFilter;
+        activityCategoryFilter.length === 0 || activityCategoryFilter.includes(act.category);
       const matchesSearch =
         act.title.toLowerCase().includes(activitySearch.toLowerCase()) ||
         act.sound.toLowerCase().includes(activitySearch.toLowerCase());
@@ -938,7 +1071,7 @@ export default function TeacherDashboardScreen() {
 
     return list;
   }, [
-    activities,
+    activitiesList,
     activityCategoryFilter,
     activitySearch,
     activitySoundFilter,
@@ -947,15 +1080,98 @@ export default function TeacherDashboardScreen() {
   ]);
 
   // Filtered Reviews
-  const filteredReviews = reviewsList.filter((rev) => {
-    if (reviewsFilter === 'All') return true;
-    return rev.status === reviewsFilter;
-  });
+  const reviewCatalog = new Map(activitiesList.map((item) => [item.title, item]));
+  const reviewActivityOptions = [...new Set([...reviewCatalog.keys(), ...reviewsList.map((review) => review.activityTitle)])].sort();
+  const reviewStudentOptions = [...new Set([...patients.map((student) => student.name), ...reviewsList.map((review) => review.studentName)])]
+    .sort((first, second) => reviewStudentSort === 'A–Z' ? first.localeCompare(second) : second.localeCompare(first));
+  const reviewActivityCaptions = new Map(activitiesList.map((item) => [item.title, item.language + ' · ' + item.category]));
+  const filteredReviews = reviewsList.filter((review) =>
+    (reviewsFilter === 'All' || review.status === reviewsFilter) &&
+    (!reviewActivities.length || reviewActivities.includes(review.activityTitle)) &&
+    (!reviewStudents.length || reviewStudents.includes(review.studentName)) &&
+    matchesPracticeLanguage(reviewCatalog.get(review.activityTitle)?.language, reviewLanguage[0]),
+  ).sort((first, second) => reviewStudentSort === 'A–Z'
+    ? first.studentName.localeCompare(second.studentName) : second.studentName.localeCompare(first.studentName));
+
+  const studentPages = useListPagination(filteredPatients.length, 10, JSON.stringify([studentFilter, patientSearch]));
+  const activityPages = useListPagination(filteredActivities.length, 10, JSON.stringify([activityCategoryFilter, activitySortBy, activitySoundFilter, activityLanguageFilter, activitySearch]));
+  const wordPages = useListPagination(filteredWordBank.length, 10, JSON.stringify([wordBankQuery, wordBankFilterSounds, wordBankFilterPositions, wordBankFilterLanguages]));
+  const reviewPages = useListPagination(filteredReviews.length, 10, JSON.stringify([reviewsFilter, reviewActivities, reviewStudents, reviewLanguage, reviewStudentSort]));
 
   // Trigger Toast Notification
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Assign Multi-Select Helpers & Handler
+  const studentOptions = patients;
+  const assignmentStudents = studentOptions.filter(({ id }) => assignSelectedStudents.includes(id));
+  const selectedAssignActivity = activitiesList.find((item) => item.id === assignActivityId);
+  const allStudentsSelected =
+    studentOptions.length > 0 && assignmentStudents.length === studentOptions.length;
+  const studentDropdownSummary =
+    assignmentStudents.length === 0
+      ? 'Select student(s)...'
+      : allStudentsSelected
+      ? `All Students (${studentOptions.length})`
+      : assignmentStudents.length === 1
+      ? assignmentStudents[0].name
+      : `${assignmentStudents.length} Students Selected`;
+
+  const openAssignment = (activity?: ActivityItem) => {
+    setAssignActivityId(activity?.id ?? '');
+    setAssignInstructions(activity?.instructions ?? '');
+    setAssignSelectedStudents([]);
+    setAssignDueDate('');
+    setAssignPreviewExpanded(false);
+    setActiveTab('activities');
+    setActivitiesView('assign');
+  };
+
+  const handleAssignActivity = async () => {
+    try {
+      if (assignmentStudents.length === 0) {
+        triggerToast('Please select at least one student.');
+        return;
+      }
+      if (!isAssignmentDate(assignDueDate)) {
+        triggerToast('Enter a valid due date today or later (mm/dd/yyyy).');
+        return;
+      }
+      if (!assignInstructions.trim()) {
+        triggerToast('Please provide activity instructions.');
+        return;
+      }
+      const activity = selectedAssignActivity;
+      if (!activity) {
+        triggerToast('Select an activity before assigning it.');
+        return;
+      }
+      for (const student of assignmentStudents) {
+        if (!student.patientCode) throw new Error(`Student code is unavailable for ${student.name}.`);
+        await createAssignment({
+          activityId: activity.id,
+          patientCode: student.patientCode,
+          dueDate: assignDueDate,
+          instructions: assignInstructions.trim(),
+        });
+      }
+      await loadDashboardData();
+      setActivitiesView('library');
+      const msg =
+        assignmentStudents.length === 1
+          ? `Activity assigned to ${assignmentStudents[0].name}`
+          : `Activity assigned to ${assignmentStudents.length} students`;
+      triggerToast(msg);
+    } catch (err) {
+      triggerToast(err instanceof Error ? err.message : 'Failed to assign activity.');
+    }
+  };
+
+  // SOAP Save
+  const handleSaveSoapNote = () => {
+    triggerToast('Only therapists can save clinical SOAP notes.');
   };
 
   // Toggle Word in checklist
@@ -969,46 +1185,100 @@ export default function TeacherDashboardScreen() {
 
   // Add Custom Word
   const handleAddCustomWord = () => {
-    if (!newCustomWordInput.trim()) return;
-    if (!customWords.includes(newCustomWordInput.trim())) {
-      setCustomWords([...customWords, newCustomWordInput.trim()]);
+    try {
+      const trimmed = newCustomWordInput.trim();
+      if (!trimmed) {
+        triggerToast('Please enter a target word.');
+        return;
+      }
+      if (!/^[a-zA-Z\s-]+$/.test(trimmed)) {
+        triggerToast('Word should only contain letters and hyphens (no numbers).');
+        return;
+      }
+      if (customWords.map((w) => w.toLowerCase()).includes(trimmed.toLowerCase())) {
+        triggerToast(`"${trimmed}" is already added.`);
+        return;
+      }
+      setCustomWords([...customWords, trimmed]);
+      setNewCustomWordInput('');
+      triggerToast(`Added "${trimmed}" to custom words.`);
+    } catch (err: any) {
+      triggerToast(err?.message || 'Error adding custom word.');
     }
-    setNewCustomWordInput('');
   };
 
   // Add Custom Phrase
   const handleAddCustomPhrase = () => {
-    if (!newPhraseInput.trim()) return;
-    setCustomPhrases([...customPhrases, newPhraseInput.trim()]);
-    setNewPhraseInput('');
+    try {
+      const trimmed = newPhraseInput.trim();
+      if (!trimmed) {
+        triggerToast('Please enter a custom phrase.');
+        return;
+      }
+      setCustomPhrases([...customPhrases, trimmed]);
+      setNewPhraseInput('');
+      triggerToast('Phrase added.');
+    } catch (err: any) {
+      triggerToast(err?.message || 'Error adding custom phrase.');
+    }
+  };
+
+  // Submit Review Action
+  const handleSubmitReview = (_item: ReviewItem) => {
+    triggerToast('Only the assigned therapist can save a clinical review. This teacher view is read-only.');
   };
 
   // --- Profile, Settings & Logout Handlers ---
+  const openProfile = () => {
+    setEditProfileForm({ ...therapistProfile });
+    setEditingProfile(false);
+    setShowProfileModal(true);
+  };
+
+  const startProfileEditing = () => {
+    setEditProfileForm({ ...therapistProfile });
+    setEditingProfile(true);
+  };
+
   const handleSaveProfile = async () => {
-    setProfileSaving(true);
+    if (!editingProfile) return;
     try {
-      const saved = await updateAccountProfile({
+      if (!editProfileForm.name.trim()) {
+        triggerToast('Name is required. Please fill in this field.');
+        return;
+      }
+      if (!/^[a-zA-Z\s.'-]+$/.test(editProfileForm.name.trim())) {
+        triggerToast('Name should only contain letters and spaces (no numbers).');
+        return;
+      }
+      if (!editProfileForm.contact.trim()) {
+        triggerToast('Contact number is required. Please fill in this field.');
+        return;
+      }
+      const cleanContact = editProfileForm.contact.replace(/\D/g, '');
+      if (cleanContact.length < 10 || cleanContact.length > 12) {
+        triggerToast('Contact number must follow the correct format (10-12 digits).');
+        return;
+      }
+      const savedProfile = await updateAccountProfile({
         fullName: editProfileForm.name.trim(),
         contact: editProfileForm.contact.trim(),
       });
-      setTherapistProfile((current) => ({
-        ...current,
-        ...editProfileForm,
-        name: saved.fullName,
-        fullName: saved.fullName,
-        email: saved.email,
-        contact: saved.contact,
+      setTherapistProfile((prev) => ({
+        ...prev,
+        name: savedProfile.fullName.split(',')[0] || savedProfile.fullName,
+        fullName: savedProfile.fullName,
+        email: savedProfile.email,
+        contact: savedProfile.contact,
       }));
       setShowProfileModal(false);
-      triggerToast('Account name and contact updated.');
+      triggerToast('Name and contact saved. Other profile fields are not supported by the backend.');
       if (profileOpenedFromSettings) {
         setShowSettingsModal(true);
         setProfileOpenedFromSettings(false);
       }
-    } catch (error) {
-      triggerToast(error instanceof Error ? error.message : 'Could not save your account profile.');
-    } finally {
-      setProfileSaving(false);
+    } catch (err: any) {
+      triggerToast(err?.message || 'Failed to save profile.');
     }
   };
 
@@ -1031,9 +1301,8 @@ export default function TeacherDashboardScreen() {
     }));
   };
 
-  const handleRevokeSession = (id: string) => {
-    setActiveSessions((current) => current.filter((s) => s.id !== id));
-    triggerToast('Session revoked successfully.');
+  const handleRevokeSession = (_id: string) => {
+    setSessionNotice('Session revocation is not available in the backend.');
   };
 
   const handlePickPhoto = () => {
@@ -1052,26 +1321,35 @@ export default function TeacherDashboardScreen() {
   };
 
   const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      triggerToast('Please fill out all password fields.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      triggerToast('New passwords do not match.');
-      return;
-    }
-    setPasswordSaving(true);
     try {
+      if (!currentPassword) {
+        triggerToast('Current password is required. Please fill in this field.');
+        return;
+      }
+      if (!newPassword) {
+        triggerToast('New password is required. Please fill in this field.');
+        return;
+      }
+      if (newPassword.length < 8) {
+        triggerToast('New password must be at least 8 characters long.');
+        return;
+      }
+      if (!confirmPassword) {
+        triggerToast('Confirm password is required. Please fill in this field.');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        triggerToast('New passwords do not match. Please try again.');
+        return;
+      }
       await changeAccountPassword({ currentPassword, newPassword });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowChangePasswordModal(false);
-      triggerToast('Password changed successfully!');
-    } catch (error) {
-      triggerToast(error instanceof Error ? error.message : 'Could not change your password.');
-    } finally {
-      setPasswordSaving(false);
+      triggerToast('Password changed successfully.');
+    } catch (err: any) {
+      triggerToast(err?.message || 'Failed to change password.');
     }
   };
 
@@ -1081,9 +1359,9 @@ export default function TeacherDashboardScreen() {
       setShowLogoutConfirm(false);
       setShowMenu(false);
       setShowSettingsModal(false);
-      router.replace('/teacher-login' as any);
+      if (router.canDismiss()) router.dismissAll();
     } catch (error) {
-      triggerToast(error instanceof Error ? error.message : 'Could not clear your session. Please try again.');
+      triggerToast(error instanceof Error ? error.message : 'Could not sign out.');
     }
   };
 
@@ -1092,10 +1370,39 @@ export default function TeacherDashboardScreen() {
     triggerToast('All notifications marked as read.');
   };
 
+  if (!fontsLoaded) return null;
+
   return (
-    <SafeAreaView style={[styles.safeContainer, { backgroundColor: colors.bg }]}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: wide ? '#F1F5F9' : colors.bg,
+        alignItems: 'center',
+        width: '100%',
+        minHeight: Platform.OS === 'web' ? ('100vh' as any) : undefined,
+      }}
+    >
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <View
+        style={{
+          flex: 1,
+          width: '100%',
+          maxWidth: 430,
+          backgroundColor: colors.bg,
+          position: 'relative',
+          ...(Platform.OS === 'web' && wide
+            ? {
+                borderLeftWidth: 1,
+                borderRightWidth: 1,
+                borderColor: isDark ? '#1E293B' : '#E2E8F0',
+                boxShadow: '0 4px 30px rgba(0, 0, 0, 0.15)',
+                minHeight: '100vh' as any,
+              }
+            : {}),
+        }}
+      >
+        <SafeAreaView style={[styles.safeContainer, { backgroundColor: colors.bg }]}>
 
       {/* ==========================================
           --- GLOBAL TOP HEADER ---
@@ -1117,6 +1424,8 @@ export default function TeacherDashboardScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Open menu"
             style={styles.iconButton}
             activeOpacity={0.7}
             onPress={() => {
@@ -1153,6 +1462,7 @@ export default function TeacherDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {dashboardError ? <Text style={styles.reviewsSubtitle}>{dashboardError}</Text> : null}
         {/* ----------------------------------------------------
             TAB 1: HOME DASHBOARD
            ---------------------------------------------------- */}
@@ -1163,17 +1473,18 @@ export default function TeacherDashboardScreen() {
               <Text style={[styles.greetingTitle, { color: colors.heading }]}>Welcome, {therapistProfile.name}</Text>
               <Text style={[styles.greetingSubtitle, { color: colors.textSub }]}>Here's what needs your attention today.</Text>
 
+              {/* Assign Activity Quick Button -> Switches to Assign Screen */}
               <TouchableOpacity
                 style={[styles.assignButton, { backgroundColor: colors.primaryLight }]}
                 activeOpacity={0.8}
-                onPress={() => setActiveTab('patients')}
+                onPress={() => {
+                  openAssignment(activitiesList.find((item) => item.id === 'ready-set-r') ?? activitiesList[0]);
+                }}
               >
-                <Users size={18} color="#0F766E" style={{ marginRight: 6 }} />
-                <Text style={styles.assignButtonText}>View Student Roster</Text>
+                <UserCheck size={18} color="#0F766E" style={{ marginRight: 6 }} />
+                <Text style={styles.assignButtonText}>Assign Activity</Text>
               </TouchableOpacity>
             </View>
-            {teacherLoading ? <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>Loading student data…</Text> : null}
-            {teacherError ? <Text style={[styles.pageSubtitle, { color: '#DC2626' }]}>{teacherError}</Text> : null}
 
             {/* 2x2 Metric Cards Grid */}
             <View style={styles.statsGrid}>
@@ -1196,17 +1507,17 @@ export default function TeacherDashboardScreen() {
 
               <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
-                  <Text style={[styles.statNumber, { color: '#F97316' }]}>{patients.length}</Text>
-                  <View style={[styles.statBadge, { backgroundColor: '#FFEDD5' }]}>
-                    <Text style={[styles.statBadgeText, { color: '#C2410C' }]}>Alert</Text>
+                  <Text style={[styles.statNumber, { color: isDark ? '#38BDF8' : '#F97316' }]}>{assignments.filter((item) => item.status === 'Assigned').length}</Text>
+                  <View style={[styles.statBadge, { backgroundColor: colors.peachPillBg }]}>
+                    <Text style={[styles.statBadgeText, { color: colors.peachPillText }]}>Alert</Text>
                   </View>
                 </View>
-                <Text style={[styles.statLabel, { color: colors.text }]}>Students</Text>
+                <Text style={[styles.statLabel, { color: colors.text }]}>Require Follow-up</Text>
               </View>
 
               <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
-                  <Text style={[styles.statNumber, { color: '#0EA5E9' }]}>{submissions.length}</Text>
+                  <Text style={[styles.statNumber, { color: '#0EA5E9' }]}>{teacherSubmissions.length}</Text>
                   <View style={[styles.statBadge, { backgroundColor: '#BAE6FD' }]}>
                     <Text style={[styles.statBadgeText, { color: '#0369A1' }]}>Today</Text>
                   </View>
@@ -1216,25 +1527,25 @@ export default function TeacherDashboardScreen() {
 
               <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
-                  <Text style={[styles.statNumber, { color: '#F59E0B' }]}>{assignments.filter((assignment) => assignment.status === 'Assigned').length}</Text>
+                  <Text style={[styles.statNumber, { color: '#F59E0B' }]}>{patients.length}</Text>
                   <View style={[styles.statBadge, { backgroundColor: '#FEF3C7' }]}>
                     <Text style={[styles.statBadgeText, { color: '#B45309' }]}>Active</Text>
                   </View>
                 </View>
-                <Text style={[styles.statLabel, { color: colors.text }]}>Active Assignments</Text>
+                <Text style={[styles.statLabel, { color: colors.text }]}>Overdue / Active Task</Text>
               </View>
             </View>
 
-            {/* Patient Progress Section */}
+            {/* Student Progress Section */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Patient Progress</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Student Progress</Text>
               <TouchableOpacity onPress={() => setActiveTab('patients')}>
                 <Text style={[styles.viewAllText, { color: isDark ? '#38BDF8' : '#0284C7' }]}>View all</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.patientListContainer}>
-              {patients.slice(0, 5).map((item) => (
+              {patients.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -1247,16 +1558,26 @@ export default function TeacherDashboardScreen() {
                   <View style={styles.patientCardBody}>
                     <View style={styles.patientCardTopRow}>
                       <Text style={[styles.patientName, { color: colors.text }]}>{item.name}</Text>
-                      <View style={[styles.percentBadge, { backgroundColor: item.badgeBg }]}>
-                        <Text style={[styles.percentText, { color: item.badgeTextColor }]}>
-                          {item.accuracy == null ? 'No score' : `${item.accuracy}%`}
-                        </Text>
-                      </View>
+                      {(() => {
+                        const badgeTheme = getStudentBadgeTheme(item, isDark);
+                        return (
+                          <View style={[styles.percentBadge, { backgroundColor: badgeTheme.bg }]}>
+                            <Text style={[styles.percentText, { color: badgeTheme.color }]}>
+                              {item.accuracy}%
+                            </Text>
+                          </View>
+                        );
+                      })()}
                     </View>
                     <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>{item.targetDescription}</Text>
-                    <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>
-                      {item.completedCount || 0}/{item.assignedCount || 0} assigned activities completed
-                    </Text>
+                    <View style={[styles.progressBarBackground, { backgroundColor: colors.border }]}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          { width: `${item.accuracy}%`, backgroundColor: item.progressColor },
+                        ]}
+                      />
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -1271,39 +1592,43 @@ export default function TeacherDashboardScreen() {
             </View>
 
             <View style={[styles.submissionsCardWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {submissions.slice(0, 5).map((sub) => (
+              {teacherSubmissions.map((sub) => (
                 <View key={sub.id} style={[styles.submissionItem, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
                   <View style={[styles.patientAvatarSmall, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.avatarTextSmall, { color: colors.text }]}>{sub.initial}</Text>
+                    <Text style={[styles.avatarTextSmall, { color: colors.text }]}>{sub.initials}</Text>
                   </View>
                   <View style={{ flex: 1, marginHorizontal: 10 }}>
-                    <Text style={[styles.subPatientName, { color: colors.text }]}>{sub.student}</Text>
+                    <Text style={[styles.subPatientName, { color: colors.text }]}>{sub.name}</Text>
                     <Text style={[styles.subDetails, { color: colors.textSub }]}>
-                      {sub.activity} • {new Date(sub.submittedAt).toLocaleString()}
+                      {sub.phrase} • {sub.time}
                     </Text>
+                    {'progress' in sub && typeof sub.progress === 'number' ? <View style={[styles.subProgressBar, { backgroundColor: colors.border }]}>
+                      <View style={[styles.subProgressFill, { width: `${sub.progress * 100}%` }]} />
+                    </View> : <Text style={styles.subDetails}>Practice submitted</Text>}
                   </View>
-                  <TouchableOpacity
+                  {'progress' in sub && typeof sub.progress === 'number' ? <TouchableOpacity
                     style={styles.reviewButton}
                     activeOpacity={0.8}
-                    onPress={() => setSelectedPatient(patients.find((patient) => patient.id === sub.patientId) || null)}
+                    onPress={() => {
+                      const match = reviewsList.find((r) => r.studentName === sub.name && r.activityTitle === sub.phrase);
+                      if (!match) { triggerToast('No matching review is available.'); return; }
+                      setSelectedReview(match);
+                    }}
                   >
-                    <Text style={styles.reviewButtonText}>Student</Text>
-                  </TouchableOpacity>
+                    <Text style={styles.reviewButtonText}>Review</Text>
+                  </TouchableOpacity> : null}
                 </View>
               ))}
-              {!teacherLoading && submissions.length === 0
-                ? <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>No submissions recorded.</Text>
-                : null}
             </View>
           </>
         )}
 
         {/* ----------------------------------------------------
-            TAB 2: PATIENTS LIST
+            TAB 2: STUDENTS LIST
            ---------------------------------------------------- */}
         {activeTab === 'patients' && (
           <View style={styles.patientsTabContainer}>
-            <Text style={[styles.pageTitle, { color: colors.heading }]}>Patients</Text>
+            <Text style={[styles.pageTitle, { color: colors.heading }]}>Students</Text>
             <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>Track development and review progress</Text>
 
             <View style={styles.searchFilterRow}>
@@ -1311,75 +1636,62 @@ export default function TeacherDashboardScreen() {
                 <Search size={16} color={colors.textMuted} style={{ marginRight: 6 }} />
                 <TextInput
                   style={[styles.searchInput, { color: colors.inputText, flex: 1 }]}
-                  placeholder="Search by name, 9-digit ID, targets..."
+                  placeholder="Search by name, targets..."
                   placeholderTextColor={colors.textMuted}
                   value={patientSearch}
                   onChangeText={setPatientSearch}
                 />
               </View>
-              <TouchableOpacity style={[styles.filterDropdown, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }]}>
-                <Text style={[styles.filterText, { color: colors.textSub, marginRight: 4 }]}>ALL</Text>
+              <TouchableOpacity
+                style={[styles.filterDropdown, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }]}
+                onPress={() => setShowStudentFilterDropdown(true)}
+              >
+                <Text style={[styles.filterText, { color: colors.textSub, marginRight: 4 }]}>
+                  {studentFilter === 'ALL' ? 'ALL' : studentFilter}
+                </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
-            {patientSearch.trim() ? (
-              <>
-                {livePatientLoading ? <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>Searching saved patients…</Text> : null}
-                {livePatientError ? <Text style={[styles.pageSubtitle, { color: '#DC2626' }]}>{livePatientError}</Text> : null}
-                {!livePatientLoading && !livePatientError && livePatientResults?.length === 0 ? (
-                  <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>No saved patients match this search.</Text>
-                ) : null}
-                {livePatientResults?.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                    activeOpacity={0.7}
-                    onPress={() => setSelectedPatient(
-                      patients.find((patient) => patient.id === item.id) ||
-                      mapTeacherPatient(item, assignments, submissions),
-                    )}
-                  >
-                    <View style={styles.patientCardBody}>
-                      <Text style={[styles.patientName, { color: colors.text }]}>
-                        {[item.firstName, item.middleName, item.lastName].filter(Boolean).join(' ')}
-                      </Text>
-                      <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>
-                        Patient ID: {item.patientCode || 'Not assigned'}
-                      </Text>
+            {filteredPatients.slice(studentPages.start, studentPages.end).map((item) => {
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  activeOpacity={0.7}
+                  onPress={() => setSelectedPatient(item)}
+                >
+                  <View style={[styles.patientAvatar, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
+                    <Text style={[styles.avatarText, { color: colors.text }]}>{item.initials}</Text>
+                  </View>
+                  <View style={styles.patientCardBody}>
+                    <View style={styles.patientCardTopRow}>
+                      <Text style={[styles.patientName, { color: colors.text }]}>{item.name}</Text>
+                      {(() => {
+                        const badgeTheme = getStudentBadgeTheme(item, isDark);
+                        return (
+                          <View style={[styles.percentBadge, { backgroundColor: badgeTheme.bg }]}>
+                            <Text style={[styles.percentText, { color: badgeTheme.color }]}>
+                              {item.accuracy}%
+                            </Text>
+                          </View>
+                        );
+                      })()}
                     </View>
-                  </TouchableOpacity>
-                ))}
-              </>
-            ) : filteredPatients.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                activeOpacity={0.7}
-                onPress={() => setSelectedPatient(item)}
-              >
-                <View style={[styles.patientAvatar, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
-                  <Text style={[styles.avatarText, { color: colors.text }]}>{item.initials}</Text>
-                </View>
-                <View style={styles.patientCardBody}>
-                  <View style={styles.patientCardTopRow}>
-                    <Text style={[styles.patientName, { color: colors.text }]}>{item.name}</Text>
-                    <View style={[styles.percentBadge, { backgroundColor: item.badgeBg }]}>
-                      <Text style={[styles.percentText, { color: item.badgeTextColor }]}>
-                        {item.accuracy == null ? 'No score' : `${item.accuracy}%`}
-                      </Text>
+                    <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>{item.targetDescription}</Text>
+                    <View style={[styles.progressBarBackground, { backgroundColor: colors.border }]}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          { width: `${item.accuracy}%`, backgroundColor: item.progressColor },
+                        ]}
+                      />
                     </View>
                   </View>
-                  <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>{item.targetDescription}</Text>
-                  <Text style={[styles.patientSubtitle, { color: colors.textSub }]}>
-                    {item.completedCount || 0}/{item.assignedCount || 0} assigned activities completed · {item.submissionCount || 0} submissions
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-            {!teacherLoading && !patientSearch.trim() && filteredPatients.length === 0
-              ? <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>No students are assigned to this account.</Text>
-              : null}
+                </TouchableOpacity>
+              );
+            })}
+            <ListPagination {...studentPages} total={filteredPatients.length} noun="students" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
           </View>
         )}
 
@@ -1392,8 +1704,8 @@ export default function TeacherDashboardScreen() {
             {activitiesView === 'library' && (
               <View>
                 <Text style={styles.subHeadingCaps}>PURPOSEFUL PRACTICE</Text>
-                <Text style={styles.pageTitle}>Assigned activities.</Text>
-                <Text style={styles.pageSubtitle}>Activities are created and assigned by your students’ therapist.</Text>
+                <Text style={styles.pageTitle}>The activity library.</Text>
+                <Text style={styles.pageSubtitle}>Build the small steps that make a big difference.</Text>
 
                 <View style={styles.subTabsRow}>
                   <TouchableOpacity
@@ -1424,6 +1736,14 @@ export default function TeacherDashboardScreen() {
                     />
                   </View>
                   <TouchableOpacity
+                    style={styles.createTaskButton}
+                    activeOpacity={0.8}
+                    onPress={handleBeginNewActivity}
+                  >
+                    <Plus size={15} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 5 }} />
+                    <Text style={styles.createTaskButtonText} numberOfLines={1}>Create a Task</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={[styles.activityFilterBtn, isActivityFilterActive && styles.activityFilterBtnActive]}
                     activeOpacity={0.7}
                     onPress={() => setShowActivityFilterPanel((prev) => !prev)}
@@ -1451,7 +1771,7 @@ export default function TeacherDashboardScreen() {
                               setActivitySortBy('default');
                               setActivitySoundFilter([]);
                               setActivityLanguageFilter('ALL');
-                              setActivityCategoryFilter('ALL');
+                              setActivityCategoryFilter([]);
                             }}
                             style={{ marginRight: 12 }}
                           >
@@ -1527,6 +1847,23 @@ export default function TeacherDashboardScreen() {
                       })}
                     </View>
 
+                    <Text style={[styles.activityFilterSectionHeading, { marginTop: 10 }]}>Activity type</Text>
+                    <View style={styles.activityFilterPillsRow}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected: activityCategoryFilter.length === 0 }}
+                        style={[styles.activityFilterPill, activityCategoryFilter.length === 0 && styles.activityFilterPillActive]} onPress={() => setActivityCategoryFilter([])}>
+                        <Text style={[styles.activityFilterPillText, activityCategoryFilter.length === 0 && styles.activityFilterPillTextActive]}>All types</Text>
+                      </TouchableOpacity>
+                      {practiceLevels.map((level) => {
+                        const selected = activityCategoryFilter.includes(level);
+                        return (
+                          <TouchableOpacity key={level} accessibilityRole="checkbox" accessibilityState={{ checked: selected }}
+                            style={[styles.activityFilterPill, selected && styles.activityFilterPillActive]}
+                            onPress={() => setActivityCategoryFilter((current) => current.includes(level) ? current.filter((item) => item !== level) : [...current, level])}>
+                            <Text style={[styles.activityFilterPillText, selected && styles.activityFilterPillTextActive]}>{level}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                     {/* Language Filters */}
                     <Text style={[styles.activityFilterSectionHeading, { marginTop: 10 }]}>Language</Text>
                     <View style={styles.activityFilterPillsRow}>
@@ -1553,240 +1890,501 @@ export default function TeacherDashboardScreen() {
                   </View>
                 )}
 
-                {/* Category Filter Chips */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-                  {(['ALL', 'Words', 'Syllables', 'Isolation', 'Sentences'] as const).map((chip) => (
-                    <TouchableOpacity
-                      key={chip}
-                      style={[styles.chipButton, activityCategoryFilter === chip && styles.chipButtonActive]}
-                      onPress={() => setActivityCategoryFilter(chip)}
-                    >
-                      <Text style={[styles.chipText, activityCategoryFilter === chip && styles.chipTextActive]}>
-                        {chip}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
                 {/* 2-Column Activity Cards Grid */}
-                {teacherLoading ? <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>Loading assigned activities…</Text> : null}
-                {teacherError ? <Text style={[styles.pageSubtitle, { color: '#DC2626' }]}>{teacherError}</Text> : null}
                 <View style={styles.activityGrid}>
-                  {filteredActivities.map((act) => (
-                    <TouchableOpacity
-                      key={act.id}
-                      style={styles.activityGridCard}
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        setCurrentActivity(act);
-                        setActivitiesView('preview');
-                      }}
-                    >
-                      <View style={[styles.activitySoundHeader, { backgroundColor: act.soundBg }]}>
-                        <Text style={[styles.activitySoundText, { color: act.soundColor }]}>{act.sound}</Text>
-                        <View style={styles.soundWavesSmall}>
-                          {[10, 16, 8, 20, 14, 18, 12].map((h, idx) => (
-                            <View key={idx} style={[styles.waveLine, { height: h, backgroundColor: act.soundColor }]} />
-                          ))}
-                          {!teacherLoading && filteredActivities.length === 0
-                            ? <Text style={[styles.pageSubtitle, { color: colors.textSub }]}>No therapist-assigned activities are available.</Text>
-                            : null}
+                  {filteredActivities.slice(activityPages.start, activityPages.end).map((act) => {
+                    const soundTheme = getActivitySoundColors(act, isDark);
+                    return (
+                      <TouchableOpacity
+                        key={act.id}
+                        style={styles.activityGridCard}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setCurrentActivity(act);
+                          setActivitiesView('preview');
+                        }}
+                      >
+                        <View style={[styles.activitySoundHeader, { backgroundColor: soundTheme.bg }]}>
+                          <Text style={[styles.activitySoundText, { color: soundTheme.color }]}>
+                            {act.sound}
+                          </Text>
+                          <View style={styles.soundWavesSmall}>
+                            {[10, 16, 8, 20, 14, 18, 12].map((h, idx) => (
+                              <View
+                                key={idx}
+                                style={[
+                                  styles.waveLine,
+                                  {
+                                    height: h,
+                                    backgroundColor: soundTheme.color,
+                                  },
+                                ]}
+                              />
+                            ))}
+                          </View>
                         </View>
-                      </View>
 
-                      <View style={styles.activityCardBody}>
-                        <Text style={styles.activityCategoryTag}>{act.category}</Text>
-                        <Text style={styles.activityCardTitle}>{act.title}</Text>
-                        <Text style={styles.activityCardSub}>{act.subtitle}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                          <Text style={styles.viewActivityLink}>View activity</Text>
-                          <ChevronRight size={13} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginLeft: 2 }} />
+                        <View style={styles.activityCardBody}>
+                          <Text style={[styles.activityCategoryTag, { color: soundTheme.categoryColor }]}>
+                            {act.category}
+                          </Text>
+                          <Text style={styles.activityCardTitle}>{act.title}</Text>
+                          <Text style={styles.activityCardSub}>{act.subtitle}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            <Text style={styles.viewActivityLink}>View activity</Text>
+                            <ChevronRight size={13} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginLeft: 2 }} />
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
+                  <ListPagination {...activityPages} total={filteredActivities.length} noun="activities" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
               </View>
             )}
 
             {/* VIEW 2: ACTIVITY PREVIEW */}
-            {activitiesView === 'preview' && currentActivity && (
-              <View style={styles.previewContainer}>
-                <View style={styles.previewTagPill}>
-                  <Text style={styles.previewTagText}>{currentActivity.category}</Text>
-                </View>
-                <Text style={styles.previewTitle}>{currentActivity.title}</Text>
-                <Text style={styles.previewSoundDesc}>{currentActivity.sound} · {currentActivity.wordPositions.join(', ') || 'No positions set'} · {currentActivity.language}</Text>
+            {activitiesView === 'preview' && (() => {
+              const currentSoundTheme = getActivitySoundColors(currentActivity, isDark);
+              return (
+                <View style={styles.previewContainer}>
+                  {/* Hero Activity Card */}
+                  <View style={[styles.heroActivityCard, { borderColor: isDark ? currentSoundTheme.bg : colors.border }]}>
+                    <View style={styles.heroActivityTopRow}>
+                      <View
+                        style={[
+                          styles.heroSoundBadgePeach,
+                          {
+                            backgroundColor: currentSoundTheme.bg,
+                            borderColor: isDark ? currentSoundTheme.color : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.heroSoundBadgeText, { color: currentSoundTheme.color }]}>
+                          {currentActivity.sound}
+                        </Text>
+                        <Text style={[styles.heroSoundWaveText, { color: currentSoundTheme.color }]}>≋</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 14 }}>
+                        <View style={styles.heroTagsRow}>
+                          <View
+                            style={[
+                              styles.heroLevelBadge,
+                              { backgroundColor: currentSoundTheme.bg, borderColor: currentSoundTheme.color },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.heroLevelBadgeText,
+                                { color: currentSoundTheme.color, fontWeight: '700' },
+                              ]}
+                            >
+                              {currentActivity.category || 'Words'}
+                            </Text>
+                          </View>
+                          <View style={styles.heroLanguageBadge}>
+                            <Text style={styles.heroLanguageBadgeText}>{currentActivity.language}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.heroActivityTitle}>{currentActivity.title}</Text>
+                      </View>
+                    </View>
 
-                <Text style={styles.previewSectionTitle}>Instructions</Text>
-                <Text style={styles.previewSectionBody}>{currentActivity.instructions}</Text>
+                    <View style={styles.heroCardDivider} />
 
-                <Text style={styles.previewSectionTitle}>Articulatory Guide</Text>
-                <Text style={styles.previewSectionBody}>{currentActivity.articulatoryGuide}</Text>
+                    {/* 3-Column Stats Row */}
+                    <View style={styles.heroMetaRow}>
+                      <View style={styles.heroMetaItem}>
+                        <Text style={styles.heroMetaLabel}>Position</Text>
+                        <Text style={styles.heroMetaValue}>
+                          {currentActivity.wordPositions?.[0] || 'Initial'}
+                        </Text>
+                      </View>
+                      <View style={styles.heroMetaDivider} />
+                      <View style={styles.heroMetaItem}>
+                        <Text style={styles.heroMetaLabel}>Sound Target</Text>
+                        <Text style={[styles.heroMetaValue, { color: currentSoundTheme.color }]}>
+                          {currentActivity.sound}
+                        </Text>
+                      </View>
+                      <View style={styles.heroMetaDivider} />
+                      <View style={styles.heroMetaItem}>
+                        <Text style={styles.heroMetaLabel}>Word Targets</Text>
+                        <Text style={styles.heroMetaValue}>{currentActivity.initialWords.length} words</Text>
+                      </View>
+                    </View>
+                  </View>
 
-                <Text style={styles.previewSectionTitle}>Practice content</Text>
-                {currentActivity.wordPositions.map((position) => {
-                  const words = (currentActivity.words || []).filter((word) => word.position === position);
-                  return (
-                    <View key={position} style={styles.practiceContentCard}>
-                      <View style={styles.practiceContentHeader}>
-                        <Text style={styles.practicePositionLabel}>{position}</Text>
-                        <View style={styles.targetCountBadge}>
-                          <Text style={styles.targetCountText}>{words.length} targets</Text>
+                  {/* Instructions Card */}
+                  <View style={styles.infoCard}>
+                    <View style={styles.infoCardHeader}>
+                      <View style={styles.infoIconWrap}>
+                        <BookOpen size={16} color="#0284C7" />
+                      </View>
+                      <Text style={styles.infoCardTitle}>Instructions</Text>
+                    </View>
+                    <Text style={styles.infoCardBody}>{currentActivity.instructions}</Text>
+                  </View>
+
+                  {/* Articulatory Guide Card */}
+                  <View style={styles.guideCardPeach}>
+                    <View style={styles.infoCardHeader}>
+                      <View style={styles.infoIconWrapPeach}>
+                        <Sparkles size={16} color={colors.peachAccent} />
+                      </View>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={[styles.infoCardTitle, { color: colors.peachText }]}>Articulatory Guide</Text>
+                        <View style={styles.guideBadge}>
+                          <Text style={styles.guideBadgeText}>Therapist guidance</Text>
                         </View>
                       </View>
-                      <View style={styles.wordPillsRow}>
-                        {words.map((word) => (
-                          <View key={word.id} style={styles.wordPillPeach}>
-                            <Text style={styles.wordPillText}>{word.text}</Text>
-                          </View>
+                    </View>
+                    <Text style={[styles.infoCardBody, { color: colors.peachText }]}>{currentActivity.articulatoryGuide}</Text>
+                  </View>
+
+                  {/* Practice Content Card */}
+                  <View style={styles.infoCard}>
+                    <View style={styles.infoCardHeader}>
+                      <View style={styles.infoIconWrap}>
+                        <Layers size={16} color="#0284C7" />
+                      </View>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={styles.infoCardTitle}>Practice Content</Text>
+                        <View style={[styles.guideBadge, { backgroundColor: currentSoundTheme.bg }]}>
+                          <Text style={[styles.guideBadgeText, { color: currentSoundTheme.color, fontWeight: '700' }]}>
+                            {currentActivity.initialWords.length} targets
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {(['Initial', 'Medial', 'Final', undefined] as const).map((position) => {
+                      const prompts = getTeacherActivityPrompts(currentActivity).filter((prompt) => prompt.position === position);
+                      if (!prompts.length) return null;
+                      return (
+                        <View key={position ?? 'prompts'} style={styles.posBlockCard}>
+                          <Text style={styles.posBlockCountText}>{position ?? 'Practice prompts'}</Text>
+                          {prompts.map((prompt, index) => (
+                            <Text key={index} style={[styles.infoCardBody, { color: colors.text }]}>{prompt.text}</Text>
+                          ))}
+                        </View>
+                      );
+                    })}
+
+                    {/* Medial Position (Subtle in-card summary) */}
+                    <View style={styles.posBlockCardSubtle}>
+                      <View style={styles.posBlockHead}>
+                        <View style={styles.posBadgeSubtle}>
+                          <Text style={styles.posBadgeSubtleText}>Medial</Text>
+                        </View>
+                        <Text style={styles.posBlockCountSubtle}>0 targets</Text>
+                      </View>
+                      <Text style={[styles.infoCardBody, { fontSize: 12, fontStyle: 'italic', color: colors.textMuted }]}>
+                        No targets in this position yet.
+                      </Text>
+                    </View>
+
+                    {/* Final Position (Subtle in-card summary) */}
+                    <View style={styles.posBlockCardSubtle}>
+                      <View style={styles.posBlockHead}>
+                        <View style={styles.posBadgeSubtle}>
+                          <Text style={styles.posBadgeSubtleText}>Final</Text>
+                        </View>
+                        <Text style={styles.posBlockCountSubtle}>0 targets</Text>
+                      </View>
+                      <Text style={[styles.infoCardBody, { fontSize: 12, fontStyle: 'italic', color: colors.textMuted }]}>
+                        No targets in this position yet.
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Audio Pronunciation Model Card */}
+                  <View style={styles.infoCard}>
+                    <View style={styles.infoCardHeader}>
+                      <View style={styles.infoIconWrap}>
+                        <Volume2 size={16} color="#0284C7" />
+                      </View>
+                      <Text style={styles.infoCardTitle}>Audio Pronunciation Model</Text>
+                    </View>
+                    <View style={styles.audioModelCard}>
+                      <View style={styles.audioPlayCircle}>
+                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
+                      </View>
+                      <View style={{ flex: 1, marginHorizontal: 12 }}>
+                        <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
+                        <Text style={styles.audioModelSub}>Demo Playback · 0:08</Text>
+                      </View>
+                      <View style={styles.audioWaveformRow}>
+                        {[12, 22, 14, 26, 18, 10, 20].map((h, i) => (
+                          <View key={i} style={[styles.audioWaveBar, { height: h }]} />
                         ))}
                       </View>
-                      {words.filter((word) => word.phrase).map((word) => (
-                        <Text key={`${word.id}-phrase`} style={styles.phraseBulletText}>{word.phrase}</Text>
-                      ))}
                     </View>
-                  );
-                })}
-                {currentActivity.phrases.length === 0 && currentActivity.wordPositions.length === 0
-                  ? <Text style={styles.noTargetsSub}>No practice targets are available.</Text>
-                  : null}
-                <Text style={styles.noTargetsSub}>Read-only preview. Ask the therapist to change assigned activities.</Text>
-              </View>
-            )}
+                  </View>
+
+                  {/* Visual Material Card */}
+                  <View style={styles.infoCard}>
+                    <View style={styles.infoCardHeader}>
+                      <View style={styles.infoIconWrap}>
+                        <Video size={16} color="#0284C7" />
+                      </View>
+                      <Text style={styles.infoCardTitle}>Visual Material</Text>
+                    </View>
+                    <View style={styles.mediaBox}>
+                      <View style={styles.mediaIconWrap}>
+                        <Play size={20} color="#0284C7" fill="#0284C7" style={{ marginLeft: 2 }} />
+                      </View>
+                      <Text style={styles.mediaTitle}>Articulation Video Cue</Text>
+                      <Text style={styles.mediaSub}>Speech model video cue ready for playback</Text>
+                    </View>
+                  </View>
+
+                  {/* Bottom Action Buttons */}
+                  <View style={styles.previewActionsRow}>
+                    <TouchableOpacity
+                      style={styles.outlineBtn}
+                      onPress={() => handleBeginEditActivity(currentActivity)}
+                      activeOpacity={0.7}
+                    >
+                      <Pencil size={15} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginRight: 6 }} />
+                      <Text style={styles.outlineBtnText}>Edit Activity</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.solidBlueBtn}
+                      onPress={() => {
+                        openAssignment(currentActivity);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Send size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.solidBlueBtnText}>Assign Activity</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })()}
 
             {/* VIEW 3: EDIT ACTIVITY (3-Step Wizard) */}
             {activitiesView === 'edit' && (
               <View style={styles.editWizardContainer}>
-                <Text style={styles.editWizardTitle}>Edit Activity</Text>
-
-                <View style={styles.stepperBar}>
-                  <TouchableOpacity
-                    style={[styles.stepItem, editStep === 1 && styles.stepItemActive]}
-                    onPress={() => setEditStep(1)}
-                  >
-                    <Text style={[styles.stepText, editStep === 1 && styles.stepTextActive]}>Clinical focus</Text>
-                    {editStep === 1 && <View style={styles.stepIndicatorLine} />}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.stepItem, editStep === 2 && styles.stepItemActive]}
-                    onPress={() => setEditStep(2)}
-                  >
-                    <Text style={[styles.stepText, editStep === 2 && styles.stepTextActive]}>Activity content</Text>
-                    {editStep === 2 && <View style={styles.stepIndicatorLine} />}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.stepItem, editStep === 3 && styles.stepItemActive]}
-                    onPress={() => setEditStep(3)}
-                  >
-                    <Text style={[styles.stepText, editStep === 3 && styles.stepTextActive]}>Preview & save</Text>
-                    {editStep === 3 && <View style={styles.stepIndicatorLine} />}
-                  </TouchableOpacity>
+                {/* Stepper Header (Clean 3-Tab Line Progress) */}
+                <View style={styles.stepperContainer}>
+                  {[
+                    { key: 1, label: 'Clinical focus' },
+                    { key: 2, label: 'Activity content' },
+                    { key: 3, label: 'Preview & save' },
+                  ].map((step, idx) => {
+                    const active = editStep === step.key;
+                    const completed = editStep > step.key;
+                    return (
+                      <View key={step.key} style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity
+                          style={styles.stepperStepBtn}
+                          onPress={() => setEditStep(step.key as 1 | 2 | 3)}
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={[
+                              styles.stepperBadge,
+                              active && styles.stepperBadgeActive,
+                              completed && styles.stepperBadgeCompleted,
+                            ]}
+                          >
+                            {completed ? (
+                              <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                            ) : (
+                              <Text style={[styles.stepperBadgeNum, (active || completed) && { color: '#FFFFFF' }]}>
+                                {step.key}
+                              </Text>
+                            )}
+                          </View>
+                          <Text
+                            style={[
+                              styles.stepperLabelText,
+                              active && styles.stepperLabelTextActive,
+                              completed && { color: colors.text },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {step.label}
+                          </Text>
+                        </TouchableOpacity>
+                        {idx < 2 && (
+                          <View
+                            style={[
+                              styles.stepperLine,
+                              completed && { backgroundColor: '#0284C7' },
+                            ]}
+                          />
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
 
                 {/* Step 1: Clinical Focus */}
                 {editStep === 1 && (
                   <View>
-                    <Text style={styles.formLabel}>Activity Title</Text>
-                    <TextInput
-                      style={styles.formInput}
-                      value={editTitle}
-                      onChangeText={setEditTitle}
-                      placeholder="e.g. Ready, set, /r/"
-                    />
-
-                    <View style={styles.formRowTwoCol}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={styles.formLabel}>Target Sound</Text>
-                        <View style={styles.dropdownSelector}>
-                          <Text style={styles.dropdownValue}>{editTargetSound}</Text>
-                          <ChevronDown size={14} color={colors.text} />
+                    {/* Card 1: Core Clinical Target */}
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoCardHeader}>
+                        <View style={styles.infoIconWrap}>
+                          <Sparkles size={16} color="#0284C7" />
+                        </View>
+                        <View>
+                          <Text style={styles.infoCardTitle}>Clinical Target</Text>
+                          <Text style={styles.infoCardSub}>Define target sound, position, level & language</Text>
                         </View>
                       </View>
-                      <View style={{ flex: 1, marginLeft: 8 }}>
-                        <Text style={styles.formLabel}>Practice Level</Text>
-                        <View style={styles.dropdownSelector}>
-                          <Text style={styles.dropdownValue}>{editPracticeLevel}</Text>
-                          <ChevronDown size={14} color={colors.text} />
-                        </View>
-                      </View>
-                    </View>
 
-                    <Text style={styles.formLabel}>Word Position (choose one or more)</Text>
-                    <View style={styles.pillsSelectRow}>
-                      {['Initial', 'Medial', 'Final'].map((pos) => {
-                        const selected = editPositions.includes(pos);
-                        return (
+                      <Text style={styles.formLabel}>Activity Title</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        value={editTitle}
+                        onChangeText={setEditTitle}
+                        placeholder="e.g. Ready, set, /r/"
+                        placeholderTextColor={colors.textMuted}
+                      />
+
+                      <View style={styles.formRowTwoCol}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={styles.formLabel}>Target Sound</Text>
                           <TouchableOpacity
-                            key={pos}
-                            style={[styles.posPill, selected && styles.posPillSelected]}
-                            onPress={() => {
-                              if (selected) {
-                                setEditPositions(editPositions.filter((p) => p !== pos));
-                              } else {
-                                setEditPositions([...editPositions, pos]);
-                              }
-                            }}
+                            style={styles.dropdownSelector}
+                            onPress={() => setShowTargetSoundDropdown(true)}
+                            activeOpacity={0.7}
                           >
-                            <Text style={[styles.posPillText, selected && styles.posPillTextSelected]}>{pos}</Text>
+                            <Text style={styles.dropdownValue}>{editTargetSound}</Text>
+                            <ChevronDown size={14} color={colors.text} />
                           </TouchableOpacity>
-                        );
-                      })}
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <Text style={styles.formLabel}>Practice Level</Text>
+                          <TouchableOpacity
+                            style={styles.dropdownSelector}
+                            onPress={() => setShowPracticeLevelDropdown(true)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.dropdownValue}>{editPracticeLevel}</Text>
+                            <ChevronDown size={14} color={colors.text} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <Text style={styles.formLabel}>Word Position (choose one or more)</Text>
+                      <View style={styles.pillsSelectRow}>
+                        {['Initial', 'Medial', 'Final'].map((pos) => {
+                          const selected = editPositions.includes(pos);
+                          return (
+                            <TouchableOpacity
+                              key={pos}
+                              style={[styles.posPill, selected && styles.posPillSelected]}
+                              onPress={() => {
+                                if (selected) {
+                                  setEditPositions(editPositions.filter((p) => p !== pos));
+                                } else {
+                                  setEditPositions([...editPositions, pos]);
+                                }
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.posPillText, selected && styles.posPillTextSelected]}>
+                                {pos}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      <Text style={styles.formLabel}>Language</Text>
+                      <View style={styles.langSegmentControl}>
+                        <TouchableOpacity
+                          style={[styles.langSegmentBtn, editLanguage === 'English' && styles.langSegmentBtnActive]}
+                          onPress={() => setEditLanguage('English')}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.langSegmentText, editLanguage === 'English' && styles.langSegmentTextActive]}>
+                            English
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.langSegmentBtn, editLanguage === 'Tagalog' && styles.langSegmentBtnActive]}
+                          onPress={() => setEditLanguage('Tagalog')}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.langSegmentText, editLanguage === 'Tagalog' && styles.langSegmentTextActive]}>
+                            Tagalog
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
-                    <Text style={styles.formLabel}>Language</Text>
-                    <View style={styles.langSegmentControl}>
-                      <TouchableOpacity
-                        style={[styles.langSegmentBtn, editLanguage === 'English' && styles.langSegmentBtnActive]}
-                        onPress={() => setEditLanguage('English')}
-                      >
-                        <Text style={[styles.langSegmentText, editLanguage === 'English' && styles.langSegmentTextActive]}>
-                          English
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.langSegmentBtn, editLanguage === 'Tagalog' && styles.langSegmentBtnActive]}
-                        onPress={() => setEditLanguage('Tagalog')}
-                      >
-                        <Text style={[styles.langSegmentText, editLanguage === 'Tagalog' && styles.langSegmentTextActive]}>
-                          Tagalog
-                        </Text>
-                      </TouchableOpacity>
+                    {/* Card 2: Guidance & Instructions */}
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoCardHeader}>
+                        <View style={styles.infoIconWrapPeach}>
+                          <BookOpen size={16} color={colors.peachAccent} />
+                        </View>
+                        <View>
+                          <Text style={styles.infoCardTitle}>Instructions & Guidance</Text>
+                          <Text style={styles.infoCardSub}>Student prompts and clinical articulatory tips</Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.formLabel}>Instructions for Student/Facilitator</Text>
+                      <TextInput
+                        style={[styles.formInput, { height: 72, textAlignVertical: 'top', paddingTop: 8 }]}
+                        multiline
+                        value={editInstructions}
+                        onChangeText={setEditInstructions}
+                        placeholder="Listen to the model. Say each target slowly, then try it on your own."
+                        placeholderTextColor={colors.textMuted}
+                      />
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 4 }}>
+                        <Text style={[styles.formLabel, { marginTop: 0, marginBottom: 0 }]}>Articulatory Guide</Text>
+                        <View style={styles.guideBadge}>
+                          <Text style={styles.guideBadgeText}>Teacher Guidance</Text>
+                        </View>
+                      </View>
+                      <TextInput
+                        style={[styles.formInput, { height: 72, textAlignVertical: 'top', paddingTop: 8 }]}
+                        multiline
+                        value={editArticulatoryGuide}
+                        onChangeText={setEditArticulatoryGuide}
+                        placeholder="Pull tongue tip back, lips slightly relaxed."
+                        placeholderTextColor={colors.textMuted}
+                      />
                     </View>
 
-                    <Text style={styles.formLabel}>Instructions for Student/Facilitator</Text>
-                    <TextInput
-                      style={[styles.formInput, { height: 60 }]}
-                      multiline
-                      value={editInstructions}
-                      onChangeText={setEditInstructions}
-                    />
-
-                    <Text style={styles.formLabel}>Articulatory Guide</Text>
-                    <TextInput
-                      style={[styles.formInput, { height: 60 }]}
-                      multiline
-                      value={editArticulatoryGuide}
-                      onChangeText={setEditArticulatoryGuide}
-                    />
-
+                    {/* Actions */}
                     <View style={styles.previewActionsRow}>
                       <TouchableOpacity
                         style={styles.outlineBtn}
-                        onPress={() => triggerToast('Draft saved successfully!')}
+                        onPress={() => triggerToast('Draft saving is not available in the backend.')}
+                        activeOpacity={0.7}
                       >
+                        <FileText size={15} color={colors.text} style={{ marginRight: 6 }} />
                         <Text style={styles.outlineBtnText}>Save Draft</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.solidBlueBtn}
-                        onPress={() => setEditStep(2)}
+                        onPress={() => {
+                          if (!editTitle.trim()) {
+                            triggerToast('Please provide an activity title before continuing.');
+                            return;
+                          }
+                          if (editPositions.length === 0) {
+                            triggerToast('Please select at least one word position (Initial, Medial, or Final).');
+                            return;
+                          }
+                          setEditStep(2);
+                        }}
+                        activeOpacity={0.7}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={styles.solidBlueBtnText}>Next Step </Text>
-                          <ChevronRight size={14} color="#FFFFFF" />
-                        </View>
+                        <Text style={styles.solidBlueBtnText}>Next Step</Text>
+                        <ChevronRight size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1795,459 +2393,682 @@ export default function TeacherDashboardScreen() {
                 {/* Step 2: Activity Content */}
                 {editStep === 2 && (
                   <View>
-                    <Text style={styles.formLabel}>Word origin</Text>
-                    <View style={styles.wordOriginRadioRow}>
-                      <TouchableOpacity
-                        style={[styles.originCard, wordOrigin === 'wordBank' && styles.originCardActive]}
-                        onPress={() => setWordOrigin('wordBank')}
-                      >
-                        <View style={[styles.radioDot, wordOrigin === 'wordBank' && styles.radioDotActive]} />
-                        <View style={{ marginLeft: 8 }}>
-                          <Text style={styles.originTitle}>Word Bank</Text>
-                          <Text style={styles.originSub}>Pick from the library</Text>
+                    {/* Card 1: Content Source & Positions */}
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoCardHeader}>
+                        <View style={styles.infoIconWrap}>
+                          <Layers size={16} color="#0284C7" />
                         </View>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.originCard, wordOrigin === 'custom' && styles.originCardActive]}
-                        onPress={() => setWordOrigin('custom')}
-                      >
-                        <View style={[styles.radioDot, wordOrigin === 'custom' && styles.radioDotActive]} />
-                        <View style={{ marginLeft: 8 }}>
-                          <Text style={styles.originTitle}>Custom Word</Text>
-                          <Text style={styles.originSub}>Type your own</Text>
+                        <View>
+                          <Text style={styles.infoCardTitle}>Word Origin & Target Counts</Text>
+                          <Text style={styles.infoCardSub}>Select source and practice distribution</Text>
                         </View>
-                      </TouchableOpacity>
-                    </View>
+                      </View>
 
-                    {/* Word Bank Sub-flow */}
-                    {wordOrigin === 'wordBank' && (
-                      <>
-                        <View style={styles.posCountersRow}>
-                          {(['Initial', 'Medial', 'Final'] as const).map((tab) => (
+                      <View style={styles.wordOriginRadioRow}>
+                        <TouchableOpacity
+                          style={[styles.originCard, wordOrigin === 'wordBank' && styles.originCardActive]}
+                          onPress={() => setWordOrigin('wordBank')}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.radioDot, wordOrigin === 'wordBank' && styles.radioDotActive]} />
+                          <View style={{ marginLeft: 8 }}>
+                            <Text style={styles.originTitle}>Word Bank</Text>
+                            <Text style={{ fontSize: 11, color: colors.textSub }}>Pick from the library</Text>
+                          </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.originCard, wordOrigin === 'custom' && styles.originCardActive]}
+                          onPress={() => setWordOrigin('custom')}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.radioDot, wordOrigin === 'custom' && styles.radioDotActive]} />
+                          <View style={{ marginLeft: 8 }}>
+                            <Text style={styles.originTitle}>Custom Word</Text>
+                            <Text style={{ fontSize: 11, color: colors.textSub }}>Type your own</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* 3 Position Boxes Side by Side */}
+                      <View style={styles.posCountersRow}>
+                        {(['Initial', 'Medial', 'Final'] as const).map((tab) => {
+                          const isInitial = tab === 'Initial';
+                          return (
                             <TouchableOpacity
                               key={tab}
-                              style={[styles.posCounterBox, wordBankPositionTab === tab && styles.posCounterBoxActive]}
+                              style={[styles.posCounterBox, isInitial && styles.posCounterBoxActive]}
                               onPress={() => setWordBankPositionTab(tab)}
+                              activeOpacity={0.7}
                             >
-                              <Text style={styles.posCounterLabel}>{tab}</Text>
-                              <Text style={styles.posCounterValue}>{tab === 'Initial' ? `${checkedWords.length}/5` : '0/5'}</Text>
+                              <Text style={[styles.posCounterLabel, isInitial && { color: colors.peachText }]}>{tab}</Text>
+                              <Text style={[styles.posCounterValue, isInitial && { color: colors.peachText }]}>
+                                {isInitial ? `${checkedWords.length || 2}/5` : '0/5'}
+                              </Text>
                             </TouchableOpacity>
-                          ))}
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    {/* Card 2: Word Selection */}
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoCardHeader}>
+                        <View style={styles.infoIconWrap}>
+                          <BookOpen size={16} color="#0284C7" />
+                        </View>
+                        <View>
+                          <Text style={styles.infoCardTitle}>Word Selection</Text>
+                          <Text style={styles.infoCardSub}>Check words to include in this practice</Text>
+                        </View>
+                      </View>
+
+                      {/* Word Bank Sub-flow */}
+                      {wordOrigin === 'wordBank' && (
+                        <>
+                          <View style={styles.wordBankSearchWrapper}>
+                            <Search size={16} color="#94A3B8" style={{ marginRight: 6 }} />
+                            <TextInput
+                              style={styles.searchInput}
+                              placeholder="Search existing from word bank..."
+                              placeholderTextColor="#94A3B8"
+                              value={wordBankSearch}
+                              onChangeText={setWordBankSearch}
+                            />
+                          </View>
+
+                          <View style={styles.wordChecklistContainer}>
+                            <ScrollView style={{ maxHeight: 180 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                              {wordBankEntries.slice(0, 6).map((item) => {
+                                const w = item.text;
+                                const isChecked = checkedWords.includes(w);
+                                return (
+                                  <TouchableOpacity
+                                    key={item.id}
+                                    style={styles.wordCheckItem}
+                                    onPress={() => toggleWordCheck(w)}
+                                    activeOpacity={0.7}
+                                  >
+                                    <View style={[styles.checkboxSquare, isChecked && styles.checkboxSquareActive]}>
+                                      {isChecked && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
+                                    </View>
+                                    <Text style={styles.checkWordLabel}>{w}</Text>
+                                    <View style={[styles.targetWordPosBadge, { marginLeft: 'auto' }]}>
+                                      <Text style={styles.targetWordPosText}>{item.position || 'Initial'}</Text>
+                                    </View>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </ScrollView>
+                          </View>
+
+                          <View style={styles.selectedChipsWrap}>
+                            {checkedWords.map((w) => (
+                              <View key={w} style={styles.removableChip}>
+                                <Text style={styles.removableChipText}>{w}</Text>
+                                <TouchableOpacity
+                                  onPress={() => toggleWordCheck(w)}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  style={{ marginLeft: 4 }}
+                                >
+                                  <X size={11} color={colors.peachText} />
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        </>
+                      )}
+
+                      {/* Custom Word Sub-flow */}
+                      {wordOrigin === 'custom' && (
+                        <>
+                          <Text style={styles.formLabel}>Custom Word</Text>
+                          <View style={styles.customWordInputRow}>
+                            <TextInput
+                              style={[styles.formInput, { flex: 1, marginBottom: 0, marginRight: 8 }]}
+                              placeholder="Add a custom word"
+                              placeholderTextColor={colors.textMuted}
+                              value={newCustomWordInput}
+                              onChangeText={setNewCustomWordInput}
+                            />
+                            <TouchableOpacity style={styles.addWordBtn} onPress={handleAddCustomWord} activeOpacity={0.7}>
+                              <Text style={styles.addWordBtnText}>ADD</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <View style={styles.selectedChipsWrap}>
+                            {customWords.map((cw) => (
+                              <View key={cw} style={styles.removableChip}>
+                                <Text style={styles.removableChipText}>{cw}</Text>
+                                <TouchableOpacity
+                                  onPress={() => setCustomWords(customWords.filter((x) => x !== cw))}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  style={{ marginLeft: 4 }}
+                                >
+                                  <X size={11} color={colors.peachText} />
+                                </TouchableOpacity>
+                              </View>
+                            ))}
+                          </View>
+                        </>
+                      )}
+                    </View>
+
+                    {/* Card 3: Sentence & Phrase Modeling (for Phrases and Sentences levels) */}
+                    {(editPracticeLevel === 'Phrases' || editPracticeLevel === 'Sentences') && (
+                      <View style={styles.infoCard}>
+                        <View style={styles.infoCardHeader}>
+                          <View style={styles.infoIconWrap}>
+                            <Volume2 size={16} color="#0284C7" />
+                          </View>
+                          <View>
+                            <Text style={styles.infoCardTitle}>
+                              {editPracticeLevel === 'Sentences' ? 'Target Sentences Modeling' : 'Target Phrases Modeling'}
+                            </Text>
+                            <Text style={styles.infoCardSub}>Provide modeled phrase or sentence for each word</Text>
+                          </View>
                         </View>
 
-                        <Text style={styles.formLabel}>Word bank - {wordBankPositionTab}</Text>
-                        <View style={styles.wordBankSearchWrapper}>
-                          <Search size={16} color="#94A3B8" style={{ marginRight: 6 }} />
-                          <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search existing from word bank..."
-                            placeholderTextColor="#94A3B8"
-                            value={wordBankSearch}
-                            onChangeText={setWordBankSearch}
-                          />
-                        </View>
-
-                        <View style={styles.wordChecklistContainer}>
-                          {wordBankEntries.map((item) => {
-                            const w = item.text;
-                            const isChecked = checkedWords.includes(w);
-                            return (
-                              <TouchableOpacity
-                                key={item.id}
-                                style={styles.wordCheckItem}
-                                onPress={() => toggleWordCheck(w)}
-                              >
-                                <View style={[styles.checkboxSquare, isChecked && styles.checkboxSquareActive]}>
-                                  {isChecked && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
-                                </View>
-                                <Text style={styles.checkWordLabel}>{w}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-
-                        <View style={styles.selectedChipsWrap}>
-                          {checkedWords.map((w) => (
-                            <View key={w} style={styles.removableChip}>
-                              <Text style={styles.removableChipText}>{w}</Text>
+                        {(checkedWords.length > 0 ? checkedWords : ['rabbit', 'red', 'run']).map((w) => (
+                          <View key={w} style={styles.targetWordPhraseCard}>
+                            <View style={styles.targetWordPhraseHeader}>
+                              <View style={styles.targetWordPill}>
+                                <Volume2 size={12} color={colors.peachAccent} style={{ marginRight: 4 }} />
+                                <Text style={styles.targetWordPillText}>{w}</Text>
+                              </View>
                               <TouchableOpacity
                                 onPress={() => toggleWordCheck(w)}
                                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                style={{ marginLeft: 4 }}
                               >
-                                <X size={11} color="#FDBA74" />
+                                <Minus size={14} color={colors.textSub} />
                               </TouchableOpacity>
                             </View>
-                          ))}
-                        </View>
-
-                        {checkedWords.map((w) => (
-                          <View key={w} style={styles.wordPhraseBlock}>
-                            <View style={styles.wordPhraseHeader}>
-                              <Text style={styles.wordPhraseTitle}>{w}</Text>
-                              <Minus size={14} color="#94A3B8" />
-                            </View>
                             <TextInput
-                              style={styles.phraseInput}
+                              style={[styles.formInput, { marginBottom: 0 }]}
                               value={wordPhrases[w] || ''}
                               onChangeText={(txt) => setWordPhrases({ ...wordPhrases, [w]: txt })}
-                              placeholder={`Sentence for ${w}...`}
+                              placeholder={`Enter ${editPracticeLevel.toLowerCase()} for "${w}"...`}
+                              placeholderTextColor={colors.textMuted}
                             />
                           </View>
                         ))}
-                      </>
+                      </View>
                     )}
 
-                    {/* Custom Word Sub-flow */}
-                    {wordOrigin === 'custom' && (
-                      <>
-                        <Text style={styles.formLabel}>Custom Word</Text>
-                        <View style={styles.customWordInputRow}>
-                          <TextInput
-                            style={[styles.formInput, { flex: 1, marginBottom: 0, marginRight: 8 }]}
-                            placeholder="Add a custom word"
-                            value={newCustomWordInput}
-                            onChangeText={setNewCustomWordInput}
-                          />
-                          <TouchableOpacity style={styles.addWordBtn} onPress={handleAddCustomWord}>
-                            <Text style={styles.addWordBtnText}>ADD</Text>
-                          </TouchableOpacity>
+                    {/* Card 4: Media & Audio Materials */}
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoCardHeader}>
+                        <View style={styles.infoIconWrap}>
+                          <Video size={16} color="#0284C7" />
                         </View>
+                        <View>
+                          <Text style={styles.infoCardTitle}>Visual & Audio Materials</Text>
+                          <Text style={styles.infoCardSub}>Upload videos and test audio model</Text>
+                        </View>
+                      </View>
 
-                        <View style={styles.selectedChipsWrap}>
-                          {customWords.map((cw) => (
-                            <View key={cw} style={styles.removableChip}>
-                              <Text style={styles.removableChipText}>{cw}</Text>
-                              <TouchableOpacity
-                                onPress={() => setCustomWords(customWords.filter((x) => x !== cw))}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                style={{ marginLeft: 4 }}
-                              >
-                                <X size={11} color="#FDBA74" />
-                              </TouchableOpacity>
-                            </View>
+                      <Text style={styles.formLabel}>Visual Material</Text>
+                      <View style={styles.uploadDashedBox}>
+                        <Upload size={22} color="#0284C7" style={{ marginBottom: 6 }} />
+                        <Text style={styles.uploadMainText}>Upload or browse files here</Text>
+                        <Text style={styles.uploadSubText}>MP4 or MOV, up to 20 MB per file</Text>
+                      </View>
+
+                      <Text style={[styles.formLabel, { marginTop: 14 }]}>Preview Audio Model</Text>
+                      <View style={styles.audioModelCard}>
+                        <View style={styles.audioPlayCircle}>
+                          <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
+                        </View>
+                        <View style={{ flex: 1, marginHorizontal: 12 }}>
+                          <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
+                          <Text style={styles.audioModelSub}>Demo Playback · 0:08</Text>
+                        </View>
+                        <View style={styles.audioWaveformRow}>
+                          {[12, 22, 14, 26, 18, 10, 20].map((h, i) => (
+                            <View key={i} style={[styles.audioWaveBar, { height: h }]} />
                           ))}
                         </View>
-
-                        <TouchableOpacity
-                          style={styles.checkboxRow}
-                          onPress={() => setSaveToWordBankChecked(!saveToWordBankChecked)}
-                        >
-                          <View style={[styles.checkboxSquare, saveToWordBankChecked && styles.checkboxSquareActive]}>
-                            {saveToWordBankChecked && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
-                          </View>
-                          <Text style={styles.checkboxRowLabel}>Save to Word Bank</Text>
-                        </TouchableOpacity>
-
-                        <View style={styles.formRowTwoCol}>
-                          <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={styles.formLabel}>Target Sound</Text>
-                            <View style={styles.dropdownSelector}>
-                              <Text style={styles.dropdownValue}>/r/</Text>
-                              <ChevronDown size={14} color={colors.text} />
-                            </View>
-                          </View>
-                          <View style={{ flex: 1, marginLeft: 8 }}>
-                            <Text style={styles.formLabel}>Target Position</Text>
-                            <View style={styles.dropdownSelector}>
-                              <Text style={styles.dropdownValue}>Initial</Text>
-                              <ChevronDown size={14} color={colors.text} />
-                            </View>
-                          </View>
-                        </View>
-
-                        <Text style={styles.formLabel}>Practice Content Builder</Text>
-                        <Text style={styles.subtextSmall}>
-                          Target words are vocabulary references. Write the exact phrases the child will say.
-                        </Text>
-                        <TextInput
-                          style={[styles.formInput, { height: 50, marginTop: 6 }]}
-                          multiline
-                          value="The rice is rich."
-                          editable={false}
-                        />
-
-                        <View style={styles.phraseBuilderRow}>
-                          <TouchableOpacity style={styles.symbolBtn} onPress={handleAddCustomPhrase}>
-                            <Plus size={16} color={colors.text} />
-                          </TouchableOpacity>
-                          <TextInput
-                            style={[styles.formInput, { flex: 1, marginHorizontal: 8, marginBottom: 0 }]}
-                            placeholder="Add another phrase..."
-                            value={newPhraseInput}
-                            onChangeText={setNewPhraseInput}
-                          />
-                          <TouchableOpacity style={styles.symbolBtn}>
-                            <Minus size={16} color={colors.text} />
-                          </TouchableOpacity>
-                        </View>
-
-                        <TouchableOpacity style={styles.savePhraseBtn} onPress={handleAddCustomPhrase}>
-                          <Text style={styles.savePhraseBtnText}>Save Phrase</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-
-                    <Text style={styles.formLabel}>Visual Material</Text>
-                    <View style={styles.uploadDashedBox}>
-                      <Upload size={32} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginBottom: 6 }} />
-                      <Text style={styles.uploadMainText}>Upload or browse files here</Text>
-                      <Text style={styles.uploadSubText}>MP4 or MOV, up to 100MB per file</Text>
-                    </View>
-
-                    <Text style={styles.formLabel}>Preview Audio Model</Text>
-                    <View style={styles.audioModelCard}>
-                      <View style={styles.audioPlayCircle}>
-                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-                      </View>
-                      <View style={{ flex: 1, marginHorizontal: 12 }}>
-                        <Text style={styles.audioModelTitle}>Sample Audio Model</Text>
-                        <Text style={styles.audioModelSub}>Demo Playback · 0:08</Text>
-                      </View>
-                      <View style={styles.audioWaveformRow}>
-                        {[12, 22, 14, 26, 18, 10, 20].map((h, i) => (
-                          <View key={i} style={[styles.audioWaveBar, { height: h }]} />
-                        ))}
                       </View>
                     </View>
 
-                    <TouchableOpacity
-                      style={styles.continueBtn}
-                      onPress={() => setEditStep(3)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.continueBtnText}>Continue</Text>
-                    </TouchableOpacity>
+                    {/* Actions */}
+                    <View style={styles.previewActionsRow}>
+                      <TouchableOpacity
+                        style={styles.outlineBtn}
+                        onPress={() => setEditStep(1)}
+                        activeOpacity={0.7}
+                      >
+                        <ChevronLeft size={16} color={colors.text} style={{ marginRight: 4 }} />
+                        <Text style={styles.outlineBtnText}>Back</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.solidBlueBtn}
+                        onPress={() => {
+                          const totalWords = checkedWords.length + customWords.length;
+                          if (totalWords === 0) {
+                            triggerToast('Please select or add at least one practice word.');
+                            return;
+                          }
+                          setEditStep(3);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.solidBlueBtnText}>Next: Preview</Text>
+                        <ChevronRight size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
 
                 {/* Step 3: Preview & Save */}
-                {editStep === 3 && (
-                  <View>
-                    <View style={styles.bigPhonemeHero}>
-                      <Text style={styles.bigHeroSound}>{editTargetSound}</Text>
-                      <Text style={styles.bigHeroTitle}>{editTitle}</Text>
-                      <Text style={styles.bigHeroSubtitle}>{editPracticeLevel} • Initial position • {editLanguage}</Text>
-                    </View>
-
-                    <Text style={styles.previewSectionTitle}>Instructions</Text>
-                    <Text style={styles.previewSectionBody}>{editInstructions}</Text>
-
-                    <Text style={styles.previewSectionTitle}>Articulatory Guide</Text>
-                    <Text style={styles.previewSectionBody}>{editArticulatoryGuide}</Text>
-
-                    <Text style={styles.previewSectionTitle}>Practice Content</Text>
-                    <View style={styles.wordPillsRow}>
-                      {checkedWords.map((w) => (
-                        <View key={w} style={styles.wordPillPeach}>
-                          <Text style={styles.wordPillText}>{w}</Text>
+                {editStep === 3 && (() => {
+                  const previewSoundColors = getCategoryLevelColors(editPracticeLevel, isDark);
+                  return (
+                    <View style={styles.previewContainer}>
+                      {/* Hero Activity Card */}
+                      <View style={[styles.heroActivityCard, { borderColor: isDark ? previewSoundColors.bg : colors.border }]}>
+                        <View style={styles.heroActivityTopRow}>
+                          <View
+                            style={[
+                              styles.heroSoundBadgePeach,
+                              {
+                                backgroundColor: previewSoundColors.bg,
+                                borderColor: isDark ? previewSoundColors.color : colors.border,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.heroSoundBadgeText, { color: previewSoundColors.color }]}>
+                              {editTargetSound}
+                            </Text>
+                            <Text style={[styles.heroSoundWaveText, { color: previewSoundColors.color }]}>≋</Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 14 }}>
+                            <View style={styles.heroTagsRow}>
+                              <View style={[styles.heroLevelBadge, { backgroundColor: previewSoundColors.bg, borderColor: previewSoundColors.color }]}>
+                                <Text style={[styles.heroLevelBadgeText, { color: previewSoundColors.color, fontWeight: '700' }]}>
+                                  {editPracticeLevel}
+                                </Text>
+                              </View>
+                              <View style={styles.heroLanguageBadge}>
+                                <Text style={styles.heroLanguageBadgeText}>{editLanguage}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.heroActivityTitle}>{editTitle || currentActivity.title || 'Untitled Activity'}</Text>
+                          </View>
                         </View>
-                      ))}
-                    </View>
-                    <Text style={[styles.phraseBulletText, { marginTop: 8 }]}>The red rabbit runs.</Text>
 
-                    <Text style={styles.previewSectionTitle}>Preview Audio Model</Text>
-                    <View style={styles.audioModelCard}>
-                      <View style={styles.audioPlayCircle}>
-                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
+                        <View style={styles.heroCardDivider} />
+
+                        {/* 3-Column Stats Row */}
+                        <View style={styles.heroMetaRow}>
+                          <View style={styles.heroMetaItem}>
+                            <Text style={styles.heroMetaLabel}>Position</Text>
+                            <Text style={styles.heroMetaValue}>
+                              {editPositions[0] || 'Initial'}
+                            </Text>
+                          </View>
+                          <View style={styles.heroMetaDivider} />
+                          <View style={styles.heroMetaItem}>
+                            <Text style={styles.heroMetaLabel}>Sound Target</Text>
+                            <Text style={[styles.heroMetaValue, { color: previewSoundColors.color }]}>
+                              {editTargetSound}
+                            </Text>
+                          </View>
+                          <View style={styles.heroMetaDivider} />
+                          <View style={styles.heroMetaItem}>
+                            <Text style={styles.heroMetaLabel}>Word Targets</Text>
+                            <Text style={styles.heroMetaValue}>{checkedWords.length + customWords.length || 3} words</Text>
+                          </View>
+                        </View>
                       </View>
-                      <View style={{ flex: 1, marginHorizontal: 12 }}>
-                        <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
-                        <Text style={styles.audioModelSub}>Demo Playback · 0:08</Text>
+
+                      {/* Instructions Card */}
+                      <View style={styles.infoCard}>
+                        <View style={styles.infoCardHeader}>
+                          <View style={styles.infoIconWrap}>
+                            <BookOpen size={16} color="#0284C7" />
+                          </View>
+                          <Text style={styles.infoCardTitle}>Instructions</Text>
+                        </View>
+                        <Text style={styles.infoCardBody}>
+                          {editInstructions || 'Listen to the model. Say each target slowly, then try it on your own.'}
+                        </Text>
                       </View>
-                      <View style={styles.audioWaveformRow}>
-                        {[12, 22, 14, 26, 18, 10, 20].map((h, i) => (
-                          <View key={i} style={[styles.audioWaveBar, { height: h }]} />
-                        ))}
+
+                      {/* Articulatory Guide Card */}
+                      <View style={styles.guideCardPeach}>
+                        <View style={styles.infoCardHeader}>
+                          <View style={styles.infoIconWrapPeach}>
+                            <Sparkles size={16} color={colors.peachAccent} />
+                          </View>
+                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={[styles.infoCardTitle, { color: colors.peachText }]}>Articulatory Guide</Text>
+                            <View style={styles.guideBadge}>
+                              <Text style={styles.guideBadgeText}>Teacher Guidance</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <Text style={[styles.infoCardBody, { color: colors.peachText }]}>
+                          {editArticulatoryGuide || 'Pull tongue tip back, lips slightly relaxed.'}
+                        </Text>
+                      </View>
+
+                      {/* Practice Content Card */}
+                      <View style={styles.infoCard}>
+                        <View style={styles.infoCardHeader}>
+                          <View style={styles.infoIconWrap}>
+                            <Layers size={16} color="#0284C7" />
+                          </View>
+                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={styles.infoCardTitle}>Practice Content</Text>
+                            <View style={[styles.guideBadge, { backgroundColor: previewSoundColors.bg }]}>
+                              <Text style={[styles.guideBadgeText, { color: previewSoundColors.color, fontWeight: '700' }]}>
+                                {checkedWords.length + customWords.length || 3} targets
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Initial Position Content */}
+                        <View style={styles.posBlockCard}>
+                          <View style={styles.posBlockHead}>
+                            <View style={[styles.posBadgePeach, { backgroundColor: previewSoundColors.bg, borderColor: previewSoundColors.color }]}>
+                              <Text style={[styles.posBadgePeachText, { color: previewSoundColors.color, fontWeight: '700' }]}>Initial</Text>
+                            </View>
+                            <Text style={styles.posBlockCountText}>
+                              {checkedWords.length + customWords.length || 3} targets
+                            </Text>
+                          </View>
+
+                          <View style={styles.wordPillsRow}>
+                            {(checkedWords.length > 0 ? checkedWords : currentActivity.initialWords || []).map((w) => (
+                              <View
+                                key={w}
+                                style={[
+                                  styles.wordPillPeachWithIcon,
+                                  { backgroundColor: previewSoundColors.bg, borderColor: previewSoundColors.color },
+                                ]}
+                              >
+                                <Volume2
+                                  size={12}
+                                  color={previewSoundColors.color}
+                                  style={{ marginRight: 4 }}
+                                />
+                                <Text
+                                  style={[
+                                    styles.wordPillText,
+                                    { color: previewSoundColors.color, fontWeight: '700' },
+                                  ]}
+                                >
+                                  {w}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+
+                          {(editPracticeLevel === 'Phrases' || editPracticeLevel === 'Sentences') &&
+                            (checkedWords.length > 0 ? checkedWords : currentActivity.initialWords || []).map((w, i) =>
+                              wordPhrases[w] ? (
+                                <View key={i} style={styles.phraseRowCard}>
+                                  <Text style={[styles.phraseBulletDot, { color: previewSoundColors.color }]}>•</Text>
+                                  <Text style={[styles.infoCardBody, { flex: 1, color: colors.text }]}>
+                                    {wordPhrases[w]}
+                                  </Text>
+                                </View>
+                              ) : null
+                            )}
+                        </View>
+
+                        {/* Medial Position (Subtle in-card summary) */}
+                        <View style={styles.posBlockCardSubtle}>
+                          <View style={styles.posBlockHead}>
+                            <View style={styles.posBadgeSubtle}>
+                              <Text style={styles.posBadgeSubtleText}>Medial</Text>
+                            </View>
+                            <Text style={styles.posBlockCountSubtle}>0 targets</Text>
+                          </View>
+                          <Text style={[styles.infoCardBody, { fontSize: 12, fontStyle: 'italic', color: colors.textMuted }]}>
+                            No targets in this position yet.
+                          </Text>
+                        </View>
+
+                        {/* Final Position (Subtle in-card summary) */}
+                        <View style={styles.posBlockCardSubtle}>
+                          <View style={styles.posBlockHead}>
+                            <View style={styles.posBadgeSubtle}>
+                              <Text style={styles.posBadgeSubtleText}>Final</Text>
+                            </View>
+                            <Text style={styles.posBlockCountSubtle}>0 targets</Text>
+                          </View>
+                          <Text style={[styles.infoCardBody, { fontSize: 12, fontStyle: 'italic', color: colors.textMuted }]}>
+                            No targets in this position yet.
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Audio Pronunciation Model Card */}
+                      <View style={styles.infoCard}>
+                        <View style={styles.infoCardHeader}>
+                          <View style={styles.infoIconWrap}>
+                            <Volume2 size={16} color="#0284C7" />
+                          </View>
+                          <Text style={styles.infoCardTitle}>Audio Pronunciation Model</Text>
+                        </View>
+                        <View style={styles.audioModelCard}>
+                          <View style={styles.audioPlayCircle}>
+                            <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
+                          </View>
+                          <View style={{ flex: 1, marginHorizontal: 12 }}>
+                            <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
+                            <Text style={styles.audioModelSub}>Demo Playback · 0:08</Text>
+                          </View>
+                          <View style={styles.audioWaveformRow}>
+                            {[12, 22, 14, 26, 18, 10, 20].map((h, i) => (
+                              <View key={i} style={[styles.audioWaveBar, { height: h }]} />
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Visual Material Card */}
+                      <View style={styles.infoCard}>
+                        <View style={styles.infoCardHeader}>
+                          <View style={styles.infoIconWrap}>
+                            <Video size={16} color="#0284C7" />
+                          </View>
+                          <Text style={styles.infoCardTitle}>Visual Material</Text>
+                        </View>
+                        <View style={styles.mediaBox}>
+                          <View style={styles.mediaIconWrap}>
+                            <Play size={20} color="#0284C7" fill="#0284C7" style={{ marginLeft: 2 }} />
+                          </View>
+                          <Text style={styles.mediaTitle}>Articulation Video Cue</Text>
+                          <Text style={styles.mediaSub}>Speech model video cue ready for playback</Text>
+                        </View>
+                      </View>
+
+                      {/* Actions */}
+                      <View style={styles.previewActionsRow}>
+                        <TouchableOpacity
+                          style={styles.outlineBtn}
+                          onPress={() => setEditStep(2)}
+                          activeOpacity={0.7}
+                        >
+                          <ChevronLeft size={16} color={colors.text} style={{ marginRight: 4 }} />
+                          <Text style={styles.outlineBtnText}>Back</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.solidBlueBtn}
+                          onPress={handleSaveEditedActivity}
+                          activeOpacity={0.7}
+                        >
+                          <Check size={16} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 6 }} />
+                          <Text style={styles.solidBlueBtnText}>Save Activity</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
-
-                    <Text style={styles.previewSectionTitle}>Visual Material</Text>
-                    <View style={styles.videoPlaceholderBox}>
-                      <View style={styles.videoPlayCircle}>
-                        <Play size={20} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-                      </View>
-                    </View>
-
-                    <View style={styles.previewActionsRow}>
-                      <TouchableOpacity
-                        style={styles.outlineBtn}
-                        onPress={() => setEditStep(2)}
-                      >
-                        <Text style={styles.outlineBtnText}>Back</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.solidBlueBtn}
-                        onPress={() => {
-                          setActivitiesView('library');
-                          triggerToast('Activity saved successfully!');
-                        }}
-                      >
-                        <Text style={styles.solidBlueBtnText}>Save Activity</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
+                  );
+                })()}
               </View>
             )}
 
             {/* VIEW 4: ASSIGN ACTIVITY */}
-            {activitiesView === 'assign' && (
+            {activitiesView === 'assign' && (() => {
+              return (
               <View style={styles.assignScreenContainer}>
-                <Text style={styles.pageTitle}>Assign Activity</Text>
-
-                <Text style={styles.formLabel}>Student</Text>
-                <View style={styles.dropdownSelector}>
-                  <Text style={styles.dropdownValue}>{assignStudent}</Text>
-                  <ChevronDown size={16} color={colors.text} />
+                <View style={styles.assignHeaderBlock}>
+                  <Text style={styles.pageTitle}>Assign Activity</Text>
+                  <Text style={styles.pageSubtitle}>Select students and schedule this activity for purposeful practice.</Text>
                 </View>
 
-                <Text style={styles.formLabel}>Activity</Text>
-                <View style={styles.dropdownSelector}>
-                  <Text style={styles.dropdownValue}>{assignActivityName}</Text>
-                  <ChevronDown size={16} color={colors.text} />
+                {/* Card 1: Assignment Target */}
+                <View style={styles.infoCard}>
+                  <View style={styles.infoCardHeader}>
+                    <View style={styles.infoIconWrap}>
+                      <Users size={16} color="#0284C7" />
+                    </View>
+                    <View>
+                      <Text style={styles.infoCardTitle}>Assignment Target</Text>
+                      <Text style={styles.infoCardSub}>Choose recipient student and activity</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.formLabel}>Students</Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Select students"
+                    style={styles.dropdownSelector}
+                    onPress={() => setShowAssignStudentDropdown(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                      <Users size={15} color={colors.textMuted} style={{ marginRight: 8 }} />
+                      <Text style={styles.dropdownValue} numberOfLines={1}>{studentDropdownSummary}</Text>
+                    </View>
+                    <ChevronDown size={16} color={colors.text} />
+                  </TouchableOpacity>
+
+                  <Text style={[styles.formLabel, { marginTop: 8 }]}>Activity</Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Select activity"
+                    style={styles.dropdownSelector}
+                    onPress={() => setShowAssignActivityDropdown(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                      <Layers size={15} color={colors.textMuted} style={{ marginRight: 8 }} />
+                      <Text style={styles.dropdownValue} numberOfLines={1}>{selectedAssignActivity?.title ?? 'Select activity'}</Text>
+                    </View>
+                    <ChevronDown size={16} color={colors.text} />
+                  </TouchableOpacity>
                 </View>
 
+                {/* Card 2: Activity Preview Accordion */}
                 <TouchableOpacity
-                  style={styles.accordionHeader}
+                  style={[styles.accordionHeader, { borderColor: colors.peachCardBorder, backgroundColor: colors.peachCardBg }]}
                   onPress={() => setAssignPreviewExpanded(!assignPreviewExpanded)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.accordionTitle}>Activity Preview</Text>
-                  {assignPreviewExpanded ? <ChevronUp size={16} color="#EA580C" /> : <ChevronDown size={16} color="#EA580C" />}
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={[styles.heroSoundBadgePeach, { width: 34, height: 34, borderRadius: 8, marginRight: 10 }]}>
+                      <Text style={[styles.heroSoundBadgeText, { fontSize: 14 }]}>{selectedAssignActivity?.sound ?? '?'}</Text>
+                    </View>
+                    <View>
+                      <Text style={[styles.accordionTitle, { color: colors.peachText }]}>Activity Preview</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSub }}>{selectedAssignActivity ? selectedAssignActivity.title + ' - ' + selectedAssignActivity.category : 'Choose an activity to preview'}</Text>
+                    </View>
+                  </View>
+                  {assignPreviewExpanded ? (
+                    <ChevronUp size={18} color={colors.peachAccent} />
+                  ) : (
+                    <ChevronDown size={18} color={colors.peachAccent} />
+                  )}
                 </TouchableOpacity>
 
-                {assignPreviewExpanded && (
-                  <View style={styles.expandedAccordionCard}>
-                    <Text style={styles.previewSectionTitle}>Practice content</Text>
-                    <View style={styles.practiceContentCard}>
-                      <View style={styles.practiceContentHeader}>
-                        <Text style={styles.practicePositionLabel}>Initial</Text>
-                        <View style={styles.targetCountBadge}>
-                          <Text style={styles.targetCountText}>3 targets</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.wordPillsRow}>
-                        {['red', 'run', 'rabbit'].map((w) => (
-                          <View key={w} style={styles.wordPillPeach}>
-                            <Text style={styles.wordPillText}>{w}</Text>
+                {assignPreviewExpanded && selectedAssignActivity && (
+                  <View style={{ marginBottom: 14 }}>
+                    <View style={styles.infoCard}>
+                      {(['Initial', 'Medial', 'Final', undefined] as const).map((position) => {
+                        const prompts = getTeacherActivityPrompts(selectedAssignActivity).filter((prompt) => prompt.position === position);
+                        if (!prompts.length) return null;
+                        return (
+                          <View key={position ?? 'prompts'} style={styles.posBlockCard}>
+                            <Text style={styles.posBlockCountText}>{position ?? 'Practice prompts'}</Text>
+                            {prompts.map((prompt, index) => (
+                              <Text key={index} style={[styles.infoCardBody, { color: colors.text }]}>{prompt.text}</Text>
+                            ))}
                           </View>
-                        ))}
-                      </View>
-
-                      <Text style={styles.phraseBulletText}>• I see a red apple.</Text>
-                      <Text style={styles.phraseBulletText}>• See the dog run fast.</Text>
-                      <Text style={styles.phraseBulletText}>• The little rabbit hid.</Text>
-                    </View>
-
-                    <View style={styles.emptyTargetCard}>
-                      <Text style={styles.practicePositionLabel}>Medial</Text>
-                      <View style={styles.zeroTargetBadge}>
-                        <Text style={styles.zeroTargetText}>0 target</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.noTargetsSub}>No targets yet.</Text>
-
-                    <View style={styles.emptyTargetCard}>
-                      <Text style={styles.practicePositionLabel}>Final</Text>
-                      <View style={styles.zeroTargetBadge}>
-                        <Text style={styles.zeroTargetText}>0 target</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.noTargetsSub}>No targets yet.</Text>
-
-                    <Text style={styles.previewSectionTitle}>Preview audio model</Text>
-                    <View style={styles.audioModelCard}>
-                      <View style={styles.audioPlayCircle}>
-                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-                      </View>
-                      <View style={{ flex: 1, marginHorizontal: 12 }}>
-                        <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
-                        <Text style={styles.audioModelSub}>Demo Playback · 0:08</Text>
-                      </View>
-                      <View style={styles.audioWaveformRow}>
-                        {[12, 22, 14, 26, 18, 10, 20].map((h, i) => (
-                          <View key={i} style={[styles.audioWaveBar, { height: h }]} />
-                        ))}
-                      </View>
-                    </View>
-
-                    <Text style={styles.previewSectionTitle}>Visual material</Text>
-                    <View style={styles.videoPlaceholderBox}>
-                      <View style={styles.videoPlayCircle}>
-                        <Play size={20} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-                      </View>
-                    </View>
-
-                    <View style={[styles.previewActionsRow, { marginTop: 12 }]}>
-                      <TouchableOpacity
-                        style={styles.outlineBtn}
-                        onPress={() => {
-                          setEditStep(1);
-                          setActivitiesView('edit');
-                        }}
-                      >
-                        <Text style={styles.outlineBtnText}>Edit Activity</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.solidBlueBtn}
-                        onPress={() => {
-                          setActivitiesView('library');
-                          triggerToast('Activity assigned to ' + assignStudent);
-                        }}
-                      >
-                        <Text style={styles.solidBlueBtnText}>Assign Activity</Text>
-                      </TouchableOpacity>
+                        );
+                      })}
+                      {selectedAssignActivity.articulatoryGuide.trim() ? (
+                        <View style={styles.posBlockCardSubtle}>
+                          <Text style={styles.posBlockCountText}>Therapist guidance</Text>
+                          <Text style={[styles.infoCardBody, { color: colors.text }]}>{selectedAssignActivity.articulatoryGuide}</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 )}
 
-                <Text style={styles.formLabel}>Due Date</Text>
-                <View style={styles.dateInputWrapper}>
+                {/* Card 3: Schedule & Instructions */}
+                <View style={styles.infoCard}>
+                  <View style={styles.infoCardHeader}>
+                    <View style={styles.infoIconWrap}>
+                      <Calendar size={16} color="#0284C7" />
+                    </View>
+                    <View>
+                      <Text style={styles.infoCardTitle}>Schedule & Instructions</Text>
+                      <Text style={styles.infoCardSub}>Set completion deadline and student cues</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.formLabel}>Due Date</Text>
+                  <AssignmentCalendar value={assignDueDate} onSelect={setAssignDueDate} isDark={isDark} minDate={todayCalendarDate()} showDueDatePresets />
+
+                  <Text style={[styles.formLabel, { marginTop: 8 }]}>Instructions for Student / Facilitator</Text>
                   <TextInput
-                    style={styles.dateTextInput}
-                    value={assignDueDate}
-                    onChangeText={setAssignDueDate}
+                    style={[styles.formInput, { height: 80, textAlignVertical: 'top', paddingTop: 10 }]}
+                    multiline
+                    value={assignInstructions}
+                    onChangeText={setAssignInstructions}
+                    placeholder="Listen to the model. Say each target slowly, then try it on your own."
+                    placeholderTextColor={colors.textMuted}
                   />
-                  <Calendar size={18} color={isDark ? '#38BDF8' : '#0284C7'} />
                 </View>
 
-                <Text style={styles.formLabel}>Instructions</Text>
-                <TextInput
-                  style={[styles.formInput, { height: 60 }]}
-                  multiline
-                  value={assignInstructions}
-                  onChangeText={setAssignInstructions}
-                />
-
-                <View style={[styles.previewActionsRow, { marginTop: 20 }]}>
+                {/* Bottom Action Row: Cancel and Assign Activity Side by Side */}
+                <View style={styles.previewActionsRow}>
                   <TouchableOpacity
-                    style={styles.outlineBtn}
+                    style={[styles.outlineBtn, { borderColor: isDark ? '#38BDF8' : '#0284C7' }]}
                     onPress={() => setActivitiesView('library')}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.outlineBtnText}>Cancel</Text>
+                    <X size={15} color={isDark ? '#38BDF8' : '#0284C7'} style={{ marginRight: 6 }} />
+                    <Text style={[styles.outlineBtnText, { color: isDark ? '#38BDF8' : '#0284C7' }]}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.solidBlueBtn}
-                    onPress={() => {
-                      setActivitiesView('library');
-                      triggerToast('Activity assigned to ' + assignStudent);
-                    }}
+                    accessibilityRole="button"
+                    onPress={handleAssignActivity}
+                    activeOpacity={0.7}
                   >
+                    <Check size={16} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 6 }} />
                     <Text style={styles.solidBlueBtnText}>Assign Activity</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            )}
+            );
+          })()}
 
             {/* VIEW 5: WORD BANK */}
             {activitiesView === 'wordbank' && (
               <View>
                 <Text style={styles.subHeadingCaps}>PURPOSEFUL PRACTICE</Text>
                 <Text style={styles.pageTitle}>The word bank.</Text>
-                <Text style={styles.pageSubtitle}>Reusable targets organized by sound, position and language. Therapists manage these entries.</Text>
+                <Text style={styles.pageSubtitle}>Reusable targets organized by sound, position and language.</Text>
 
                 <View style={styles.subTabsRow}>
                   <TouchableOpacity
@@ -2278,7 +3099,17 @@ export default function TeacherDashboardScreen() {
                       onChangeText={setWordBankQuery}
                     />
                   </View>
-                  <Text style={[styles.wbPositionBadgeText, { marginHorizontal: 4 }]}>Read-only</Text>
+                  <TouchableOpacity
+                    style={styles.wbAddBtn}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setWordBankAdding((curr) => !curr);
+                      setWordBankEditing(false);
+                    }}
+                  >
+                    <Plus size={14} color="#FFFFFF" strokeWidth={2.5} style={{ marginRight: 4 }} />
+                    <Text style={styles.wbAddBtnText}>{wordBankAdding ? 'Cancel' : 'Add a word'}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.wbFilterBtn, wordBankFiltersOpen && styles.wbFilterBtnActive]}
                     activeOpacity={0.7}
@@ -2365,14 +3196,88 @@ export default function TeacherDashboardScreen() {
                   </View>
                 )}
 
+                {/* Add a Word Entry Form */}
+                {wordBankAdding && (
+                  <View style={styles.wbAddForm}>
+                    <Text style={styles.wbAddFormTitle}>Add a Word Bank Entry</Text>
+
+                    <Text style={styles.wbFormLabel}>Word</Text>
+                    <TextInput
+                      style={styles.wbFormInput}
+                      placeholder="Target word (e.g. rainbow)"
+                      placeholderTextColor="#94A3B8"
+                      value={newWordText}
+                      onChangeText={setNewWordText}
+                    />
+
+                    <Text style={styles.wbFormLabel}>Sound</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {['/r/', '/s/', '/l/', '/t/', '/k/', '/p/', '/m/'].map((s) => (
+                        <TouchableOpacity
+                          key={s}
+                          style={[styles.wbChoicePill, newWordSound === s && styles.wbChoicePillActive]}
+                          onPress={() => setNewWordSound(s)}
+                        >
+                          <Text style={[styles.wbChoicePillText, newWordSound === s && styles.wbChoicePillTextActive]}>{s}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.wbFormLabel, { marginTop: 10 }]}>Position</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {(['Initial', 'Medial', 'Final'] as const).map((pos) => (
+                        <TouchableOpacity
+                          key={pos}
+                          style={[styles.wbChoicePill, newWordPosition === pos && styles.wbChoicePillActive]}
+                          onPress={() => setNewWordPosition(pos)}
+                        >
+                          <Text style={[styles.wbChoicePillText, newWordPosition === pos && styles.wbChoicePillTextActive]}>{pos}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.wbFormLabel, { marginTop: 10 }]}>Language</Text>
+                    <View style={styles.wbFilterOptionsWrap}>
+                      {['English', 'Tagalog'].map((lang) => (
+                        <TouchableOpacity
+                          key={lang}
+                          style={[styles.wbChoicePill, newWordLanguage === lang && styles.wbChoicePillActive]}
+                          onPress={() => setNewWordLanguage(lang)}
+                        >
+                          <Text style={[styles.wbChoicePillText, newWordLanguage === lang && styles.wbChoicePillTextActive]}>{lang}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.wbSaveWordBtn}
+                      onPress={handleAddWordBankEntry}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.wbSaveWordBtnText}>Save Target</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* Word Bank List Header */}
                 <View style={styles.wbListHeader}>
                   <Text style={styles.wbListTitle}>Word Bank List ({filteredWordBank.length})</Text>
+                  <TouchableOpacity
+                    style={styles.wbEditModeBtn}
+                    onPress={() => setWordBankEditing((curr) => !curr)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {wordBankEditing ? (
+                      <Check size={18} color="#0284C7" />
+                    ) : (
+                      <Pencil size={16} color={colors.textSub} />
+                    )}
+                  </TouchableOpacity>
                 </View>
 
                 {/* Word Bank List */}
                 <View style={styles.wbListCard}>
-                  {filteredWordBank.map((item, index) => (
+                  {filteredWordBank.slice(wordPages.start, wordPages.end).map((item, index) => (
                     <View
                       key={item.id}
                       style={[
@@ -2387,11 +3292,22 @@ export default function TeacherDashboardScreen() {
                         </View>
                       </View>
 
-                      <View style={styles.wbPositionBadge}>
-                        <Text style={styles.wbPositionBadgeText}>{item.position}</Text>
-                      </View>
+                      {wordBankEditing ? (
+                        <TouchableOpacity
+                          onPress={() => handleRemoveWordBankEntry(item.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={styles.wbDeleteBtn}
+                        >
+                          <Trash2 size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.wbPositionBadge}>
+                          <Text style={styles.wbPositionBadgeText}>{item.position}</Text>
+                        </View>
+                      )}
                     </View>
                   ))}
+                  <ListPagination {...wordPages} total={filteredWordBank.length} noun="words" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
                   {filteredWordBank.length === 0 && (
                     <View style={{ padding: 24, alignItems: 'center' }}>
                       <Text style={{ color: colors.textMuted, fontSize: 13 }}>No words match your search or filters.</Text>
@@ -2433,8 +3349,31 @@ export default function TeacherDashboardScreen() {
             </View>
 
             {/* Reviews List Cards */}
+            <View style={styles.reviewFilterControl}>
+              <ChecklistFilter isDark={isDark}
+                palette={{ card: colors.card, line: colors.border, text: colors.text, faint: colors.textMuted, primary: isDark ? '#0369A1' : '#0865AD', muted: colors.textSub }}
+                label="Filter reviews" sectionLabel="Activities" options={reviewActivityOptions} optionCaptions={reviewActivityCaptions}
+                selected={reviewActivities} onChange={setReviewActivities} emptyLabel="All activities" allLabel="All activities" compact resetOnAll searchable
+                extraSections={[
+                  { label: 'Language', options: PRACTICE_LANGUAGES, selected: reviewLanguage, onChange: setReviewLanguage, allLabel: 'All languages', single: true },
+                  { label: 'Students', options: reviewStudentOptions, selected: reviewStudents, onChange: setReviewStudents, allLabel: 'All students',
+                    headerContent: (
+                      <View style={styles.reviewSortRow}>
+                        <Text style={styles.reviewsSubtitle}>Sort by name</Text>
+                        {(['A–Z', 'Z–A'] as const).map((order) => (
+                          <TouchableOpacity key={order} accessibilityRole="radio" accessibilityState={{ checked: order === reviewStudentSort }}
+                            onPress={() => setReviewStudentSort(order)} style={[styles.reviewSortButton, { borderColor: order === reviewStudentSort ? '#0284C7' : colors.border }]}>
+                            <Text style={{ color: colors.text }}>{order}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ),
+                  },
+                ]} />
+            </View>
             <View style={styles.reviewsListContainer}>
-              {filteredReviews.map((rev) => (
+              {filteredReviews.length === 0 && <Text style={styles.reviewsSubtitle}>No reviews match these filters.</Text>}
+              {filteredReviews.slice(reviewPages.start, reviewPages.end).map((rev) => (
                 <TouchableOpacity
                   key={rev.id}
                   style={styles.reviewCard}
@@ -2479,10 +3418,444 @@ export default function TeacherDashboardScreen() {
                   <ChevronRight size={16} color={colors.textMuted} />
                 </TouchableOpacity>
               ))}
+              <ListPagination {...reviewPages} total={filteredReviews.length} noun="reviews" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
             </View>
           </View>
         )}
       </ScrollView>
+
+      {/* ==========================================
+          --- MODAL: TARGET SOUND SELECTION POPUP ---
+          ========================================== */}
+      <Modal
+        visible={showTargetSoundDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTargetSoundDropdown(false)}
+      >
+        <Pressable
+          style={styles.dropdownPopupOverlay}
+          onPress={() => setShowTargetSoundDropdown(false)}
+        >
+          <Pressable
+            style={[styles.dropdownPopupCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <View style={[styles.dropdownPopupHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.dropdownPopupTitle, { color: colors.text }]}>
+                Select Target Sound
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => setShowTargetSoundDropdown(false)}
+                style={styles.dropdownPopupCloseBtn}
+                hitSlop={8}
+              >
+                <Text style={[styles.dropdownPopupCloseText, { color: colors.textMuted }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {TARGET_SOUND_OPTIONS.map((snd) => {
+                const isSelected = editTargetSound === snd;
+                return (
+                  <TouchableOpacity
+                    key={snd}
+                    style={[
+                      styles.dropdownPopupOption,
+                      isSelected && {
+                        backgroundColor: colors.isDark ? 'rgba(56,189,248,0.15)' : '#E0F2FE',
+                      },
+                    ]}
+                    onPress={() => {
+                      setEditTargetSound(snd);
+                      setShowTargetSoundDropdown(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownPopupOptionText,
+                        { color: colors.text },
+                        isSelected && {
+                          color: colors.isDark ? '#38BDF8' : '#0284C7',
+                          fontWeight: '700',
+                        },
+                      ]}
+                    >
+                      {snd}
+                    </Text>
+                    {isSelected && (
+                      <Check
+                        size={16}
+                        color={colors.isDark ? '#38BDF8' : '#0284C7'}
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: PRACTICE LEVEL SELECTION POPUP ---
+          ========================================== */}
+      <Modal
+        visible={showPracticeLevelDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPracticeLevelDropdown(false)}
+      >
+        <Pressable
+          style={styles.dropdownPopupOverlay}
+          onPress={() => setShowPracticeLevelDropdown(false)}
+        >
+          <Pressable
+            style={[styles.dropdownPopupCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <View style={[styles.dropdownPopupHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.dropdownPopupTitle, { color: colors.text }]}>
+                Select Practice Level
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => setShowPracticeLevelDropdown(false)}
+                style={styles.dropdownPopupCloseBtn}
+                hitSlop={8}
+              >
+                <Text style={[styles.dropdownPopupCloseText, { color: colors.textMuted }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {PRACTICE_LEVEL_OPTIONS.map((lvl) => {
+                const isSelected = editPracticeLevel === lvl;
+                return (
+                  <TouchableOpacity
+                    key={lvl}
+                    style={[
+                      styles.dropdownPopupOption,
+                      isSelected && {
+                        backgroundColor: colors.isDark ? 'rgba(56,189,248,0.15)' : '#E0F2FE',
+                      },
+                    ]}
+                    onPress={() => {
+                      setEditPracticeLevel(lvl);
+                      setShowPracticeLevelDropdown(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownPopupOptionText,
+                        { color: colors.text },
+                        isSelected && {
+                          color: colors.isDark ? '#38BDF8' : '#0284C7',
+                          fontWeight: '700',
+                        },
+                      ]}
+                    >
+                      {lvl}
+                    </Text>
+                    {isSelected && (
+                      <Check
+                        size={16}
+                        color={colors.isDark ? '#38BDF8' : '#0284C7'}
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: ASSIGN STUDENT CHECKLIST POPUP ---
+          ========================================== */}
+      <Modal
+        visible={showAssignStudentDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAssignStudentDropdown(false)}
+      >
+        <Pressable
+          style={styles.dropdownPopupOverlay}
+          onPress={() => setShowAssignStudentDropdown(false)}
+        >
+          <Pressable
+            style={[styles.dropdownPopupCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <View style={[styles.dropdownPopupHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.dropdownPopupTitle, { color: colors.text }]}>
+                Select Student(s)
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => setShowAssignStudentDropdown(false)}
+                style={styles.dropdownPopupCloseBtn}
+                hitSlop={8}
+              >
+                <Text style={[styles.dropdownPopupCloseText, { color: colors.textMuted }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.dropdownPopupOption,
+                allStudentsSelected && {
+                  backgroundColor: colors.isDark ? 'rgba(56,189,248,0.15)' : '#E0F2FE',
+                },
+              ]}
+              onPress={() => {
+                if (allStudentsSelected) {
+                  setAssignSelectedStudents([]);
+                } else {
+                  setAssignSelectedStudents(studentOptions.map(({ id }) => id));
+                }
+              }}
+            >
+              <Text
+                style={[
+                  styles.dropdownPopupOptionText,
+                  { color: colors.text, fontWeight: '700' },
+                ]}
+              >
+                Select all
+              </Text>
+              <View
+                style={[
+                  styles.checkboxSquare,
+                  allStudentsSelected && styles.checkboxSquareActive,
+                ]}
+              >
+                {allStudentsSelected && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
+              </View>
+            </TouchableOpacity>
+
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              {studentOptions.map(({ id, name }) => {
+                const checked = assignSelectedStudents.includes(id);
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
+                    style={[
+                      styles.dropdownPopupOption,
+                      checked && {
+                        backgroundColor: colors.isDark ? 'rgba(56,189,248,0.15)' : '#E0F2FE',
+                      },
+                    ]}
+                    onPress={() => {
+                      if (checked) {
+                        setAssignSelectedStudents((prev) => prev.filter((selectedId) => selectedId !== id));
+                      } else {
+                        setAssignSelectedStudents((prev) => [...prev, id]);
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownPopupOptionText,
+                        { color: colors.text },
+                        checked && {
+                          color: colors.isDark ? '#38BDF8' : '#0284C7',
+                          fontWeight: '600',
+                        },
+                      ]}
+                    >
+                      {name}
+                    </Text>
+                    <View
+                      style={[
+                        styles.checkboxSquare,
+                        checked && styles.checkboxSquareActive,
+                      ]}
+                    >
+                      {checked && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[
+                styles.dropdownPopupDoneBtn,
+                { backgroundColor: '#0284C7' },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Done selecting students"
+              onPress={() => setShowAssignStudentDropdown(false)}
+            >
+              <Text style={styles.dropdownPopupDoneBtnText}>Done</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: ASSIGN ACTIVITY SELECTION POPUP ---
+          ========================================== */}
+      <Modal
+        visible={showAssignActivityDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAssignActivityDropdown(false)}
+      >
+        <Pressable
+          style={styles.dropdownPopupOverlay}
+          onPress={() => setShowAssignActivityDropdown(false)}
+        >
+          <Pressable
+            style={[styles.dropdownPopupCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <View style={[styles.dropdownPopupHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.dropdownPopupTitle, { color: colors.text }]}>
+                Select Activity
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => setShowAssignActivityDropdown(false)}
+                style={styles.dropdownPopupCloseBtn}
+                hitSlop={8}
+              >
+                <Text style={[styles.dropdownPopupCloseText, { color: colors.textMuted }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {activitiesList.map((act) => {
+                const isSelected = assignActivityId === act.id;
+                return (
+                  <TouchableOpacity
+                    key={act.id}
+                    style={[
+                      styles.dropdownPopupOption,
+                      isSelected && {
+                        backgroundColor: colors.isDark ? 'rgba(56,189,248,0.15)' : '#E0F2FE',
+                      },
+                    ]}
+                    onPress={() => {
+                      setAssignActivityId(act.id);
+                      setAssignInstructions(act.instructions);
+                      setAssignPreviewExpanded(false);
+                      setShowAssignActivityDropdown(false);
+                    }}
+                  >
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text
+                        style={[
+                          styles.dropdownPopupOptionText,
+                          { color: colors.text },
+                          isSelected && {
+                            color: colors.isDark ? '#38BDF8' : '#0284C7',
+                            fontWeight: '700',
+                          },
+                        ]}
+                      >
+                        {act.title}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.textSub, marginTop: 2 }}>
+                        {act.sound} • {act.category} • {act.language}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Check
+                        size={16}
+                        color={colors.isDark ? '#38BDF8' : '#0284C7'}
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ==========================================
+          --- MODAL: STUDENT FILTER SELECTION POPUP ---
+          ========================================== */}
+      <Modal
+        visible={showStudentFilterDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowStudentFilterDropdown(false)}
+      >
+        <Pressable
+          style={styles.dropdownPopupOverlay}
+          onPress={() => setShowStudentFilterDropdown(false)}
+        >
+          <Pressable
+            style={[styles.dropdownPopupCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <View style={[styles.dropdownPopupHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.dropdownPopupTitle, { color: colors.text }]}>
+                Filter by Target Sound
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => setShowStudentFilterDropdown(false)}
+                style={styles.dropdownPopupCloseBtn}
+                hitSlop={8}
+              >
+                <Text style={[styles.dropdownPopupCloseText, { color: colors.textMuted }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {['ALL', ...TARGET_SOUND_OPTIONS].map((opt) => {
+                const isSelected = studentFilter === opt;
+                return (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[
+                      styles.dropdownPopupOption,
+                      isSelected && {
+                        backgroundColor: colors.isDark ? 'rgba(56,189,248,0.15)' : '#E0F2FE',
+                      },
+                    ]}
+                    onPress={() => {
+                      setStudentFilter(opt);
+                      setShowStudentFilterDropdown(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownPopupOptionText,
+                        { color: colors.text },
+                        isSelected && {
+                          color: colors.isDark ? '#38BDF8' : '#0284C7',
+                          fontWeight: '700',
+                        },
+                      ]}
+                    >
+                      {opt === 'ALL' ? 'All Targets' : opt}
+                    </Text>
+                    {isSelected && (
+                      <Check
+                        size={16}
+                        color={colors.isDark ? '#38BDF8' : '#0284C7'}
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ==========================================
           --- MODAL: REVIEW AUDIO & SUBMIT FEEDBACK ---
@@ -2518,33 +3891,110 @@ export default function TeacherDashboardScreen() {
               Submitted {selectedReview?.submittedDate} • Target Word: "{selectedReview?.targetWord}"
             </Text>
 
+            {/* Audio Playback Box */}
             <View style={[styles.audioModelCard, { marginVertical: 12 }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.audioModelTitle}>Recording metadata</Text>
-                <Text style={styles.audioModelSub}>
-                  Duration: {selectedReview?.audioDuration || 'Not recorded'}
-                </Text>
-                {selectedReview?.audioRecordingUrl ? (
-                  <AudioPlaybackButton
-                    audioUrl={selectedReview.audioRecordingUrl}
-                    label="Play child recording"
-                    variant="inline"
-                    color={colors.textSub}
-                  />
-                ) : (
-                  <Text style={styles.audioModelSub}>No audio URI saved.</Text>
-                )}
+              <AudioPlaybackButton
+                audioUrl={selectedReview?.audioRecordingUrl}
+                label="Play child recording"
+                variant="inline"
+                buttonStyle={styles.audioPlayCircle}
+                renderIcon={() => <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />}
+              />
+              <View style={{ flex: 1, marginHorizontal: 12 }}>
+                <Text style={styles.audioModelTitle}>Child Audio Recording</Text>
+                <Text style={styles.audioModelSub}>Duration: {selectedReview?.audioDuration}</Text>
+              </View>
+              <View style={styles.audioWaveformRow}>
+                {[14, 26, 12, 28, 18, 10, 22].map((h, i) => (
+                  <View key={i} style={[styles.audioWaveBar, { height: h }]} />
+                ))}
               </View>
             </View>
 
-            <Text style={styles.formLabel}>Therapist observations</Text>
-            <Text style={styles.subtextSmall}>
-              {selectedReview?.observations || 'No therapist review has been saved.'}
-            </Text>
+            {/* Evaluation Rating Buttons */}
+            <Text style={styles.formLabel}>Clinical Accuracy Rating</Text>
+            <View style={styles.ratingButtonsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.ratingBtn,
+                  reviewEvaluation === 'Correct' && { backgroundColor: '#DCFCE7', borderColor: '#16A34A' },
+                  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+                ]}
+                onPress={() => setReviewEvaluation('Correct')}
+              >
+                <Check size={14} color={reviewEvaluation === 'Correct' ? '#16A34A' : colors.textSub} style={{ marginRight: 4 }} />
+                <Text
+                  style={[
+                    styles.ratingBtnText,
+                    reviewEvaluation === 'Correct' && { color: '#16A34A', fontWeight: '700' },
+                  ]}
+                >
+                  Correct
+                </Text>
+              </TouchableOpacity>
 
+              <TouchableOpacity
+                style={[
+                  styles.ratingBtn,
+                  reviewEvaluation === 'Approximate' && { backgroundColor: '#FEF3C7', borderColor: '#D97706' },
+                ]}
+                onPress={() => setReviewEvaluation('Approximate')}
+              >
+                <Text
+                  style={[
+                    styles.ratingBtnText,
+                    reviewEvaluation === 'Approximate' && { color: '#D97706', fontWeight: '700' },
+                  ]}
+                >
+                  ~ Approximate
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.ratingBtn,
+                  reviewEvaluation === 'Incorrect' && { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+                  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+                ]}
+                onPress={() => setReviewEvaluation('Incorrect')}
+              >
+                <X size={14} color={reviewEvaluation === 'Incorrect' ? '#DC2626' : colors.textSub} style={{ marginRight: 4 }} />
+                <Text
+                  style={[
+                    styles.ratingBtnText,
+                    reviewEvaluation === 'Incorrect' && { color: '#DC2626', fontWeight: '700' },
+                  ]}
+                >
+                  Needs Practice
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Notes / Clinical Feedback Input */}
+            <Text style={styles.formLabel}>Feedback for Student / Parent</Text>
+            <TextInput
+              style={[styles.formInput, { height: 60 }]}
+              multiline
+              placeholder="Good elevation of tongue tip, keep practicing initial /r/..."
+              placeholderTextColor="#94A3B8"
+              value={reviewNotes}
+              onChangeText={setReviewNotes}
+            />
+
+            {/* Action Buttons */}
             <View style={[styles.previewActionsRow, { marginTop: 10 }]}>
-              <TouchableOpacity style={styles.solidBlueBtn} onPress={() => setSelectedReview(null)}>
-                <Text style={styles.solidBlueBtnText}>Close</Text>
+              <TouchableOpacity
+                style={styles.outlineBtn}
+                onPress={() => setSelectedReview(null)}
+              >
+                <Text style={styles.outlineBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.solidBlueBtn}
+                onPress={() => selectedReview && handleSubmitReview(selectedReview)}
+              >
+                <Text style={styles.solidBlueBtnText}>Submit Review</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2581,11 +4031,11 @@ export default function TeacherDashboardScreen() {
             {/* 3 Metric Summary Boxes */}
             <View style={styles.modalMetricsRow}>
               <View style={[styles.modalMetricBox, { backgroundColor: '#DCFCE7' }]}>
-                <Text style={styles.metricBoxTitle}>Current Accuracy</Text>
+                <Text style={styles.metricBoxTitle}>Assignment Completion</Text>
                 <Text style={[styles.metricBoxValue, { color: '#16A34A' }]}>
-                  {selectedPatient?.accuracy == null ? 'Not scored' : `${selectedPatient.accuracy}%`}
+                  {selectedPatient?.accuracy}%
                 </Text>
-                <Text style={styles.metricBoxSubtitle}>No automated score supplied</Text>
+                <Text style={styles.metricBoxSubtitle}>Assigned activities</Text>
               </View>
 
               <View style={[styles.modalMetricBox, { backgroundColor: '#CFFAFE' }]}>
@@ -2597,11 +4047,11 @@ export default function TeacherDashboardScreen() {
               </View>
 
               <View style={[styles.modalMetricBox, { backgroundColor: '#FFE4E6' }]}>
-                <Text style={styles.metricBoxTitle}>Assigned Activity Completion</Text>
+                <Text style={styles.metricBoxTitle}>Home Compliance</Text>
                 <Text style={[styles.metricBoxValue, { color: '#E11D48' }]}>
-                  {selectedPatient?.completedCount || 0}/{selectedPatient?.assignedCount || 0}
+                  {selectedPatient?.compliance}
                 </Text>
-                <Text style={styles.metricBoxSubtitle}>{selectedPatient?.submissionCount || 0} submissions</Text>
+                <Text style={styles.metricBoxSubtitle}>{selectedPatient?.complianceDays}</Text>
               </View>
             </View>
 
@@ -2633,15 +4083,58 @@ export default function TeacherDashboardScreen() {
               {/* SOAP SESSION HISTORY */}
               <View style={styles.modalSection}>
                 <View style={styles.sectionRowWithButton}>
-                  <Text style={styles.modalSectionHeading}>THERAPIST NOTES (READ ONLY)</Text>
+                  <Text style={styles.modalSectionHeading}>SOAP SESSION HISTORY</Text>
+                  <TouchableOpacity
+                    style={styles.newSoapButton}
+                    onPress={() => setShowSoapForm(!showSoapForm)}
+                  >
+                    <Text style={styles.newSoapButtonText}>+ New SOAP Note</Text>
+                  </TouchableOpacity>
                 </View>
 
-                {patientDetailLoading ? <Text style={styles.emptySessionSubtitle}>Loading notes…</Text> : null}
-                {soapNotes.length === 0 && !patientDetailLoading ? (
+                {showSoapForm && (
+                  <View style={styles.soapFormCard}>
+                    <Text style={styles.soapFormTitle}>Add SOAP Clinical Entry</Text>
+                    <TextInput
+                      style={styles.soapInput}
+                      placeholder="S (Subjective): e.g Cooperative"
+                      placeholderTextColor="#94A3B8"
+                      value={soapInputs.s}
+                      onChangeText={(text) => setSoapInputs({ ...soapInputs, s: text })}
+                    />
+                    <TextInput
+                      style={styles.soapInput}
+                      placeholder="O (Objective): e.g 15/20 trials"
+                      placeholderTextColor="#94A3B8"
+                      value={soapInputs.o}
+                      onChangeText={(text) => setSoapInputs({ ...soapInputs, o: text })}
+                    />
+                    <TextInput
+                      style={styles.soapInput}
+                      placeholder="A (Assessment): e.g Improving"
+                      placeholderTextColor="#94A3B8"
+                      value={soapInputs.a}
+                      onChangeText={(text) => setSoapInputs({ ...soapInputs, a: text })}
+                    />
+                    <TextInput
+                      style={styles.soapInput}
+                      placeholder="P (Plan): e.g Advance to words"
+                      placeholderTextColor="#94A3B8"
+                      value={soapInputs.p}
+                      onChangeText={(text) => setSoapInputs({ ...soapInputs, p: text })}
+                    />
+
+                    <TouchableOpacity style={styles.saveSoapButton} onPress={handleSaveSoapNote}>
+                      <Text style={styles.saveSoapButtonText}>Save Clinical Note</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {soapNotes.length === 0 && !showSoapForm ? (
                   <View style={styles.emptySessionBox}>
-                    <Text style={styles.emptySessionTitle}>No therapist notes recorded.</Text>
+                    <Text style={styles.emptySessionTitle}>No Sessions recorded yet.</Text>
                     <Text style={styles.emptySessionSubtitle}>
-                      Notes added by the therapist will appear here.
+                      Log the first SOAP note to start tracking articulation progress over time
                     </Text>
                   </View>
                 ) : (
@@ -2673,24 +4166,34 @@ export default function TeacherDashboardScreen() {
 
               {/* ACCOMPLISHMENT HISTORY */}
               <View style={styles.modalSection}>
-                <Text style={styles.modalSectionHeading}>OBSERVATIONS & ACCOMPLISHMENTS</Text>
-                {(selectedPatient?.accomplishments || []).map((acc) => (
+                <Text style={styles.modalSectionHeading}>ACCOMPLISHMENT HISTORY</Text>
+                {SAMPLE_ACCOMPLISHMENTS.map((acc) => (
                   <View key={acc.id} style={styles.accomplishmentCard}>
                     <Text style={styles.accDate}>
-                      {new Date(acc.achievedDate).toLocaleDateString()}
+                      {acc.date} ({acc.duration})
                     </Text>
                     <Text style={styles.accTitle}>{acc.title}</Text>
-                    {acc.targetAccuracy ? <Text style={styles.accAccuracy}>Target accuracy: {acc.targetAccuracy}</Text> : null}
+                    <Text style={styles.accAccuracy}>Target Accuracy: {acc.accuracyText}</Text>
                     <Text style={styles.notesLabel}>NOTES & OBSERVATION</Text>
                     <View style={styles.notesBox}>
-                      <Text style={styles.notesText}>{acc.clinicianNotes || acc.quote || 'No observation recorded.'}</Text>
+                      <Text style={styles.notesText}>"{acc.notes}"</Text>
                     </View>
-                    {acc.audioSampleUrl ? <Text style={styles.audioSub}>Saved audio URI: {acc.audioSampleUrl}</Text> : null}
+                    <View style={styles.audioPlayerRow}>
+                      <View style={styles.playButtonCircle}>
+                        <Play size={12} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
+                      </View>
+                      <View style={{ flex: 1, marginHorizontal: 10 }}>
+                        <Text style={styles.audioLabel}>Child Audio</Text>
+                        <Text style={styles.audioSub}>Demo Playback • {acc.audioDuration}</Text>
+                      </View>
+                      <View style={styles.waveformContainer}>
+                        {[16, 24, 12, 28, 20, 14, 22, 18, 26, 12].map((height, i) => (
+                          <View key={i} style={[styles.waveBar, { height }]} />
+                        ))}
+                      </View>
+                    </View>
                   </View>
                 ))}
-                {!patientDetailLoading && (selectedPatient?.accomplishments || []).length === 0
-                  ? <Text style={styles.emptySessionSubtitle}>No saved observations or accomplishments.</Text>
-                  : null}
               </View>
             </ScrollView>
           </View>
@@ -2702,76 +4205,80 @@ export default function TeacherDashboardScreen() {
           ========================================== */}
       {showMenu && (
         <Modal transparent animationType="fade" visible={showMenu} onRequestClose={() => setShowMenu(false)}>
-          <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={styles.menuDropdownContainer}>
-              {/* Therapist Profile Snippet Header */}
-              <TouchableOpacity
-                style={styles.menuUserHeader}
-                activeOpacity={0.8}
-                onPress={() => {
-                  setShowMenu(false);
-                  setShowProfileModal(true);
-                }}
-              >
-                <View style={styles.menuAvatarCircle}>
-                  <Text style={styles.menuAvatarText}>A</Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.menuUserName} numberOfLines={1}>{therapistProfile.name}</Text>
-                  <Text style={styles.menuUserRole} numberOfLines={1}>{therapistProfile.title}</Text>
-                </View>
-              </TouchableOpacity>
+          <Pressable style={[styles.menuOverlay, { alignItems: 'center' }]} onPress={() => setShowMenu(false)}>
+            <View style={{ width: columnWidth, position: 'relative' }}>
+              <View style={styles.menuDropdownContainer}>
+                {/* Therapist Profile Snippet Header */}
+                <TouchableOpacity
+                  style={styles.menuUserHeader}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setShowMenu(false);
+                    openProfile();
+                  }}
+                >
+                  <View style={styles.menuAvatarCircle}>
+                    <Text style={styles.menuAvatarText}>A</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.menuUserName} numberOfLines={1}>{therapistProfile.name}</Text>
+                    <Text style={styles.menuUserRole} numberOfLines={1}>{therapistProfile.title}</Text>
+                  </View>
+                </TouchableOpacity>
 
-              <View style={styles.menuSectionDivider} />
+                <View style={styles.menuSectionDivider} />
 
-              {/* Option 1: Profile */}
-              <TouchableOpacity
-                style={styles.menuOptionRow}
-                activeOpacity={0.7}
-                onPress={() => {
-                  setShowMenu(false);
-                  setShowProfileModal(true);
-                }}
-              >
-                <View style={styles.menuIconCircle}>
-                  <User size={18} color="#0284C7" />
-                </View>
-                <Text style={styles.menuOptionLabel}>Profile</Text>
-                <ChevronRight size={16} color={colors.textMuted} />
-              </TouchableOpacity>
+                {/* Option 1: Profile */}
+                <TouchableOpacity
+                  style={styles.menuOptionRow}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="View profile and credentials"
+                  onPress={() => {
+                    setShowMenu(false);
+                    openProfile();
+                  }}
+                >
+                  <View style={styles.menuIconCircle}>
+                    <User size={18} color="#0284C7" />
+                  </View>
+                  <Text style={styles.menuOptionLabel}>Profile</Text>
+                  <ChevronRight size={16} color={colors.textMuted} />
+                </TouchableOpacity>
 
-              {/* Option 2: Settings */}
-              <TouchableOpacity
-                style={styles.menuOptionRow}
-                activeOpacity={0.7}
-                onPress={() => {
-                  setShowMenu(false);
-                  setShowSettingsModal(true);
-                }}
-              >
-                <View style={styles.menuIconCircle}>
-                  <Settings size={18} color="#0284C7" />
-                </View>
-                <Text style={styles.menuOptionLabel}>Settings</Text>
-                <ChevronRight size={16} color={colors.textMuted} />
-              </TouchableOpacity>
+                {/* Option 2: Settings */}
+                <TouchableOpacity
+                  style={styles.menuOptionRow}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowMenu(false);
+                    setShowSettingsModal(true);
+                  }}
+                >
+                  <View style={styles.menuIconCircle}>
+                    <Settings size={18} color="#0284C7" />
+                  </View>
+                  <Text style={styles.menuOptionLabel}>Settings</Text>
+                  <ChevronRight size={16} color={colors.textMuted} />
+                </TouchableOpacity>
 
-              <View style={styles.menuSectionDivider} />
+                <View style={styles.menuSectionDivider} />
 
-              {/* Option 3: Logout */}
-              <TouchableOpacity
-                style={styles.menuOptionRow}
-                activeOpacity={0.7}
-                onPress={() => {
-                  setShowMenu(false);
-                  setShowLogoutConfirm(true);
-                }}
-              >
-                <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
-                  <LogOut size={18} color="#DC2626" />
-                </View>
-                <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontWeight: '700' }]}>Logout</Text>
-              </TouchableOpacity>
+                {/* Option 3: Logout */}
+                <TouchableOpacity
+                  style={styles.menuOptionRow}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setShowMenu(false);
+                    setShowLogoutConfirm(true);
+                  }}
+                >
+                  <View style={[styles.menuIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                    <LogOut size={18} color="#DC2626" />
+                  </View>
+                  <Text style={[styles.menuOptionLabel, { color: '#DC2626', fontWeight: '700' }]}>Logout</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </Pressable>
         </Modal>
@@ -2787,8 +4294,9 @@ export default function TeacherDashboardScreen() {
           visible={showNotificationsDropdown}
           onRequestClose={() => setShowNotificationsDropdown(false)}
         >
-          <Pressable style={styles.menuOverlay} onPress={() => setShowNotificationsDropdown(false)}>
-            <View style={styles.notifDropdownContainer}>
+          <Pressable style={[styles.menuOverlay, { alignItems: 'center' }]} onPress={() => setShowNotificationsDropdown(false)}>
+            <View style={{ width: columnWidth, position: 'relative' }}>
+              <View style={styles.notifDropdownContainer}>
               <View style={styles.notifDropdownHeaderRow}>
                 <Text style={styles.notifDropdownTitle}>Notifications</Text>
                 <View style={styles.notifFilterPillsRow}>
@@ -2852,8 +4360,9 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.markAllReadBtnText}>Mark All as Read</Text>
               </TouchableOpacity>
             </View>
-          </Pressable>
-        </Modal>
+          </View>
+        </Pressable>
+      </Modal>
       )}
 
       {/* ==========================================
@@ -2863,9 +4372,11 @@ export default function TeacherDashboardScreen() {
         visible={showSettingsModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowSettingsModal(false)}
+        onRequestClose={() => sessionToRevoke ? setSessionToRevoke(null) : setShowSettingsModal(false)}
       >
-        <SafeAreaView style={styles.settingsModalContainer}>
+        <View style={{ flex: 1, backgroundColor: wide ? (isDark ? '#0F172A' : '#E2E8F0') : colors.bgSecondary, alignItems: 'center' }}>
+          <View style={{ flex: 1, width: columnWidth, backgroundColor: colors.bgSecondary }}>
+            <SafeAreaView style={styles.settingsModalContainer}>
           {/* Header Row */}
           <View style={styles.newHeaderRow}>
             <TouchableOpacity
@@ -2885,9 +4396,8 @@ export default function TeacherDashboardScreen() {
               activeOpacity={0.8}
               onPress={() => {
                 setProfileOpenedFromSettings(true);
-                setEditProfileForm({ ...therapistProfile });
                 setShowSettingsModal(false);
-                setShowProfileModal(true);
+                openProfile();
               }}
             >
               <View style={styles.newProfileAvatar}>
@@ -2927,7 +4437,7 @@ export default function TeacherDashboardScreen() {
                   value={newRecordingsToggle}
                   onValueChange={(val) => {
                     setNewRecordingsToggle(val);
-                    triggerToast(`New recordings alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -2939,13 +4449,13 @@ export default function TeacherDashboardScreen() {
               <View style={styles.newToggleRow}>
                 <View style={styles.newToggleRowCopy}>
                   <Text style={styles.newRowTitle}>Follow-Up Alerts</Text>
-                  <Text style={styles.newRowSubtitle}>Patients who need practice follow-up</Text>
+                  <Text style={styles.newRowSubtitle}>Students who need practice follow-up</Text>
                 </View>
                 <Switch
                   value={followUpAlertsToggle}
                   onValueChange={(val) => {
                     setFollowUpAlertsToggle(val);
-                    triggerToast(`Follow-up alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -2963,7 +4473,7 @@ export default function TeacherDashboardScreen() {
                   value={readyToLevelUpToggle}
                   onValueChange={(val) => {
                     setReadyToLevelUpToggle(val);
-                    triggerToast(`Level up alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -2981,7 +4491,7 @@ export default function TeacherDashboardScreen() {
                   value={teacherUpdatesToggle}
                   onValueChange={(val) => {
                     setTeacherUpdatesToggle(val);
-                    triggerToast(`Teacher updates ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -2999,7 +4509,7 @@ export default function TeacherDashboardScreen() {
                   value={missedExercisesToggle}
                   onValueChange={(val) => {
                     setMissedExercisesToggle(val);
-                    triggerToast(`Missed exercises alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -3019,7 +4529,7 @@ export default function TeacherDashboardScreen() {
                   <Text style={styles.newRowTitle}>Theme</Text>
                 </View>
                 <View style={styles.newThemeSegmentControl}>
-                  {(['Auto', 'Light', 'Dark'] as const).map((mode) => (
+                  {(['Light', 'Dark'] as const).map((mode) => (
                     <TouchableOpacity
                       key={mode}
                       style={[
@@ -3028,11 +4538,7 @@ export default function TeacherDashboardScreen() {
                       ]}
                       onPress={() => {
                         setThemeMode(mode);
-                        triggerToast(
-                          mode === 'Auto'
-                            ? `Auto theme enabled (${systemColorScheme === 'dark' ? 'Dark' : 'Light'})`
-                            : `${mode} theme enabled`
-                        );
+                        triggerToast(`${mode} theme enabled`);
                       }}
                     >
                       <Text
@@ -3065,10 +4571,7 @@ export default function TeacherDashboardScreen() {
                 </View>
                 <Switch
                   value={twoFactorAuthToggle}
-                  onValueChange={(val) => {
-                    setTwoFactorAuthToggle(val);
-                    triggerToast(`Two-factor authentication ${val ? 'enabled' : 'disabled'}`);
-                  }}
+                  onValueChange={() => triggerToast('Two-factor authentication is not supported by the backend.')}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
                 />
@@ -3077,6 +4580,7 @@ export default function TeacherDashboardScreen() {
 
             <Text style={styles.newSubSectionTitle}>Active Mobile Session</Text>
             <View style={styles.newCard}>
+              {activeSessions.length === 0 ? <Text style={styles.newRowSubtitle}>Session information is unavailable from the backend.</Text> : null}
               {activeSessions.map((session, index) => (
                 <React.Fragment key={session.id}>
                   <View style={styles.newSessionRow}>
@@ -3093,7 +4597,8 @@ export default function TeacherDashboardScreen() {
                     </View>
                     {!session.isCurrent ? (
                       <TouchableOpacity
-                        onPress={() => handleRevokeSession(session.id)}
+                        accessibilityRole="button"
+                        onPress={() => { setSessionNotice(''); setSessionToRevoke(session); }}
                         style={styles.newRevokeBtn}
                       >
                         <Text style={styles.newRevokeBtnText}>Revoke</Text>
@@ -3105,7 +4610,9 @@ export default function TeacherDashboardScreen() {
               ))}
             </View>
 
-            {/* About Help Section */}
+            {sessionNotice ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.newRowSubtitle, { marginTop: 6 }]}>{sessionNotice}</Text> : null}
+
+              {/* About Help Section */}
             <View style={styles.newSectionHeader}>
               <Text style={styles.newSectionTitle}>About Help</Text>
             </View>
@@ -3136,10 +4643,23 @@ export default function TeacherDashboardScreen() {
               }}
             >
               <LogOut size={18} color={colors.isDark ? '#FED7AA' : '#C48B5A'} style={{ marginRight: 8 }} />
-              <Text style={styles.newSignOutBtnText}>Sign Out</Text>
+              <Text style={styles.newSignOutBtnText}>Log Out</Text>
             </TouchableOpacity>
           </ScrollView>
-        </SafeAreaView>
+        {sessionToRevoke ? (
+              <SessionRevokeWarning
+                device={sessionToRevoke.device}
+                isDark={isDark}
+                onCancel={() => setSessionToRevoke(null)}
+                onConfirm={() => {
+                  handleRevokeSession(sessionToRevoke.id);
+                  setSessionToRevoke(null);
+                }}
+              />
+            ) : null}
+          </SafeAreaView>
+          </View>
+        </View>
       </Modal>
 
       {/* ==========================================
@@ -3157,7 +4677,9 @@ export default function TeacherDashboardScreen() {
           }
         }}
       >
-        <SafeAreaView style={styles.settingsModalContainer}>
+        <View style={{ flex: 1, backgroundColor: wide ? (isDark ? '#0F172A' : '#E2E8F0') : colors.bgSecondary, alignItems: 'center' }}>
+          <View style={{ flex: 1, width: columnWidth, backgroundColor: colors.bgSecondary }}>
+            <SafeAreaView style={styles.settingsModalContainer}>
           {/* Header Row */}
           <View style={styles.newHeaderRow}>
             <TouchableOpacity
@@ -3173,15 +4695,22 @@ export default function TeacherDashboardScreen() {
             >
               <ChevronLeft size={22} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.newHeaderTitle}>Profile & Credentials</Text>
+            <View style={styles.profileHeading}>
+              <Text accessibilityRole="header" style={styles.newHeaderTitle}>Profile & Credentials</Text>
+              <Text style={styles.profileMode}>{editingProfile ? 'Editing profile' : 'Profile overview'}</Text>
+            </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
+          {editingProfile && (
+              <ProfileEditWarning isDark={isDark} style={{ marginHorizontal: 16 }} />
+            )}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
             {/* Upload Photo Card */}
             <TouchableOpacity
               style={styles.newUploadPhotoCard}
               activeOpacity={0.8}
               onPress={handlePickPhoto}
+                disabled={!editingProfile}
             >
               <View style={styles.newPhotoAvatarWrapper}>
                 <View style={styles.newPhotoAvatar}>
@@ -3195,7 +4724,7 @@ export default function TeacherDashboardScreen() {
                   <Camera size={14} color="#FFFFFF" />
                 </View>
               </View>
-              <Text style={styles.newUploadPhotoLabel}>Upload Photo</Text>
+              <Text style={styles.newUploadPhotoLabel}>{editingProfile ? 'Upload Photo' : 'Profile photo'}</Text>
             </TouchableOpacity>
 
             {/* Profile Section */}
@@ -3205,6 +4734,8 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.newFieldLabel}>Name</Text>
                 <TextInput
                   style={styles.newFieldInput}
+                  accessibilityLabel="Name"
+                  editable={editingProfile}
                   value={editProfileForm.name}
                   onChangeText={(text) =>
                     setEditProfileForm((prev) => ({
@@ -3223,6 +4754,8 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.newFieldLabel}>Professional Title</Text>
                 <TextInput
                   style={styles.newFieldInput}
+                  accessibilityLabel="Professional title"
+                  editable={editingProfile}
                   value={editProfileForm.title}
                   onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, title: text }))}
                   placeholder="Speech-Language Pathologist"
@@ -3235,6 +4768,8 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.newFieldLabel}>Contact Number</Text>
                 <TextInput
                   style={styles.newFieldInput}
+                  accessibilityLabel="Contact number"
+                  editable={editingProfile}
                   value={editProfileForm.contact}
                   onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, contact: text }))}
                   placeholder="+63 9000 000 000"
@@ -3244,33 +4779,21 @@ export default function TeacherDashboardScreen() {
               </View>
               <View style={styles.newDivider} />
 
-              <View style={styles.newProfileFieldRow}>
+              <View style={[styles.newProfileFieldRow, styles.readOnlyCredential]}>
                 <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
-                <TextInput
-                  style={styles.newFieldInput}
-                  value={editProfileForm.license}
-                  onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, license: text }))}
-                  placeholder="PRC #0048291"
-                  placeholderTextColor={colors.textMuted}
-                />
+                <Text style={[styles.newFieldInput, styles.readOnlyCredentialValue]}>{editProfileForm.license || '—'}</Text>
               </View>
               <View style={styles.newDivider} />
 
-              <View style={styles.newProfileFieldRow}>
+              <View style={[styles.newProfileFieldRow, styles.readOnlyCredential]}>
                 <Text style={styles.newFieldLabel}>Clinic/School</Text>
-                <TextInput
-                  style={styles.newFieldInput}
-                  value={editProfileForm.clinic}
-                  onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, clinic: text }))}
-                  placeholder="LittleVoices Pediatric Speech Center"
-                  placeholderTextColor={colors.textMuted}
-                />
+                <Text style={[styles.newFieldInput, styles.readOnlyCredentialValue]}>{editProfileForm.clinic || CENTER_NAME}</Text>
               </View>
             </View>
 
             {/* Specialization Section */}
             <Text style={styles.newSectionTitleStandalone}>Specialization</Text>
-            <View style={styles.newSpecialtyContainer}>
+            <View style={[styles.newSpecialtyContainer, !editProfileForm.specializations.length && { gap: 0 }]}>
               <View style={styles.newChipsRow}>
                 {editProfileForm.specializations.map((spec, index) => {
                   const colorInfo = SPECIALTY_PALETTE[index % SPECIALTY_PALETTE.length];
@@ -3295,6 +4818,7 @@ export default function TeacherDashboardScreen() {
                       </Text>
                       <TouchableOpacity
                         onPress={() => handleRemoveSpecialty(spec)}
+                        disabled={!editingProfile}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         style={styles.newChipRemove}
                       >
@@ -3305,7 +4829,7 @@ export default function TeacherDashboardScreen() {
                 })}
               </View>
 
-              <View style={styles.newAddSpecialtyRow}>
+              {editingProfile && <View style={styles.newAddSpecialtyRow}>
                 <TextInput
                   style={styles.newAddSpecialtyInput}
                   value={newSpecialtyInput}
@@ -3315,7 +4839,7 @@ export default function TeacherDashboardScreen() {
                   placeholderTextColor={colors.textMuted}
                   returnKeyType="done"
                 />
-              </View>
+              </View>}
             </View>
 
             {/* Save Credentials Button */}
@@ -3323,14 +4847,16 @@ export default function TeacherDashboardScreen() {
               <TouchableOpacity
                 style={styles.newSaveCredentialsBtn}
                 activeOpacity={0.8}
-                disabled={profileSaving}
-                onPress={handleSaveProfile}
+                accessibilityRole="button"
+                onPress={editingProfile ? handleSaveProfile : startProfileEditing}
               >
-                <Text style={styles.newSaveCredentialsBtnText}>{profileSaving ? 'Saving…' : 'Save Account Info'}</Text>
+                <Text style={styles.newSaveCredentialsBtnText}>{editingProfile ? 'Save Credentials' : 'Edit profile'}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeAreaView>
+          </View>
+        </View>
       </Modal>
 
       {/* ==========================================
@@ -3387,10 +4913,9 @@ export default function TeacherDashboardScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.solidBlueBtn}
-                disabled={passwordSaving}
                 onPress={handleChangePassword}
               >
-                <Text style={styles.solidBlueBtnText}>{passwordSaving ? 'Updating…' : 'Update Password'}</Text>
+                <Text style={styles.solidBlueBtnText}>Update Password</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3413,7 +4938,7 @@ export default function TeacherDashboardScreen() {
             </View>
             <Text style={[styles.modalPatientName, { fontSize: 18, marginBottom: 6 }]}>Log Out of SpeakSteps?</Text>
             <Text style={[styles.subtextSmall, { textAlign: 'center', marginBottom: 20 }]}>
-              You will need to sign back in with your credentials to manage your patients.
+              You will need to sign back in with your credentials to manage your students.
             </Text>
 
             <View style={[styles.previewActionsRow, { width: '100%', marginTop: 0 }]}>
@@ -3460,7 +4985,7 @@ export default function TeacherDashboardScreen() {
           <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>Home</Text>
         </TouchableOpacity>
 
-        {/* Tab 2: Patients */}
+        {/* Tab 2: Students */}
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => setActiveTab('patients')}
@@ -3471,7 +4996,7 @@ export default function TeacherDashboardScreen() {
             size={22}
             color={activeTab === 'patients' ? (isDark ? '#38BDF8' : '#0284C7') : colors.textMuted}
           />
-          <Text style={[styles.navLabel, activeTab === 'patients' && styles.navLabelActive]}>Patients</Text>
+          <Text style={[styles.navLabel, activeTab === 'patients' && styles.navLabelActive]}>Students</Text>
         </TouchableOpacity>
 
         {/* Tab 3: Activities */}
@@ -3512,7 +5037,9 @@ export default function TeacherDashboardScreen() {
           <Text style={[styles.navLabel, activeTab === 'reviews' && styles.navLabelActive]}>Reviews</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+        </SafeAreaView>
+      </View>
+    </View>
   );
 }
 
@@ -3575,7 +5102,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     },
     mainScrollView: {
       flex: 1,
-      backgroundColor: colors.bgSecondary,
+      backgroundColor: colors.bg,
     },
     scrollContent: {
       paddingHorizontal: 16,
@@ -4325,6 +5852,420 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     previewContainer: {
       paddingTop: 8,
     },
+    // Hero Activity Card & Elements
+    heroActivityCard: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      shadowColor: '#000',
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 1,
+    },
+    heroActivityTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    heroSoundBadgePeach: {
+      width: 58,
+      height: 58,
+      borderRadius: 14,
+      backgroundColor: colors.peachCardBg,
+      borderWidth: 1,
+      borderColor: colors.peachCardBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroSoundBadgeText: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: colors.peachAccent,
+    },
+    heroSoundWaveText: {
+      fontSize: 14,
+      color: colors.isDark ? '#0284C7' : '#FB923C',
+      marginTop: -4,
+    },
+    heroTagsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginBottom: 4,
+    },
+    heroLevelBadge: {
+      backgroundColor: colors.peachPillBg,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    heroLevelBadgeText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+    heroLanguageBadge: {
+      backgroundColor: colors.cardSubtle,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    heroLanguageBadgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    heroActivityTitle: {
+      fontFamily: 'SourGummy-Bold',
+      fontSize: 22,
+      color: colors.text,
+    },
+    heroCardDivider: {
+      height: 1,
+      backgroundColor: colors.borderLight || colors.border,
+      marginVertical: 14,
+    },
+    heroMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    heroMetaItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    heroMetaLabel: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 2,
+    },
+    heroMetaValue: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    heroMetaDivider: {
+      width: 1,
+      height: 24,
+      backgroundColor: colors.borderLight || colors.border,
+    },
+
+    // Modular Info Cards & Peach Accents
+    infoCard: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+      shadowColor: '#000',
+      shadowOpacity: 0.03,
+      shadowRadius: 3,
+      shadowOffset: { width: 0, height: 1 },
+      elevation: 1,
+    },
+    infoCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    infoIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 10,
+    },
+    infoIconWrapPeach: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.peachPillBg,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 10,
+    },
+    infoCardTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    infoCardBody: {
+      fontSize: 13,
+      color: colors.textSub,
+      lineHeight: 20,
+    },
+    infoCardSub: {
+      fontSize: 11,
+      color: colors.textSub,
+      marginTop: 1,
+    },
+    guideCardPeach: {
+      backgroundColor: colors.peachCardBg,
+      borderWidth: 1,
+      borderColor: colors.peachCardBorder,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 14,
+    },
+    guideBadge: {
+      backgroundColor: colors.peachPillBg,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+    },
+    guideBadgeText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+
+    // Position Blocks & Word Pills
+    posBlockCard: {
+      backgroundColor: colors.isDark ? '#1E293B' : '#F8FAFC',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 10,
+    },
+    posBlockHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    posBadgePeach: {
+      backgroundColor: colors.peachPillBg,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    posBadgePeachText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+    posBlockCountText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    wordPillPeachWithIcon: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.peachPillBg,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      marginRight: 6,
+      marginBottom: 4,
+    },
+    phraseRowCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 4,
+      paddingHorizontal: 2,
+    },
+    phraseBulletDot: {
+      fontSize: 14,
+      color: colors.peachAccent,
+      marginRight: 6,
+      lineHeight: 18,
+    },
+    posBlockCardSubtle: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      borderRadius: 12,
+      padding: 10,
+      marginTop: 6,
+    },
+    posBadgeSubtle: {
+      backgroundColor: colors.cardSubtle,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    posBadgeSubtleText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSub,
+    },
+    posBlockCountSubtle: {
+      fontSize: 11,
+      color: colors.textMuted,
+    },
+
+    // Video Card Box
+    videoCardBox: {
+      height: 130,
+      borderRadius: 14,
+      backgroundColor: colors.cardSubtle,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      justifyContent: 'center',
+      alignItems: 'center',
+      position: 'relative',
+      marginTop: 4,
+    },
+    videoBadgeTop: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      backgroundColor: colors.isDark ? 'rgba(30, 41, 59, 0.85)' : 'rgba(255, 255, 255, 0.9)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    videoBadgeText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.textSub,
+    },
+    videoBottomBar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: colors.isDark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)',
+      borderTopWidth: 1,
+      borderTopColor: colors.borderLight || colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    videoBottomTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    videoBottomSub: {
+      fontSize: 10,
+      color: colors.textMuted,
+    },
+
+    // Action Buttons
+    actionBtnOutline: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 48,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.isDark ? '#38BDF8' : '#0284C7',
+      backgroundColor: colors.card,
+      marginRight: 8,
+    },
+    actionBtnOutlineText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+    },
+    actionBtnPrimary: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: '#0284C7',
+      marginLeft: 8,
+      shadowColor: '#0284C7',
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 2,
+    },
+    actionBtnPrimaryText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFFFFF',
+    },
+
+    // Stepper Card Styles
+    stepperCard: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.03,
+      shadowRadius: 3,
+      shadowOffset: { width: 0, height: 1 },
+      elevation: 1,
+    },
+    stepperRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    stepperStepItem: {
+      flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: 2,
+    },
+    stepperCircleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 6,
+    },
+    stepperCircle: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.cardSubtle,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 6,
+    },
+    stepperCircleActive: {
+      backgroundColor: '#0284C7',
+      borderColor: '#0284C7',
+    },
+    stepperCircleCompleted: {
+      backgroundColor: '#16A34A',
+      borderColor: '#16A34A',
+    },
+    stepperCircleText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textSub,
+    },
+    stepperLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textMuted,
+    },
+    stepperLabelActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    stepperProgressBar: {
+      width: '100%',
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: colors.borderLight || colors.border,
+    },
+    stepperProgressBarActive: {
+      backgroundColor: '#0284C7',
+    },
     previewTagPill: {
       alignSelf: 'flex-start',
       backgroundColor: colors.peachPillBg,
@@ -4455,7 +6396,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: '#F97316',
+      backgroundColor: colors.isDark ? '#0284C7' : '#F97316',
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -4479,7 +6420,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     },
     audioWaveBar: {
       width: 3.5,
-      backgroundColor: '#F97316',
+      backgroundColor: colors.isDark ? '#38BDF8' : '#F97316',
       marginHorizontal: 1.5,
       borderRadius: 2,
     },
@@ -4510,27 +6451,57 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       fontSize: 16,
       marginLeft: 2,
     },
+    mediaBox: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.isDark ? '#0F172A' : '#F8FAFC',
+      padding: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 4,
+    },
+    mediaIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.isDark ? '#082F49' : '#E0F2FE',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    mediaTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    mediaSub: {
+      fontSize: 11,
+      color: colors.textSub,
+    },
     previewActionsRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      gap: 12,
       marginTop: 18,
+      marginBottom: 16,
     },
     outlineBtn: {
       flex: 1,
       height: 48,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: colors.isDark ? '#38BDF8' : '#0284C7',
+      borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
-      marginRight: 8,
+      flexDirection: 'row',
       backgroundColor: colors.card,
     },
     outlineBtnText: {
       fontSize: 14,
       fontWeight: '700',
-      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      color: colors.text,
     },
     solidBlueBtn: {
       flex: 1,
@@ -4539,7 +6510,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       backgroundColor: '#0284C7',
       justifyContent: 'center',
       alignItems: 'center',
-      marginLeft: 8,
+      flexDirection: 'row',
     },
     solidBlueBtnText: {
       fontSize: 14,
@@ -4571,6 +6542,65 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       fontSize: 24,
       color: colors.heading,
       marginBottom: 8,
+    },
+    stepperContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.03,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    stepperStepBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    stepperBadge: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.cardSubtle,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 6,
+    },
+    stepperBadgeActive: {
+      backgroundColor: '#0284C7',
+      borderColor: '#0284C7',
+    },
+    stepperBadgeCompleted: {
+      backgroundColor: '#0284C7',
+      borderColor: '#0284C7',
+    },
+    stepperBadgeNum: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.textMuted,
+    },
+    stepperLabelText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textMuted,
+    },
+    stepperLabelTextActive: {
+      color: colors.isDark ? '#38BDF8' : '#0284C7',
+      fontWeight: '700',
+    },
+    stepperLine: {
+      flex: 1,
+      height: 2,
+      backgroundColor: colors.border,
+      marginHorizontal: 8,
+      borderRadius: 1,
     },
     stepperBar: {
       flexDirection: 'row',
@@ -4660,7 +6690,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     },
     posPillSelected: {
       backgroundColor: colors.peachPillBg,
-      borderColor: '#FB923C',
+      borderColor: colors.isDark ? '#0284C7' : '#FB923C',
     },
     posPillText: {
       fontSize: 12,
@@ -4716,7 +6746,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       padding: 10,
     },
     originCardActive: {
-      borderColor: '#FB923C',
+      borderColor: colors.isDark ? '#0284C7' : '#FB923C',
       backgroundColor: colors.peachCardBg,
     },
     radioDot: {
@@ -4727,8 +6757,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       borderColor: colors.border,
     },
     radioDotActive: {
-      borderColor: '#EA580C',
-      backgroundColor: '#EA580C',
+      borderColor: colors.peachAccent,
+      backgroundColor: colors.peachAccent,
     },
     originTitle: {
       fontSize: 12,
@@ -4754,7 +6784,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       alignItems: 'center',
     },
     posCounterBoxActive: {
-      borderColor: '#FB923C',
+      borderColor: colors.isDark ? '#0284C7' : '#FB923C',
       backgroundColor: colors.peachCardBg,
     },
     posCounterLabel: {
@@ -4804,8 +6834,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       backgroundColor: colors.card,
     },
     checkboxSquareActive: {
-      backgroundColor: '#EA580C',
-      borderColor: '#EA580C',
+      backgroundColor: colors.peachAccent,
+      borderColor: colors.peachAccent,
     },
     checkmarkIcon: {
       color: '#FFFFFF',
@@ -4960,7 +6990,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     bigHeroSound: {
       fontSize: 54,
       fontWeight: '800',
-      color: '#C2410C',
+      color: colors.peachText,
     },
     bigHeroTitle: {
       fontFamily: 'SourGummy-Bold',
@@ -5006,22 +7036,48 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       padding: 12,
       marginBottom: 14,
     },
-    dateInputWrapper: {
+    assignHeaderBlock: {
+      marginBottom: 14,
+    },
+    targetWordPhraseCard: {
+      backgroundColor: colors.cardSubtle,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 8,
+    },
+    targetWordPhraseHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 6,
+    },
+    targetWordPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.peachPillBg,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+    },
+    targetWordPillText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.peachPillText,
+    },
+    targetWordPosBadge: {
       backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      height: 42,
-      marginBottom: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
     },
-    dateTextInput: {
-      flex: 1,
-      fontSize: 13,
-      color: colors.inputText,
+    targetWordPosText: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: colors.textSub,
     },
     // ==========================================
     // --- REVIEWS TAB STYLES (Image 2) ---
@@ -5047,6 +7103,9 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       color: colors.textSub,
       marginBottom: 14,
     },
+    reviewFilterControl: { alignSelf: 'flex-end', marginBottom: 12 },
+    reviewSortRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+    reviewSortButton: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderRadius: 8 },
     reviewsFilterTabsBar: {
       flexDirection: 'row',
       borderBottomWidth: 1,
@@ -5170,9 +7229,14 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       flex: 1,
       backgroundColor: colors.modalOverlay,
       justifyContent: 'center',
+      alignItems: 'center',
       padding: 16,
     },
     modalContent: {
+      width: '100%',
+      maxWidth: 500,
+      maxHeight: '90%',
+      alignSelf: 'center',
       backgroundColor: colors.card,
       borderRadius: 20,
       padding: 18,
@@ -5428,7 +7492,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       width: 28,
       height: 28,
       borderRadius: 14,
-      backgroundColor: '#F97316',
+      backgroundColor: colors.isDark ? '#0284C7' : '#F97316',
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -5452,7 +7516,7 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
     },
     waveBar: {
       width: 3,
-      backgroundColor: '#F97316',
+      backgroundColor: colors.isDark ? '#38BDF8' : '#F97316',
       marginHorizontal: 1.5,
       borderRadius: 1.5,
     },
@@ -5927,6 +7991,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       color: colors.text,
       marginTop: -2,
     },
+    profileHeading: { flex: 1, minWidth: 0, gap: 2 },
+    profileMode: { color: colors.textSub, fontSize: 13, fontWeight: '600' },
     newHeaderTitle: {
       fontSize: 20,
       fontWeight: '700',
@@ -6214,6 +8280,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       fontWeight: '700',
       color: colors.text,
     },
+    readOnlyCredential: { backgroundColor: colors.isDark ? '#263241' : '#F1F3F5' },
+    readOnlyCredentialValue: { color: colors.textSub },
     newProfileFieldRow: {
       paddingHorizontal: 14,
       paddingVertical: 10,
@@ -6290,6 +8358,81 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       fontSize: 14,
       fontWeight: '700',
       color: colors.isDark ? '#FED7AA' : '#C48B5A',
+    },
+    studentPlayBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.isDark ? 'rgba(56,189,248,0.18)' : '#E0F2FE',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    // Popup Dropdown Modal Styles
+    dropdownPopupOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 18,
+    },
+    dropdownPopupCard: {
+      width: '100%',
+      maxWidth: 380,
+      maxHeight: '80%',
+      borderRadius: 20,
+      borderWidth: 1,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    dropdownPopupHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingBottom: 12,
+      marginBottom: 8,
+      borderBottomWidth: 1,
+    },
+    dropdownPopupTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    dropdownPopupCloseBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dropdownPopupCloseText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    dropdownPopupOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      borderRadius: 10,
+      marginVertical: 2,
+    },
+    dropdownPopupOptionText: {
+      fontSize: 15,
+    },
+    dropdownPopupDoneBtn: {
+      marginTop: 14,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dropdownPopupDoneBtnText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '700',
     },
   });
 }

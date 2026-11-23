@@ -8,7 +8,6 @@ const SECURITY_QUESTIONS = [
   "What is the middle name of your father?",
   "On what street did you grow up?",
   "What was the name of your elementary school?",
-  "Where did you meet your spouse?",
   "In what town was your father born?",
   "In what town was your mother born?",
 ];
@@ -106,7 +105,7 @@ export default function SecurityQuestionsScreen() {
         </KeyboardAvoidingView>
 
         {/* Custom Dropdown Modal */}
-        <Modal visible={isDropdownVisible} transparent={true} animationType="fade">
+        <Modal visible={isDropdownVisible} transparent={true} animationType="fade" onRequestClose={() => setDropdownVisible(false)}>
           <TouchableOpacity 
             style={styles.modalOverlay} 
             activeOpacity={1} 

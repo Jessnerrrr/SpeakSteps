@@ -1,3 +1,4 @@
+import { PatientPressable } from '@/components/patient-pressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -198,9 +199,8 @@ export default function PickBuddyScreen() {
                 {buddyList.map((buddy) => {
                   const isSelected = activeBuddy.id === buddy.id;
                   return (
-                    <TouchableOpacity
+                    <PatientPressable
                       key={buddy.id}
-                      activeOpacity={0.85}
                       style={[
                         styles.buddyTile,
                         {
@@ -210,12 +210,15 @@ export default function PickBuddyScreen() {
                         },
                         isSelected && styles.buddyTileSelected,
                       ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={buddy.name}
+                      accessibilityState={{ selected: isSelected }}
                       onPress={() => BuddyStore.setActiveBuddy(buddy.id)}
                     >
                       {/* Selection Checkmark Badge */}
                       {isSelected && (
-                        <View style={styles.selectedBadge}>
-                          <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                        <View pointerEvents="none" style={[styles.selectedBadge, { borderColor: buddy.cardBorderColor }]}>
+                          <Ionicons name="checkmark" size={14} color="#0D68AC" />
                         </View>
                       )}
 
@@ -241,7 +244,7 @@ export default function PickBuddyScreen() {
                         {buddy.name}
                       </Text>
                       <Text style={styles.tileSpeciesText}>{buddy.species}</Text>
-                    </TouchableOpacity>
+                    </PatientPressable>
                   );
                 })}
               </View>
@@ -461,7 +464,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: '#0D68AC',
+    backgroundColor: '#F7FBFE',
+    borderWidth: 1,
     width: 22,
     height: 22,
     borderRadius: 11,

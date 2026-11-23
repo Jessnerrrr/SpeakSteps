@@ -1,6 +1,10 @@
+import { CheckinHeader } from '../../components/CheckinHeader';
 import React, { useState } from 'react';
 import { useFonts } from 'expo-font';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { createSpeechCheckin } from '@/services/user-api';
 import {
   Image,
   ImageBackground,
@@ -11,8 +15,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
-import { createSpeechCheckin } from '@/services/user-api';
 
 const soundChecksData = [
   {
@@ -32,7 +34,7 @@ const soundChecksData = [
 export default function SoundCheckScreen() {
   const router = useRouter();
   const { responses } = useLocalSearchParams<{ responses?: string }>();
-  const { patient } = usePatientLearning();
+  const { patient, refresh } = usePatientLearning();
   const { width, height } = useWindowDimensions();
   const isTablet = width > 600;
   const isShortScreen = height < 700;
@@ -71,32 +73,26 @@ export default function SoundCheckScreen() {
     if (currentIndex < soundChecksData.length - 1) {
       setCurrentIndex((prev) => prev + 1);
       setIsRecording(false);
-    } else {
-      if (!patient) {
-        setSaveError('Your child profile is not available. Return to the parent dashboard and try again.');
-        return;
-      }
-      if (typeof responses !== 'string') {
-        setSaveError('The check-in answers are missing. Please start the check-in again.');
-        return;
-      }
-      let questionResponses: unknown;
-      try {
-        questionResponses = JSON.parse(responses);
-      } catch {
-        setSaveError('The check-in answers could not be read. Please start the check-in again.');
-        return;
-      }
-      setIsSaving(true);
-      setSaveError('');
-      try {
-        const saved = await createSpeechCheckin({ patientId: patient.id, responses: questionResponses });
-        router.push({ pathname: '/speech-checkin-result', params: { checkinId: saved.id } } as any);
-      } catch (error) {
-        setSaveError(error instanceof Error ? error.message : 'Could not save this check-in.');
-      } finally {
-        setIsSaving(false);
-      }
+      return;
+    }
+    if (!patient) {
+      setSaveError('The patient profile could not be loaded. Please try again.');
+      return;
+    }
+    if (!responses) {
+      setSaveError('The check-in answers are missing. Please complete the questions again.');
+      return;
+    }
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      const saved = await createSpeechCheckin({ patientId: patient.id, responses: JSON.parse(responses) });
+      await refresh();
+      router.push({ pathname: '/speech-checkin-result', params: { checkinId: saved.id } } as any);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save this speech check-in.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -119,16 +115,7 @@ export default function SoundCheckScreen() {
           bounces={false}
         >
           {/* Top Header Bar placed below the top pattern area, right above the card */}
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              activeOpacity={0.75}
-              onPress={handleBack}
-            >
-              <Text style={styles.backIcon}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Say it!</Text>
-          </View>
+          <CheckinHeader title="Say it!" onBack={handleBack} />
 
           {/* Main White Card */}
           <View
@@ -196,19 +183,18 @@ export default function SoundCheckScreen() {
                 Long press the mic to record your voice
               </Text>
               <Text style={styles.micPrompt}>Ask your child to say it</Text>
+              {saveError ? <Text accessibilityRole="alert" style={styles.micPrompt}>{saveError}</Text> : null}
             </View>
 
             {/* Submit Button */}
             <TouchableOpacity
               style={styles.submitButton}
               activeOpacity={0.85}
+              onPress={() => void handleSubmit()}
               disabled={isSaving}
-              onPress={handleSubmit}
             >
               <Text style={styles.submitButtonText}>{isSaving ? 'Saving…' : 'Submit'}</Text>
             </TouchableOpacity>
-            {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
-
           </View>
         </ScrollView>
       </ImageBackground>
@@ -238,39 +224,6 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     alignSelf: 'center',
     width: '100%',
-  },
-  headerRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  backButton: {
-    width: 43,
-    height: 43,
-    borderRadius: 21.5,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#C8DFEE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 11,
-    shadowColor: '#0C66AD',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  backIcon: {
-    fontSize: 21.5,
-    color: '#0C66AD',
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 24.5,
-    color: '#0C66AD',
-    marginTop: -3,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -421,11 +374,5 @@ const styles = StyleSheet.create({
     fontFamily: 'SourGummy-Bold',
     color: '#FFFFFF',
     fontSize: 20.5,
-  },
-  saveErrorText: {
-    fontFamily: 'SourGummy-Medium',
-    color: '#B91C1C',
-    textAlign: 'center',
-    marginTop: 10,
   },
 });

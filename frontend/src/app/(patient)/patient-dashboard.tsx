@@ -1,12 +1,16 @@
+import { useAssignedActivities } from '@/data/assigned-activities';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
+import Svg, { Path } from 'react-native-svg';
 import {
   ImageBackground,
-  Alert,
+  Modal,
+  Platform,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -17,17 +21,21 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
+// MOCK DATA IMPORT:
+import { MOCK_PATIENT_DASHBOARD } from '@/data/patient-dashboard-mock';
 import { BuddyStore, Buddy } from '@/data/buddy-store';
+import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { adventurePracticeLevels, practiceLevelIcons } from '@/components/adventure-icon';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
 import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
-import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
-import { clearSession } from '@/services/user-api';
 
 export default function PatientDashboardScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
+  const mascotSize = width < 360 ? 100 : isTablet ? 126 : 116;
 
   // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
@@ -36,11 +44,21 @@ export default function PatientDashboardScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const { user, patient, assignments, progress, loading, error, refresh } = usePatientLearning();
+  const data = MOCK_PATIENT_DASHBOARD;
+  const { patient, progress, error } = usePatientLearning();
+  const submissions = progress?.recentSubmissions ?? [];
+  const assignedPractice = useAssignedActivities().filter((activity) => activity.assignmentStatus === 'Assigned');
+  const [isActivitiesOpen, setIsActivitiesOpen] = useState(false);
   const [activeBuddy, setActiveBuddy] = useState<Buddy>(BuddyStore.getActiveBuddy());
+  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
+
+  // Clean dialogue text without emoji
+  const dialogueText = (activeBuddy?.dashboardSpeech || data?.activeBuddy?.speechBubbleText || '')
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .trim();
 
   // FIXED TS ERROR: Added explicit : Buddy type
   useEffect(() => {
@@ -50,38 +68,23 @@ export default function PatientDashboardScreen() {
     return unsubscribe;
   }, []);
 
+  // Listen to child profile changes from Parent Mode
+  useEffect(() => {
+    const unsubscribe = ChildProfileStore.subscribe((updatedProfile: ChildProfile) => {
+      setChildProfile(updatedProfile);
+    });
+    return unsubscribe;
+  }, []);
+
   if (!fontsLoaded) return null;
 
-  const childName = patient?.firstName || user?.childName || 'friend';
-  const completedActivities = progress?.completedCount || 0;
-  const totalActivities = assignments.length;
-  const progressPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
-  const adventureDefinitions = [
-    { id: 'sounds', name: 'Sounds', iconType: 'sounds', bgColor: '#4DAEEB', levels: ['Isolation', 'Syllables'] },
-    { id: 'words', name: 'Words', iconType: 'words', bgColor: '#6BB34C', levels: ['Words'] },
-    { id: 'phrases', name: 'Phrases', iconType: 'phrases', bgColor: '#F6A823', levels: ['Phrases'] },
-    { id: 'sentences', name: 'Sentences', iconType: 'sentences', bgColor: '#EB4444', levels: ['Sentences', 'Conversation'] },
-  ];
-  const adventures = adventureDefinitions.filter((category) =>
-    assignments.some((assignment) => category.levels.includes(assignment.activity.level)),
-  );
-  const nextAssignment = assignments.find((assignment) => assignment.status !== 'Completed');
-  const openAssignment = (assignmentId?: string) => {
-    const assignment = assignments.find((item) => item.id === assignmentId) || nextAssignment;
-    if (!assignment) {
-      router.push('/parent-tasks' as any);
-      return;
-    }
-    router.push({
-      pathname: '/sentences',
-      params: {
-        assignmentId: assignment.id,
-        activityId: assignment.activityId,
-        patientId: patient?.id,
-        patientCode: patient?.patientCode,
-      },
-    } as any);
-  };
+  const displayName = patient
+    ? [patient.firstName, patient.lastName].filter(Boolean).join(' ')
+    : childProfile.displayName;
+  const totalAssigned = progress?.assignedCount ?? 0;
+  const progressPercentage = totalAssigned
+    ? Math.min(100, ((progress?.completedCount ?? 0) / totalAssigned) * 100)
+    : 0;
 
   return (
     <>
@@ -99,8 +102,7 @@ export default function PatientDashboardScreen() {
             {/* TOP HEADER */}
             <View style={styles.topHeader}>
               <View style={styles.greetingRow}>
-                <Text style={styles.greetingText}>Hi, {childName}!</Text>
-                <Text style={styles.waveEmoji}>👋</Text>
+                <Text style={styles.greetingText}>Hi, {displayName}!</Text>
               </View>
 
               <View style={styles.headerRightActions}>
@@ -109,9 +111,8 @@ export default function PatientDashboardScreen() {
                   onBeforeOpen={() => setIsMenuOpen(false)}
                 />
 
-                <TouchableOpacity
-                  style={styles.menuButton}
-                  activeOpacity={0.7}
+                <Pressable accessibilityRole="button"
+                  style={(state) => [styles.menuButton, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
                   onPress={() => setIsMenuOpen(!isMenuOpen)}
                 >
                   <Ionicons
@@ -119,7 +120,7 @@ export default function PatientDashboardScreen() {
                     size={34}
                     color="#0D68AC"
                   />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
@@ -134,9 +135,8 @@ export default function PatientDashboardScreen() {
 
                 <View style={styles.menuDropdownCard}>
                   {/* Row 1: Parent mode */}
-                  <TouchableOpacity
-                    style={styles.menuItemRow}
-                    activeOpacity={0.8}
+                  <Pressable accessibilityRole="button"
+                    style={(state) => [styles.menuItemRow, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
                     onPress={() => {
                       setIsMenuOpen(false);
                       setIsGrownUpModalVisible(true);
@@ -150,15 +150,14 @@ export default function PatientDashboardScreen() {
                     />
                     <Text style={styles.menuItemText}>Parent mode</Text>
                     <Ionicons name="chevron-forward" size={16} color="#F5A623" />
-                  </TouchableOpacity>
+                  </Pressable>
 
                   {/* Soft Divider */}
                   <View style={styles.menuDivider} />
 
                   {/* Row 2: Sign out */}
-                  <TouchableOpacity
-                    style={styles.menuItemRow}
-                    activeOpacity={0.8}
+                  <Pressable accessibilityRole="button"
+                    style={(state) => [styles.menuItemRow, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
                     onPress={() => {
                       setIsMenuOpen(false);
                       setIsSignOutModalVisible(true);
@@ -169,7 +168,7 @@ export default function PatientDashboardScreen() {
                     </View>
                     <Text style={styles.menuItemText}>Sign out</Text>
                     <Ionicons name="chevron-forward" size={16} color="#F5A623" />
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </>
             )}
@@ -179,38 +178,40 @@ export default function PatientDashboardScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
-              {loading ? <Text style={styles.myStepsSubtext}>Loading saved activities…</Text> : null}
-              {error ? (
-                <TouchableOpacity onPress={() => void refresh()}>
-                  <Text style={styles.myStepsSubtext}>{error} Tap to retry.</Text>
-                </TouchableOpacity>
-              ) : null}
               {/* MASCOT & SPEECH BUBBLE ROW */}
               <View style={styles.mascotSpeechRow}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  style={styles.mascotContainer}
+                <Pressable
+                  style={(state) => [styles.mascotContainer, { width: mascotSize, height: mascotSize }, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
                   onPress={() => router.push('/pick-buddy' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${activeBuddy.name} buddy`}
                 >
                   <Image
                     source={activeBuddy.image}
-                    style={[
-                      styles.mascotImage,
-                      activeBuddy.id !== 'chirpy' && styles.mascotImageOther,
-                    ]}
+                    style={styles.mascotImage}
                     contentFit="contain"
                   />
-                </TouchableOpacity>
+                </Pressable>
 
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={styles.speechBubble}
+                <Pressable
+                  style={(state) => [styles.speechBubbleWrapper, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
                   onPress={() => router.push('/pick-buddy' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Buddy speech dialogue"
                 >
-                  <Text style={styles.speechBubbleText}>
-                    {activeBuddy.dashboardSpeech}
-                  </Text>
-                </TouchableOpacity>
+                  <View style={styles.speechBubble}>
+                    <View pointerEvents="none" style={styles.speechBubbleTailContainer}>
+                      <Svg width={15} height={22} viewBox="0 0 15 22">
+                        <Path d="M 15 2 Q 10 8 2 11 Q 10 14 15 20 Z" fill="#FFFFFF" />
+                        <Path d="M 13 4 Q 9 8 2 11 Q 9 14 13 18" fill="none" stroke="#D4E7F6" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+
+                    <Text style={styles.speechBubbleText}>
+                      Hi, {childProfile.displayName}! {dialogueText}
+                    </Text>
+                  </View>
+                </Pressable>
               </View>
 
               {/* "MY STEPS" CARD */}
@@ -224,10 +225,10 @@ export default function PatientDashboardScreen() {
                 <Text style={styles.myStepsTitle}>My Steps</Text>
 
                 <View style={styles.starNumberRow}>
-                  <Text style={styles.starNumberText}>{progress?.stars || 0}</Text>
+                  <Text style={styles.starNumberText}>{progress?.stars ?? 0}</Text>
                   {/* FIXED IMAGE PATH (3 levels up) */}
                   <Image
-                    source={require('../../../assets/images/star-3d.png')}
+                    source={require('../../../assets/images/speaksteps_star_3d.gif')}
                     style={styles.starAssetImage}
                     contentFit="contain"
                   />
@@ -243,7 +244,7 @@ export default function PatientDashboardScreen() {
                 </View>
 
                 <Text style={styles.myStepsSubtext}>
-                  {completedActivities} of {totalActivities} activities done
+                  {progress?.completedCount ?? 0} {(progress?.completedCount ?? 0) === 1 ? 'activity' : 'activities'} done
                 </Text>
               </LinearGradient>
 
@@ -253,26 +254,19 @@ export default function PatientDashboardScreen() {
 
                 <View style={styles.stepperRow}>
                   {/* FIXED TS ERROR: Added explicit : any and : number types */}
-                  {adventures.map((adv, index) => {
-                    const isLast = index === adventures.length - 1;
+                  {data.adventures.map((adv, index) => {
+                    const isLast = index === data.adventures.length - 1;
                     return (
                       <View key={adv.id} style={styles.stepperItemWrapper}>
                         <View style={styles.stepperNodeRow}>
-                          <TouchableOpacity
-                            style={[styles.stepCircle, { backgroundColor: adv.bgColor }]}
-                            activeOpacity={0.8}
-                            onPress={() => openAssignment(assignments.find((item) => adv.levels.includes(item.activity.level))?.id)}
+                          <Pressable
+                            style={(state) => [[styles.stepCircle, { backgroundColor: adv.bgColor }], styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
+                            accessibilityRole="button"
+                            accessibilityLabel={adv.name}
+                            onPress={() => router.push({ pathname: '/sentences', params: { level: adventurePracticeLevels[adv.iconType] } })}
                           >
-                            {adv.iconType === 'sounds' ? (
-                              <Ionicons name="musical-notes" size={26} color="#FFFFFF" />
-                            ) : adv.iconType === 'words' ? (
-                              <Text style={styles.stepAaText}>Aa</Text>
-                            ) : adv.iconType === 'phrases' ? (
-                              <Text style={styles.stepQuotesText}>❝❞</Text>
-                            ) : (
-                              <Ionicons name="clipboard" size={24} color="#FFFFFF" />
-                            )}
-                          </TouchableOpacity>
+                            <Ionicons name={practiceLevelIcons[adventurePracticeLevels[adv.iconType]]} size={26} color="#FFFFFF" />
+                          </Pressable>
 
                           {!isLast && <View style={styles.stepConnectingLine} />}
                         </View>
@@ -284,24 +278,22 @@ export default function PatientDashboardScreen() {
               </View>
 
               {/* "CONTINUE PRACTICE ▶" BUTTON */}
-              <TouchableOpacity
-                style={styles.continuePracticeBtn}
-                activeOpacity={0.85}
-                onPress={() => openAssignment(nextAssignment?.id)}
+              <Pressable accessibilityRole="button"
+                style={(state) => [styles.continuePracticeBtn, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
+                onPress={() => router.push('/sentences' as any)}
               >
                 <Text style={styles.continuePracticeText}>Continue Practice</Text>
                 <View style={styles.playArrowIcon}>
-                  <Ionicons name="play" size={26} color="#0D68AC" />
+                  <Ionicons name="play" size={19} color="#0D68AC" />
                 </View>
-              </TouchableOpacity>
+              </Pressable>
 
               {/* QUICK ACCESS CARDS */}
               <View style={styles.bottomCardsRow}>
                 {/* My Activities Card */}
-                <TouchableOpacity
-                  style={[styles.bottomCard, styles.activitiesCard]}
-                  activeOpacity={0.85}
-                  onPress={() => router.push('/sentences' as any)}
+                <Pressable accessibilityRole="button"
+                  style={(state) => [[styles.bottomCard, styles.activitiesCard], styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
+                  onPress={() => setIsActivitiesOpen(true)}
                 >
                   <View style={styles.cardIconWrapper}>
                     {/* FIXED IMAGE PATH (3 levels up) */}
@@ -313,14 +305,13 @@ export default function PatientDashboardScreen() {
                   </View>
                   <Text style={styles.cardHeading}>My Activities</Text>
                   <Text style={styles.cardSubtext}>
-                    {assignments.length} assigned
+                    {assignedPractice.length > 0 ? assignedPractice.length + ' assigned' : submissions.length + ' submitted'}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
 
                 {/* My Progress Card */}
-                <TouchableOpacity
-                  style={[styles.bottomCard, styles.progressCard]}
-                  activeOpacity={0.85}
+                <Pressable accessibilityRole="button"
+                  style={(state) => [[styles.bottomCard, styles.progressCard], styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
                   onPress={() => router.push('/patient-stars' as any)}
                 >
                   <View style={styles.cardIconWrapper}>
@@ -333,9 +324,9 @@ export default function PatientDashboardScreen() {
                   </View>
                   <Text style={styles.cardHeading}>My Progress</Text>
                   <Text style={styles.cardSubtext}>
-                    {progress?.stars || 0} stars earned
+                    {progress?.stars ?? 0} earned
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </ScrollView>
 
@@ -359,17 +350,54 @@ export default function PatientDashboardScreen() {
         {/* =========================================================================
             SIGN OUT CONFIRMATION MODAL (Cancel / Sign Out)
             ========================================================================= */}
+        <Modal visible={isActivitiesOpen} transparent animationType="fade" onRequestClose={() => setIsActivitiesOpen(false)}>
+          <View style={styles.activitiesBackdrop}>
+            <View style={styles.activitiesDialog}>
+              <View style={styles.activitiesHeader}>
+                <Text style={styles.cardHeading}>My Activities</Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close activities" onPress={() => setIsActivitiesOpen(false)}>
+                  <Ionicons name="close" size={28} color="#0D68AC" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.activitiesList}>
+                                {assignedPractice.map((activity) => (
+                  <Pressable key={activity.id} accessibilityRole="button" accessibilityLabel={'Practice ' + activity.title} style={styles.activityEntry} onPress={() => {
+                    setIsActivitiesOpen(false);
+                    router.push({ pathname: '/practice', params: {
+                      activityId: activity.id, linkedAssignment: 'true', sound: activity.title,
+                      syllable: '', category: activity.category.toLowerCase(),
+                    } });
+                  }}>
+                    <Text style={styles.cardHeading}>{activity.title}</Text>
+                    <Text style={styles.cardSubtext}>{activity.level}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}</Text>
+                  </Pressable>
+                ))}
+                {error ? <Text style={styles.cardSubtext}>{error}</Text> : null}
+                {submissions.map((activity) => (
+                  <View key={activity.id} style={styles.activityEntry}>
+                    <Text style={styles.cardHeading}>{activity.activityTitle}</Text>
+                    <Text style={styles.cardSubtext}>{activity.level} · Submitted</Text>
+                  </View>
+                ))}
+              </ScrollView>
+              <Pressable accessibilityRole="button" style={(state) => [styles.activitiesPlay, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]} onPress={() => {
+                setIsActivitiesOpen(false);
+                router.push('/sentences' as any);
+              }}>
+                <Text style={styles.activitiesPlayText}>Go to Play</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
         <SignOutConfirmModal
           visible={isSignOutModalVisible}
           onClose={() => setIsSignOutModalVisible(false)}
-          onConfirm={async () => {
-            try {
-              await clearSession();
-              setIsSignOutModalVisible(false);
-              router.replace('/patient-login' as any);
-            } catch (error) {
-              Alert.alert('Sign out failed', error instanceof Error ? error.message : 'Could not clear your session.');
+          onConfirm={() => {
+            setIsSignOutModalVisible(false);
+            if (router.canDismiss()) {
+              router.dismissAll();
             }
+            router.replace('/patient-login' as any);
           }}
         />
       </SafeAreaView >
@@ -378,6 +406,16 @@ export default function PatientDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  interactiveMotion: { ...(Platform.OS === 'web' ? { cursor: 'pointer', transitionProperty: 'transform, opacity', transitionDuration: '140ms', transitionTimingFunction: 'ease-out' } : {}) },
+  interactiveHovered: { transform: [{ translateY: -2 }, { scale: 1.02 }] },
+  interactivePressed: { opacity: 0.88, transform: [{ translateY: 1 }, { scale: 0.97 }] },
+  activitiesBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: 'rgba(16, 42, 64, 0.45)' },
+  activitiesDialog: { width: '100%', maxWidth: 440, maxHeight: '85%', backgroundColor: '#FFFFFF', borderRadius: 22, padding: 20, gap: 14 },
+  activitiesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  activitiesList: { flexGrow: 0, flexShrink: 1 },
+  activityEntry: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#D9EAF5' },
+  activitiesPlay: { minHeight: 44, justifyContent: 'center', alignItems: 'center', borderRadius: 12, backgroundColor: '#0D68AC' },
+  activitiesPlayText: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#FFFFFF' },
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   dashboardCard: { flex: 1, backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
@@ -403,10 +441,6 @@ const styles = StyleSheet.create({
     fontSize: 30,
     color: '#0D68AC',
     letterSpacing: -0.5,
-  },
-  waveEmoji: {
-    fontSize: 28,
-    marginLeft: 6,
   },
   headerRightActions: {
     flexDirection: 'row',
@@ -476,18 +510,58 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 16 },
-  mascotSpeechRow: { flexDirection: 'row', alignItems: 'center', marginBottom: -16, zIndex: 10 },
-  mascotContainer: { position: 'relative', marginRight: 10, marginLeft: 4, width: 82, height: 82, justifyContent: 'flex-end', alignItems: 'center', overflow: 'visible' },
-  mascotImage: { width: 82, height: 82 },
-  mascotImageOther: { transform: [{ scale: 1.22 }], marginBottom: -4 },
-  speechBubble: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1.5, borderColor: '#D4E7F6', shadowColor: '#0865AD', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
-  speechBubbleText: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#0D68AC', lineHeight: 18 },
+  mascotSpeechRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  mascotContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mascotImage: { width: '100%', height: '100%' },
+  speechBubbleWrapper: { flex: 1, minWidth: 0, maxWidth: 300 },
+  speechBubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    minHeight: 68,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#D4E7F6',
+    shadowColor: '#0865AD',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+    position: 'relative',
+    overflow: 'visible',
+    alignSelf: 'stretch',
+  },
+  speechBubbleTailContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: -13,
+    marginTop: -11,
+    width: 15,
+    height: 22,
+  },
+  speechBubbleText: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 15,
+    color: '#0D68AC',
+    lineHeight: 20,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+  },
 
   myStepsCard: { borderRadius: 22, paddingVertical: 18, paddingHorizontal: 20, alignItems: 'center', marginBottom: 14, shadowColor: '#0865AD', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 5 },
   myStepsTitle: { fontFamily: 'SourGummy-Bold', fontSize: 24, color: '#FFFFFF', marginBottom: 4 },
   starNumberRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 10, gap: 3 },
   starNumberText: { fontFamily: 'SourGummy-Bold', fontSize: 44, color: '#FFFFFF' },
-  starAssetImage: { width: 42, height: 42, marginTop: -2 },
+  starAssetImage: { width: 66, height: 65, marginTop: -2 },
   capsuleProgressTrack: { width: '100%', height: 18, backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden', padding: 3, marginBottom: 8 },
   capsuleProgressFill: { height: '100%', backgroundColor: '#F5A623', borderRadius: 10 },
   myStepsSubtext: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.12)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
@@ -498,21 +572,41 @@ const styles = StyleSheet.create({
   stepperItemWrapper: { alignItems: 'center', flex: 1 },
   stepperNodeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' },
   stepCircle: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
-  stepAaText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#FFFFFF' },
+
   stepQuotesText: { fontSize: 22, color: '#FFFFFF', fontWeight: 'bold' },
   stepConnectingLine: { position: 'absolute', right: -14, width: 28, height: 6, backgroundColor: '#B6D7F2', borderRadius: 3, zIndex: -1 },
   stepLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0D68AC', marginTop: 8 },
 
-  continuePracticeBtn: { backgroundColor: '#F5A623', borderRadius: 28, paddingVertical: 15, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderBottomWidth: 5, borderBottomColor: '#C47B09', shadowColor: '#C47B09', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 5, elevation: 4 },
-  continuePracticeText: { fontFamily: 'SourGummy-Bold', fontSize: 21, color: '#FFFFFF', marginRight: 10, textShadowColor: 'rgba(0,0,0,0.15)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
-  playArrowIcon: { marginLeft: 2 },
+  continuePracticeBtn: {
+    minHeight: 70,
+    backgroundColor: '#D9ECFA',
+    borderRadius: 22,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: '#AECFE8',
+    borderBottomWidth: 6,
+    borderBottomColor: '#83B2D6',
+    shadowColor: '#0D68AC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.19,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  continuePracticeText: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#0D68AC' },
+  playArrowIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EDF7FE' },
 
   bottomCardsRow: { flexDirection: 'row', gap: 12, marginBottom: 6 },
   bottomCard: { flex: 1, borderRadius: 22, paddingVertical: 14, paddingHorizontal: 10, alignItems: 'center', borderWidth: 1.5, borderBottomWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
   activitiesCard: { backgroundColor: '#A0C6E8', borderColor: '#8AB7DF', borderBottomColor: '#6B9DC9' },
   progressCard: { backgroundColor: '#EFE0B6', borderColor: '#E6D4A0', borderBottomColor: '#CCA95B' },
-  cardIconWrapper: { marginBottom: 8, height: 56, width: 56, justifyContent: 'center', alignItems: 'center' },
-  cardImageIllustration: { width: 54, height: 54 },
+  cardIconWrapper: { marginBottom: 8, height: 68, width: 68, justifyContent: 'center', alignItems: 'center' },
+  cardImageIllustration: { width: 64, height: 64 },
   cardHeading: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#000000', marginBottom: 2 },
   cardSubtext: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#444444' },
 });

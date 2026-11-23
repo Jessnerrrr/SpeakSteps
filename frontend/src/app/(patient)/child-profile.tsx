@@ -1,3 +1,4 @@
+import { maximumStudentAge, minimumStudentAge } from '@/data/calendar-date';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -23,11 +24,8 @@ import {
 import { ParentBottomNav } from '@/components/parent-bottom-nav';
 import { ParentHeader } from '@/components/parent-header';
 import { ChildProfile, ChildProfileStore, PRESET_CHILD_AVATARS } from '@/data/child-profile-store';
-import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
-import { updateMyChildProfile } from '@/services/user-api';
 
 export default function ChildProfileScreen() {
-  const { patient, refresh } = usePatientLearning();
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
     'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
@@ -42,11 +40,16 @@ export default function ChildProfileScreen() {
   const [nameError, setNameError] = useState('');
 
   const [isEditingAge, setIsEditingAge] = useState(false);
-  const [tempAge, setTempAge] = useState(profile.age);
+  const [tempAge, setTempAge] = useState(Math.min(maximumStudentAge, Math.max(minimumStudentAge, profile.age)));
+
+  // Confirmation Modal State (for both Name and Age changes)
+  const [pendingChange, setPendingChange] = useState<{
+    type: 'name' | 'age';
+    oldValue: string | number;
+    newValue: string | number;
+  } | null>(null);
 
   const [isAvatarPickerVisible, setIsAvatarPickerVisible] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [profileError, setProfileError] = useState('');
 
   // Synchronize with shared ChildProfileStore
   useEffect(() => {
@@ -55,18 +58,6 @@ export default function ChildProfileScreen() {
     });
     return unsubscribe;
   }, []);
-
-  useEffect(() => {
-    if (!patient) return;
-    const fullName = [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ');
-    const age = Number(patient.age);
-    ChildProfileStore.updateProfile({
-      id: patient.id,
-      fullName,
-      displayName: fullName.split(/\s+/)[0] || profile.displayName,
-      ...(Number.isInteger(age) && age > 0 ? { age } : {}),
-    });
-  }, [patient?.id, patient?.firstName, patient?.middleName, patient?.lastName, patient?.age]);
 
   if (!fontsLoaded) return null;
 
@@ -84,49 +75,78 @@ export default function ChildProfileScreen() {
     setIsEditingName(true);
   };
 
-  const handleSaveName = async () => {
+  const handleSaveName = () => {
     const trimmed = tempName.trim();
     if (!trimmed) {
-      setNameError('Please enter a valid name');
+      setNameError('Child’s name is required. Please fill in this field.');
       return;
     }
-    setSavingProfile(true);
-    setProfileError('');
-    try {
-      const saved = await updateMyChildProfile({ childName: trimmed, childAge: profile.age });
-      await refresh();
-      const fullName = [saved.firstName, saved.middleName, saved.lastName].filter(Boolean).join(' ');
-      ChildProfileStore.updateProfile({ id: saved.id, fullName });
-      setIsEditingName(false);
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Could not save your child’s name.');
-    } finally {
-      setSavingProfile(false);
+    if (!/^[a-zA-Z\s.'-]+$/.test(trimmed)) {
+      setNameError('Child’s name should only contain letters and spaces (no numbers or special characters).');
+      return;
     }
+    if (trimmed.length < 2) {
+      setNameError('Name must be at least 2 characters');
+      return;
+    }
+    if (!/^[a-zA-Z\s.'-]+$/.test(trimmed)) {
+      setNameError('Name can only contain letters, spaces, and hyphens');
+      return;
+    }
+
+    if (trimmed === profile.fullName) {
+      setIsEditingName(false);
+      return;
+    }
+
+    // Require confirmation for changes
+    setPendingChange({
+      type: 'name',
+      oldValue: profile.fullName,
+      newValue: trimmed,
+    });
   };
 
   const handleOpenAgeEdit = () => {
-    setTempAge(profile.age);
+    setTempAge(Math.min(maximumStudentAge, Math.max(minimumStudentAge, profile.age)));
     setIsEditingAge(true);
   };
 
-  const handleSaveAge = async () => {
-    if (tempAge < 1 || tempAge > 18) {
-      setProfileError('Age must be between 1 and 18.');
+  const handleSaveAge = () => {
+    if (tempAge < 5) {
       return;
     }
-    setSavingProfile(true);
-    setProfileError('');
-    try {
-      await updateMyChildProfile({ childName: profile.fullName, childAge: tempAge });
-      await refresh();
-      ChildProfileStore.updateProfile({ age: tempAge });
+
+    if (tempAge === profile.age) {
       setIsEditingAge(false);
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Could not save your child’s age.');
-    } finally {
-      setSavingProfile(false);
+      return;
     }
+
+    // Require confirmation for changes
+    setPendingChange({
+      type: 'age',
+      oldValue: `${profile.age} years old`,
+      newValue: `${tempAge} years old`,
+    });
+  };
+
+  const handleConfirmChange = () => {
+    if (!pendingChange) return;
+
+    if (pendingChange.type === 'name') {
+      ChildProfileStore.updateProfile({ fullName: pendingChange.newValue as string });
+      setIsEditingName(false);
+    } else if (pendingChange.type === 'age') {
+      const numericAge = parseInt(String(pendingChange.newValue), 10);
+      ChildProfileStore.updateProfile({ age: Number.isNaN(numericAge) ? minimumStudentAge : numericAge });
+      setIsEditingAge(false);
+    }
+
+    setPendingChange(null);
+  };
+
+  const handleCancelConfirmation = () => {
+    setPendingChange(null);
   };
 
   const handlePickFromLibrary = async () => {
@@ -143,7 +163,7 @@ export default function ChildProfileScreen() {
         setIsAvatarPickerVisible(false);
       }
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Could not select an image.');
+      console.log('Error selecting image from library:', error);
     }
   };
 
@@ -291,7 +311,8 @@ export default function ChildProfileScreen() {
               <TextInput
                 value={tempName}
                 onChangeText={(val) => {
-                  setTempName(val);
+                  const filtered = val.replace(/[^a-zA-Z\s.'-]/g, '');
+                  setTempName(filtered);
                   if (nameError) setNameError('');
                 }}
                 placeholder="Enter child's full name"
@@ -305,7 +326,6 @@ export default function ChildProfileScreen() {
             </View>
 
             {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
-            {profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
 
             <View style={styles.dialogActionRow}>
               <TouchableOpacity
@@ -319,10 +339,9 @@ export default function ChildProfileScreen() {
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
-                disabled={savingProfile}
                 onPress={handleSaveName}
               >
-                <Text style={styles.saveButtonText}>{savingProfile ? 'Saving…' : 'Save Changes'}</Text>
+                <Text style={styles.saveButtonText}>Save Changes</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -352,21 +371,21 @@ export default function ChildProfileScreen() {
             </View>
 
             <Text style={styles.dialogSubtitle}>
-              Adjust your child's age to calibrate recommended activities.
+              Update the age shown in your child's profile.
             </Text>
 
             {/* Stepper Control */}
             <View style={styles.stepperContainer}>
               <TouchableOpacity
-                style={[styles.stepperButton, tempAge <= 1 && styles.stepperButtonDisabled]}
+                style={[styles.stepperButton, tempAge <= minimumStudentAge && styles.stepperButtonDisabled]}
                 activeOpacity={0.7}
-                disabled={tempAge <= 1}
-                onPress={() => setTempAge((prev) => Math.max(1, prev - 1))}
+                disabled={tempAge <= minimumStudentAge}
+                onPress={() => setTempAge((prev) => Math.max(minimumStudentAge, prev - 1))}
               >
                 <Ionicons
                   name="remove"
                   size={26}
-                  color={tempAge <= 1 ? '#B2C8DA' : '#0D68AC'}
+                  color={tempAge <= minimumStudentAge ? '#B2C8DA' : '#0D68AC'}
                 />
               </TouchableOpacity>
 
@@ -376,21 +395,28 @@ export default function ChildProfileScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.stepperButton, tempAge >= 18 && styles.stepperButtonDisabled]}
+                style={[styles.stepperButton, tempAge >= maximumStudentAge && styles.stepperButtonDisabled]}
                 activeOpacity={0.7}
-                disabled={tempAge >= 18}
-                onPress={() => setTempAge((prev) => Math.min(18, prev + 1))}
+                disabled={tempAge >= maximumStudentAge}
+                onPress={() => setTempAge((prev) => Math.min(maximumStudentAge, prev + 1))}
               >
                 <Ionicons
                   name="add"
                   size={26}
-                  color={tempAge >= 18 ? '#B2C8DA' : '#0D68AC'}
+                  color={tempAge >= maximumStudentAge ? '#B2C8DA' : '#0D68AC'}
                 />
               </TouchableOpacity>
             </View>
 
+            {/* Minimum Age 5 Validation Badge */}
+            <View style={styles.ageValidationBadge}>
+              <Ionicons name="information-circle" size={17} color="#0D68AC" />
+              <Text style={styles.ageValidationText}>
+                SpeakSteps is designed for children aged {minimumStudentAge} to {maximumStudentAge}.
+              </Text>
+            </View>
+
             <View style={styles.dialogActionRow}>
-              {profileError ? <Text style={styles.errorText}>{profileError}</Text> : null}
               <TouchableOpacity
                 style={styles.cancelButton}
                 activeOpacity={0.7}
@@ -402,10 +428,9 @@ export default function ChildProfileScreen() {
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
-                disabled={savingProfile}
                 onPress={handleSaveAge}
               >
-                <Text style={styles.saveButtonText}>{savingProfile ? 'Saving…' : 'Save Changes'}</Text>
+                <Text style={styles.saveButtonText}>Save Changes</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -485,6 +510,81 @@ export default function ChildProfileScreen() {
             >
               <Text style={styles.closeSheetText}>Close</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* =========================================================================
+          MODAL 4: CONFIRMATION MODAL (Name / Age Change Confirmation)
+          ========================================================================= */}
+      <Modal
+        visible={pendingChange !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelConfirmation}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={handleCancelConfirmation}>
+            <View style={styles.modalDimmedBackdrop} />
+          </TouchableWithoutFeedback>
+
+          <View style={styles.dialogCard}>
+            <View style={styles.dialogHeader}>
+              <View style={[styles.dialogIconBadge, { backgroundColor: '#E8F4FC' }]}>
+                <Ionicons
+                  name={pendingChange?.type === 'name' ? 'person' : 'calendar'}
+                  size={20}
+                  color="#0D68AC"
+                />
+              </View>
+              <Text style={styles.dialogTitle}>
+                {pendingChange?.type === 'name' ? 'Confirm Name Change' : 'Confirm Age Change'}
+              </Text>
+            </View>
+
+            <Text style={styles.dialogSubtitle}>
+              {pendingChange?.type === 'name'
+                ? "Are you sure you want to update your child's name? This will be updated across both Parent and Child modes."
+                : "Are you sure you want to update your child's age?"}
+            </Text>
+
+            <View style={styles.changeComparisonCard}>
+              <View style={styles.comparisonItem}>
+                <Text style={styles.comparisonLabel}>Previous</Text>
+                <Text style={styles.comparisonOldValue} numberOfLines={1}>
+                  {pendingChange?.oldValue}
+                </Text>
+              </View>
+
+              <View style={styles.comparisonArrowWrapper}>
+                <Ionicons name="arrow-forward" size={18} color="#2A8AC8" />
+              </View>
+
+              <View style={styles.comparisonItem}>
+                <Text style={styles.comparisonLabel}>New</Text>
+                <Text style={styles.comparisonNewValue} numberOfLines={1}>
+                  {pendingChange?.newValue}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.dialogActionRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                activeOpacity={0.7}
+                onPress={handleCancelConfirmation}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                activeOpacity={0.8}
+                onPress={handleConfirmChange}
+              >
+                <Text style={styles.saveButtonText}>Confirm Change</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -908,6 +1008,74 @@ const styles = StyleSheet.create({
     fontFamily: 'SourGummy-Bold',
     fontSize: 15,
     color: '#7C93A8',
+  },
+
+  /* Confirmation Modal Comparison Card */
+  changeComparisonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F9FE',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#D4E8F8',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginVertical: 4,
+  },
+  comparisonItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  comparisonLabel: {
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 11,
+    color: '#7C93A8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  comparisonOldValue: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 15,
+    color: '#7692A8',
+    textAlign: 'center',
+  },
+  comparisonArrowWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E2F0FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+  },
+  comparisonNewValue: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 15,
+    color: '#0D68AC',
+    textAlign: 'center',
+  },
+
+  /* Age Minimum Validation Badge in Edit Age Modal */
+  ageValidationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EAF4FC',
+    borderWidth: 1,
+    borderColor: '#C6DFFA',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 14,
+    gap: 8,
+  },
+  ageValidationText: {
+    flex: 1,
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 12,
+    color: '#0D68AC',
+    lineHeight: 16,
   },
 });
 

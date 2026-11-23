@@ -68,7 +68,19 @@ function roleLoginRouter(role) {
       const filter = {};
       const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
       const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 200) : '';
-      if (category && category !== 'All activity') filter.category = category.slice(0, 60);
+      if (category && category !== 'All activity') {
+        const categoryAliases = {
+          Accounts: ['Account'],
+          Assignments: ['Activity'],
+          Students: ['Practice', 'Clinical', 'Media'],
+          Requests: ['Request'],
+          Settings: ['Settings'],
+        };
+        const matchingCategories = categoryAliases[category] || [category.slice(0, 60)];
+        filter.category = matchingCategories.length === 1
+          ? matchingCategories[0]
+          : { $in: matchingCategories };
+      }
       if (search) {
         const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const expression = new RegExp(escapedSearch, 'i');

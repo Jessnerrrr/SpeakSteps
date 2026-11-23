@@ -10,7 +10,7 @@ export const languageProfiles = [
 ] as const;
 
 export const hierarchyLevels = [
-  'Isolation',
+  'Sound',
   'Syllable',
   'Word Level',
   'Phrase Level',

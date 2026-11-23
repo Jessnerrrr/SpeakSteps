@@ -1,101 +1,94 @@
+import { usePracticeRecorder } from '@/components/use-practice-recorder';
+import { useAssignedActivities } from '@/data/assigned-activities';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { AudioPlaybackButton } from '@/components/audio/AudioPlaybackButton';
+import { createSubmission, getPracticeItems, uploadAudioFile } from '@/services/user-api';
+import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentRef } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  Pressable,
   View,
-  useWindowDimensions,
 } from 'react-native';
-import {
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-  useAudioPlayer,
-  useAudioPlayerStatus,
-  useAudioRecorder,
-  useAudioRecorderState,
-} from 'expo-audio';
 
 // FIXED IMPORTS: 2 levels up to reach src/types and src/components
-import type { Position } from '../../types/sentences';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
-import { createSubmission, getMyPatients, resolveAudioUrl, uploadAudioFile, type PatientSearchResult } from '@/services/user-api';
+import { ChildScreenFrame, childScreenColors } from '../../components/child-screen-frame';
+import { BuddyStore } from '../../data/buddy-store';
+import type { AdventureCategory } from '../../data/patient-dashboard-mock';
+
+type PracticeItem = Awaited<ReturnType<typeof getPracticeItems>>[number];
 
 export default function PracticeScreen() {
   const params = useLocalSearchParams<{
     sentenceId: string;
     sound: string;
     syllable: string;
-    stars: string;
+    category: AdventureCategory['iconType'] | 'sound';
+    activityId: string;
+    linkedAssignment: string;
+    practiceItemId: string;
     position: string;
-    assignmentId?: string;
-    practiceItemId?: string;
-    patientId?: string;
-    patientCode?: string;
-    modelAudioUrl?: string | string[];
+    language: string;
+    level: string;
   }>();
 
-  const position = (params.position ?? 'Initial') as Position;
+  const [submissionError, setSubmissionError] = useState('');
+  const [practiceItem, setPracticeItem] = useState<PracticeItem | null>(null);
+  const [promptIndex, setPromptIndex] = useState(0);
+  const audio = usePracticeRecorder(promptIndex);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const { patient, refresh } = usePatientLearning();
+  const assignments = useAssignedActivities();
+  const assignment = params.linkedAssignment === 'true'
+    ? assignments.find((item) => item.id === params.activityId)
+    : undefined;
+  const prompts = assignment?.prompts ?? (practiceItem ? [{
+    text: params.level === 'Sentences'
+      ? practiceItem.sentenceText || practiceItem.syllable || practiceItem.sound
+      : params.level === 'Syllables'
+        ? practiceItem.syllable || practiceItem.sound
+        : practiceItem.sound,
+    position: practiceItem.position,
+  }] : []);
+  const currentPrompt = prompts[promptIndex];
+  const hasNextPrompt = promptIndex < prompts.length - 1;
+  const instructions = assignment?.description;
+  const guidance = assignment?.guidance?.trim();
+  const [submission, setSubmission] = useState<'earned' | 'repeat' | 'missing' | null>(null);
   const sound = params.sound ?? '/s/';
-  const syllable = params.syllable ?? 'sa';
-  const modelAudioUrl = Array.isArray(params.modelAudioUrl) ? params.modelAudioUrl[0] : params.modelAudioUrl;
-  const modelPlayer = useAudioPlayer(modelAudioUrl ? resolveAudioUrl(modelAudioUrl) : null);
-  const modelPlayerStatus = useAudioPlayerStatus(modelPlayer);
+  const syllable = params.syllable ?? (params.level === 'Sound' ? '' : 'sa');
+  const category = (assignment?.level ?? params.level) === 'Syllables'
+    ? 'syllables' : params.category === 'sound' ? 'sounds' : params.category ?? 'sounds';
+  const practiceContext = assignment
+    ? assignment.dueDate ? 'Due ' + assignment.dueDate : 'Assigned practice'
+    : practiceItem?.language ?? (params.level === 'Sound' ? 'Individual sound' : params.language ?? 'Play');
+  const practiceId = assignment ? 'assigned:' + assignment.id : practiceItem ? 'library:' + practiceItem.id : params.sentenceId;
+  const title = assignment?.title ?? practiceItem?.sentenceText ?? practiceItem?.syllable ?? [sound, syllable].filter(Boolean).join(' ');
 
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder);
-  const [permissionGranted, setPermissionGranted] = useState(false);
-  const [recordingUri, setRecordingUri] = useState<string | null>(null);
-  const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
-  const [patient, setPatient] = useState<PatientSearchResult | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const recording = recorderState.isRecording;
+  const buddy = useSyncExternalStore(BuddyStore.subscribe, BuddyStore.getActiveBuddy, BuddyStore.getActiveBuddy);
 
-  // Responsive Hooks
-  const { width } = useWindowDimensions();
-  const isTablet = width > 600;
+  useEffect(() => {
+    if (!params.practiceItemId || assignment) return;
+    let active = true;
+    void getPracticeItems({ language: params.language }).then((items) => {
+      if (active) setPracticeItem(items.find((item) => item.id === params.practiceItemId) ?? null);
+    }).catch((loadError) => {
+      if (active) setSubmissionError(loadError instanceof Error ? loadError.message : 'Could not load this practice item.');
+    });
+    return () => { active = false; };
+  }, [assignment, params.language, params.practiceItemId]);
 
   // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
-    SourGummy: require('../../../assets/SourGummy.ttf'),
+    'SourGummy-Medium': require('../../../assets/SourGummy-Medium.ttf'),
+    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
-  
-  useEffect(() => {
-    let active = true;
-    AudioModule.requestRecordingPermissionsAsync()
-      .then(({ granted }) => {
-        if (active) {
-          setPermissionGranted(granted);
-          if (!granted) setError('Microphone access is required to record practice.');
-        }
-      })
-      .catch((permissionError: unknown) => {
-        if (active) setError(permissionError instanceof Error ? permissionError.message : 'Could not request microphone access.');
-      });
-    setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true })
-      .catch((modeError: unknown) => {
-        if (active) setError(modeError instanceof Error ? modeError.message : 'Could not prepare audio recording.');
-      });
-    getMyPatients()
-      .then((patients) => {
-        if (!active) return;
-        const selected = params.patientId
-          ? patients.find((item) => item.id === params.patientId)
-          : patients.find((item) => item.patientCode === params.patientCode) || patients[0];
-        setPatient(selected || null);
-      })
-      .catch((loadError: unknown) => {
-        if (active) setError(loadError instanceof Error ? loadError.message : 'Could not load the child profile.');
-      });
-    return () => {
-      active = false;
-    };
-  }, [params.patientCode, params.patientId]);
 
   if (!fontsLoaded) return null;
 
@@ -107,179 +100,185 @@ export default function PracticeScreen() {
     }
   };
 
-  const toggleRecording = async () => {
-    setError('');
-    try {
-      if (recording) {
-        await recorder.stop();
-        setRecordingUri(recorder.uri || null);
-        return;
-      }
-      if (!permissionGranted) {
-        const permission = await AudioModule.requestRecordingPermissionsAsync();
-        setPermissionGranted(permission.granted);
-        if (!permission.granted) {
-          setError('Microphone access is required to record practice.');
-          return;
-        }
-      }
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setRecordingUri(null);
-      setUploadedAudioUrl(null);
-    } catch (recordError) {
-      setError(recordError instanceof Error ? recordError.message : 'Could not record this practice attempt.');
-    }
+  const goToPrompt = (index: number) => {
+    audio.stopPlayback();
+    setPromptIndex(index);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
 
-  const toggleModelPlayback = async () => {
-    if (!modelAudioUrl) return;
-    setError('');
-    if (modelPlayerStatus.playing) {
-      modelPlayer.pause();
-      return;
-    }
-    try {
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
-      if (modelPlayerStatus.didJustFinish) await modelPlayer.seekTo(0);
-      modelPlayer.play();
-    } catch (playError) {
-      setError(playError instanceof Error ? playError.message : 'Could not play the SLP model audio.');
-    }
-  };
-
-  const submitPractice = async () => {
-    if (recording) {
-      setError('Stop recording before submitting.');
-      return;
-    }
-    if (!recordingUri) {
-      setError('Record a practice attempt before submitting.');
+  const submitRecording = async () => {
+    if (!audio.take) {
+      setSubmissionError('Record your voice before submitting.');
       return;
     }
     if (!patient) {
-      setError('No patient profile is available for this account.');
+      setSubmissionError('The patient profile could not be loaded. Please try again.');
       return;
     }
-    setSaving(true);
-    setError('');
+    if (params.linkedAssignment === 'true' && !assignment) {
+      setSubmissionError('This assignment is no longer available for this student.');
+      return;
+    }
+    if (!practiceItem && !assignment) {
+      setSubmissionError('This practice activity is no longer available.');
+      return;
+    }
+    setSubmissionError('');
     try {
-      const audioRecordingUrl = uploadedAudioUrl || await uploadAudioFile(recordingUri);
-      if (!uploadedAudioUrl) setUploadedAudioUrl(audioRecordingUrl);
-      await createSubmission({
+      const audioRecordingUrl = await uploadAudioFile(audio.take);
+      const saved = await createSubmission({
         patientId: patient.id,
-        patientCode: patient.patientCode,
-        assignmentId: params.assignmentId,
-        practiceItemId: params.practiceItemId,
+        assignmentId: assignment?.id,
+        practiceItemId: practiceItem?.id,
         audioRecordingUrl,
-        durationSeconds: Math.round(recorderState.durationMillis / 1000),
       });
-      router.back();
+      await refresh();
+      setSubmission(saved.starsAwarded > 0 ? 'earned' : 'repeat');
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Could not submit this practice attempt.');
-    } finally {
-      setSaving(false);
+      setSubmissionError(submitError instanceof Error ? submitError.message : 'Could not submit this practice recording.');
     }
   };
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
+      <ChildScreenFrame>
 
         {/* Header */}
         <View style={styles.header}>
-          <View style={[styles.headerContent, isTablet && styles.contentMax]}>
-            <TouchableOpacity onPress={handleBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
-              <Text style={styles.backIcon}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Practice</Text>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleBack} style={({ pressed }) => [styles.backBtn, pressed && styles.buttonPressed]} accessibilityRole="button" accessibilityLabel="Back">
+              <Ionicons name="chevron-back" size={26} color="#0D68AC" />
+            </Pressable>
+            <Text accessibilityRole="header" style={styles.headerTitle}>Practice</Text>
           </View>
         </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {/* Centering Wrapper for tablet responsiveness */}
-          <View style={[styles.centerWrapper, isTablet && styles.contentMax]}>
-            
-            {/* Sound Banner (Chirpy) */}
+          <View style={styles.centerWrapper}>
+
             <View style={styles.banner}>
-              {/* FIXED IMAGE PATH (3 levels up) */}
-              <Image
-                source={require('../../../assets/images/bird-logo.gif')}
-                style={styles.chirpy}
-                contentFit="contain"
-              />
+              <Image source={buddy.image} style={styles.buddyImage} contentFit="contain" />
               <View style={styles.bannerText}>
-                <Text style={styles.bannerLabel}>Sounds · {position}</Text>
-                <Text style={styles.bannerSound}>{sound} {syllable}</Text>
+                <Text style={styles.bannerLabel}>{params.level ?? (category.charAt(0).toUpperCase() + category.slice(1))} · {practiceContext}</Text>
+                <Text style={styles.bannerSound}>{title}</Text>
               </View>
             </View>
 
-            {/* Video Card */}
-            <View style={styles.videoCard}>
-              <View style={styles.videoPlaceholder}>
-                <Text style={styles.videoPlaceholderText}>▶</Text>
+            {(!submission || submission === 'missing') && <View style={styles.videoCard}>
+              {currentPrompt ? (
+                <View style={styles.promptList}>
+                  <View accessibilityLiveRegion="polite" style={styles.promptList}>
+                    <Text style={styles.promptCount}>Prompt {promptIndex + 1} of {prompts.length}{currentPrompt.position ? ' · ' + currentPrompt.position : ''}</Text>
+                    <Text style={styles.prompt}>{currentPrompt.text}</Text>
+                    <AudioPlaybackButton
+                      audioUrl={assignment?.modelAudioUrls?.[promptIndex] ?? practiceItem?.sampleAudioUrl}
+                      label="Listen to the example"
+                      variant="inline"
+                    />
+                  </View>
+                  {instructions ? <Text style={styles.videoHint}>{instructions}</Text> : null}
+                </View>
+              ) : (
+                <>
+                  <View style={styles.videoPlaceholder}>
+                    <Ionicons name="play" size={34} color="#0D68AC" />
+                  </View>
+                  <Text style={styles.videoHint}>{instructions || 'A practice video is unavailable for this activity.'}</Text>
+                  <View style={styles.watchAgainBtn}>
+                    <Text style={styles.watchAgainText}>Say it out loud</Text>
+                  </View>
+                </>
+              )}
+              {guidance ? (
+                <View style={styles.guidance}>
+                  <Text style={styles.watchAgainText}>Therapist guidance</Text>
+                  <Text style={styles.guidanceText}>{guidance}</Text>
+                </View>
+              ) : null}
+            </View>}
+
+            {submission && submission !== 'missing' ? (
+              <View accessible accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.rewardCard}>
+                <View style={styles.rewardIcon}>
+                  <Image source={require('../../../assets/images/speaksteps_star_3d.gif')} style={styles.rewardStar} contentFit="contain" />
+                </View>
+                <View style={styles.rewardCopy}>
+                  <Text style={styles.rewardTitle}>{submission === 'earned' ? 'You earned a star!' : 'Great practice!'}</Text>
+                  <Text style={styles.rewardDetail}>{submission === 'earned'
+                    ? 'Activity submitted. Your star is in My Stars.'
+                    : 'You already earned a star for this activity.'}</Text>
+                </View>
               </View>
-              <Text style={styles.videoHint}>Watch the video how to say the word</Text>
-              <TouchableOpacity
-                style={styles.watchAgainBtn}
-                activeOpacity={0.8}
-                onPress={modelAudioUrl ? () => void toggleModelPlayback() : undefined}
-                accessibilityLabel={modelAudioUrl ? 'Play or pause SLP model audio' : 'Watch again'}
-              >
-                <Text style={styles.watchAgainText}>
-                  {modelAudioUrl
-                    ? `${modelPlayerStatus.playing ? '❚❚  Pause' : '▶  Listen to'} SLP Model`
-                    : '▶  Watch again'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            ) : (
+              <View style={styles.micSection}>
+                <Pressable accessibilityRole="button" accessibilityLabel={audio.recording ? 'Stop recording' : audio.take ? 'Record again' : 'Record'}
+                  disabled={audio.busy} onPress={() => void audio.record()}
+                  style={({ pressed }) => [styles.micBtn, pressed && styles.buttonPressed, audio.recording && styles.micRecording]}>
+                  <Image source={require('../../../assets/images/mic.png')} style={styles.micIconImg} contentFit="contain" />
+                </Pressable>
+                <Text accessibilityLiveRegion="polite" style={styles.micLabel}>{audio.recording ? 'Stop recording' : audio.take ? 'Record again' : 'Record your voice'}</Text>
+                {audio.take && !audio.recording && (
+                  <Pressable accessibilityRole="button" onPress={() => void audio.listen()} disabled={audio.busy}
+                    style={({ pressed }) => [styles.listenButton, pressed && styles.buttonPressed]}>
+                    <Ionicons name={audio.playing ? 'pause' : 'play'} size={17} color="#0D68AC" />
+                    <Text style={styles.previousPromptText}>{audio.playing ? 'Pause playback' : 'Listen to my recording'}</Text>
+                  </Pressable>
+                )}
+                <Text style={styles.micHint}>{audio.recording ? 'Say the prompt, then tap to stop.' : 'Record a take before submitting.'}</Text>
+                {audio.error ? <Text accessibilityRole="alert" style={styles.micHint}>{audio.error}</Text> : null}
+              </View>
 
-            {/* Mic Section */}
-            <View style={styles.micSection}>
-              <TouchableOpacity
-                style={[styles.micBtn, recording && styles.micBtnActive]}
-                onPress={() => void toggleRecording()}
-                activeOpacity={0.85}
-              >
-                {/* FIXED IMAGE PATH (3 levels up) */}
-                <Image
-                  source={require('../../../assets/images/mic.png')}
-                  style={styles.micIconImg}
-                  contentFit="contain"
-                />
-              </TouchableOpacity>
-              <Text style={styles.micLabel}>Ask your child to say it</Text>
-              <Text style={styles.micHint}>{recording ? 'Tap to stop recording' : 'Tap the mic to record your voice'}</Text>
-              {recordingUri ? <Text style={styles.micHint}>Recording ready · {Math.round(recorderState.durationMillis / 1000)} sec</Text> : null}
-            </View>
-
-            {/* Submit Button */}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <TouchableOpacity disabled={saving} style={styles.submitBtn} activeOpacity={0.8} onPress={() => void submitPractice()}>
-              <Text style={styles.submitText}>{saving ? 'Submitting…' : 'Submit'}</Text>
-            </TouchableOpacity>
+            )}
+            {submissionError ? <Text accessibilityRole="alert" style={styles.rewardDetail}>{submissionError}</Text> : null}
+            {submission === 'missing' ? <Text accessibilityRole="alert" style={styles.rewardDetail}>Choose a sound in Play to submit an activity.</Text> : null}
+            <Pressable accessibilityRole="button" disabled={audio.recording || audio.busy}
+              style={({ pressed }) => [styles.submitBtn, submission && styles.rewardAction, pressed && styles.buttonPressed, (audio.recording || audio.busy) && styles.submitDisabled]} onPress={() => {
+              audio.stopPlayback();
+              if (submission === 'missing') {
+                router.replace('/sentences');
+                return;
+              }
+              if (submission) {
+                handleBack();
+                return;
+              }
+              if (!practiceId) {
+                setSubmissionError('This practice activity is still loading. Please wait and try again.');
+                return;
+              }
+              if (hasNextPrompt) {
+                goToPrompt(promptIndex + 1);
+                return;
+              }
+              void submitRecording();
+            }}>
+              <Text style={styles.submitText}>{submission === 'missing' ? 'Go to Play' : submission ? 'Done' : hasNextPrompt ? 'Next prompt' : 'Submit'}</Text>
+            </Pressable>
+            {!submission && promptIndex > 0 && (
+              <Pressable accessibilityRole="button" disabled={audio.recording || audio.busy} onPress={() => goToPrompt(promptIndex - 1)} style={({ pressed }) => [styles.previousPrompt, pressed && styles.buttonPressed]}>
+                <Text style={styles.previousPromptText}>Previous prompt</Text>
+              </Pressable>
+            )}
 
           </View>
         </ScrollView>
 
         {/* Global Footer Navigation Component */}
-        <View style={styles.footerContainer}>
-          <ChildBottomNav activeTab="play" />
-        </View>
+        <ChildBottomNav activeTab="play" />
 
-      </View>
+      </ChildScreenFrame>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
   scrollContainer: { flex: 1 },
   scrollContent: { paddingBottom: 24 },
 
@@ -288,15 +287,10 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  contentMax: {
-    maxWidth: 760, 
-    width: '100%',
-    alignSelf: 'center'
-  },
 
   header: {
-    backgroundColor: '#0865AD',
-    paddingTop: 55,
+    backgroundColor: childScreenColors.canvas,
+    paddingTop: 12,
     paddingBottom: 12,
   },
   headerContent: {
@@ -305,39 +299,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   backBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: childScreenColors.surface,
+    borderWidth: 1,
+    borderColor: '#C7DFEE',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
   },
-  backIcon: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: 'bold', textAlign: 'center' },
-  headerTitle: { fontFamily: 'SourGummy', color: '#fff', fontSize: 20 },
+  headerTitle: { fontFamily: 'SourGummy-Bold', color: '#0D68AC', fontSize: 26 },
 
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0865AD',
+    borderWidth: 1,
+    borderColor: '#CBE6F6',
+    backgroundColor: childScreenColors.surface,
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 15,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
-  chirpy: { width: 70, height: 70, marginRight: 16 },
+  buddyImage: { width: 70, height: 70, marginRight: 16 },
   bannerText: { flex: 1 },
-  bannerLabel: { fontFamily: 'SourGummy', color: 'rgba(255,255,255,0.8)', fontSize: 13 },
-  bannerSound: { fontFamily: 'SourGummy', color: '#fff', fontSize: 30, fontWeight: 'bold' },
+  bannerLabel: { fontFamily: 'SourGummy-Medium', color: '#485569', fontSize: 14 },
+  bannerSound: { fontFamily: 'SourGummy-Bold', color: '#183B56', fontSize: 30 },
 
   videoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: childScreenColors.surface,
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 16,
@@ -354,90 +346,94 @@ const styles = StyleSheet.create({
   videoPlaceholder: {
     width: 100,
     height: 80,
-    backgroundColor: '#E8F4FB',
+    backgroundColor: childScreenColors.canvas,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  videoPlaceholderText: { fontSize: 36, color: '#0865AD' },
+  promptList: { width: '100%', gap: 8 },
+  promptCount: { color: '#436780', fontFamily: 'SourGummy-Medium', fontSize: 15, textAlign: 'center' },
+  previousPrompt: { minHeight: 44, marginHorizontal: 16, marginTop: 8, alignItems: 'center', justifyContent: 'center' },
+  previousPromptText: { color: '#0D68AC', fontFamily: 'SourGummy-Bold', fontSize: 16 },
+  guidance: { width: '100%', marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: '#FFF4D9', gap: 4 },
+  guidanceText: { color: '#183B56', fontFamily: 'SourGummy-Medium', fontSize: 16 },
+  prompt: { backgroundColor: childScreenColors.canvas, borderRadius: 12, padding: 16, color: '#183B56', fontFamily: 'SourGummy-Bold', fontSize: 24, textAlign: 'center' },
   videoHint: {
-    fontFamily: 'SourGummy',
-    fontSize: 12,
-    color: '#999',
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 14,
+    color: '#526779',
     textAlign: 'center',
     marginBottom: 14,
   },
   watchAgainBtn: {
-    backgroundColor: '#FFB923',
+    backgroundColor: childScreenColors.canvas,
+    minHeight: 44,
     paddingVertical: 12,
     paddingHorizontal: 30,
     borderRadius: 25,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+    justifyContent: 'center',
   },
-  watchAgainText: { fontFamily: 'SourGummy', color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  watchAgainText: { fontFamily: 'SourGummy-Bold', color: '#0D68AC', fontSize: 18 },
 
   micSection: { alignItems: 'center', marginTop: 24 },
+  micRecording: { backgroundColor: '#B83E36' },
+  listenButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#DAECF8', marginTop: 8 },
+  submitDisabled: { opacity: 0.55 },
   micBtn: {
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#F66540',
+    backgroundColor: childScreenColors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
-    shadowColor: '#F66540',
+    shadowColor: childScreenColors.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
   },
-  micBtnActive: { backgroundColor: '#DE502C', transform: [{ scale: 0.95 }] },
   micIconImg: {
     width: 52,
     height: 52,
   },
   micLabel: {
-    fontFamily: 'SourGummy',
+    fontFamily: 'SourGummy-Bold',
     fontSize: 16,
     color: '#0865AD',
-    fontWeight: 'bold',
     marginTop: 12,
   },
   micHint: {
-    fontFamily: 'SourGummy',
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  error: {
-    color: '#B42318',
+    fontFamily: 'SourGummy-Medium',
+    fontSize: 14,
+    color: '#526779',
     textAlign: 'center',
-    marginHorizontal: 16,
-    marginBottom: 8,
+    marginTop: 4,
   },
 
   submitBtn: {
-    backgroundColor: '#0865AD',
+    backgroundColor: childScreenColors.accent,
     marginHorizontal: 40,
     marginTop: 24,
+    minHeight: 48,
     paddingVertical: 14,
     borderRadius: 25,
     alignItems: 'center',
+    justifyContent: 'center',
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
-  submitText: { fontFamily: 'SourGummy', color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  
-  footerContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#CCE0F0',
-  }
+  rewardCard: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFF9EA', borderColor: '#EBD49C', borderWidth: 1, borderRadius: 14, padding: 10 },
+  rewardIcon: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  rewardStar: { width: 30, height: 30 },
+  rewardCopy: { flex: 1, minWidth: 0 },
+  rewardTitle: { fontFamily: 'SourGummy-Bold', color: '#65450C', fontSize: 16 },
+  rewardDetail: { fontFamily: 'SourGummy-Medium', color: '#664F2E', fontSize: 13, lineHeight: 17 },
+  rewardAction: { marginTop: 10, marginHorizontal: 16 },
+  submitText: { fontFamily: 'SourGummy-Bold', color: '#fff', fontSize: 20 },
+  buttonPressed: { opacity: 0.83, transform: [{ scale: 0.97 }, { translateY: 2 }] },
+
 });

@@ -94,7 +94,7 @@ export default function App() {
         </View>
 
         {/* Custom About SpeakSteps Alert Modal */}
-        <Modal visible={aboutVisible} transparent={true} animationType="fade">
+        <Modal visible={aboutVisible} transparent={true} animationType="fade" onRequestClose={() => setAboutVisible(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.alertBox}>
 

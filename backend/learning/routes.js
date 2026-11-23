@@ -130,6 +130,9 @@ async function patientDto(patient) {
     middleName: patient.middle_name || '',
     lastName: patient.last_name,
     dateOfBirth: patient.date_of_birth,
+    createdAt: patient.created_at,
+    primaryTherapistId: patient.primary_therapist_id ? String(patient.primary_therapist_id) : '',
+    assignedTeacherId: patient.assigned_teacher_id ? String(patient.assigned_teacher_id) : '',
     age: guardian?.child_age != null ? String(guardian.child_age) : age,
     guardianName: parentProfile?.guardian_name || guardian?.full_name || '',
     relationship: parentProfile?.relationship_to_child || '',
@@ -377,10 +380,13 @@ router.get('/activities', requireRoles('therapist', 'teacher', 'admin'), endpoin
   } else if (user.role === 'teacher') {
     const patients = await getVisiblePatients(user);
     visiblePatientIds = patients.map((patient) => patient._id);
-    const assigned = await PatientAssignment.find({ patient_id: { $in: visiblePatientIds } })
-      .select('activity_id')
-      .lean();
-    filter = { _id: { $in: [...new Set(assigned.map((item) => String(item.activity_id)))] } };
+    const therapistIds = [...new Set(
+      patients
+        .map((patient) => patient.primary_therapist_id)
+        .filter(Boolean)
+        .map((id) => String(id)),
+    )];
+    filter = { author_therapist_id: { $in: therapistIds } };
   }
   const activities = await TherapistActivity.find(filter).sort({ created_at: -1 }).lean();
   const assignmentFilter = {
@@ -580,21 +586,32 @@ router.get('/assignments', requireRoles('parent', 'therapist', 'teacher', 'admin
   return res.json({ success: true, assignments: mapped, unlockedLevels });
 }));
 
-router.post('/assignments', requireRoles('therapist'), endpoint(async (req, res) => {
+router.post('/assignments', requireRoles('therapist', 'teacher'), endpoint(async (req, res) => {
   const user = await getSessionUser(req);
-  const therapistId = await getProfileId(user);
+  const profileId = await getProfileId(user);
   const body = req.body || {};
   const patientCode = boundedString(body.patientCode, 'Patient code', 9, true);
   if (!/^\d{9}$/.test(patientCode)) throw new HttpError(400, 'Patient code must contain exactly 9 digits.');
-  const patient = await Patient.findOne({ patientCode, primary_therapist_id: therapistId }).lean();
+  const patientFilter = user.role === 'teacher'
+    ? { patientCode, assigned_teacher_id: profileId }
+    : { patientCode, primary_therapist_id: profileId };
+  const patient = await Patient.findOne(patientFilter).lean();
   if (!patient) throw new HttpError(404, 'Patient was not found in your caseload.');
+  if (user.role === 'teacher' && !patient.primary_therapist_id) {
+    throw new HttpError(409, 'This student needs an assigned therapist before activities can be assigned.');
+  }
+  const therapistId = patient.primary_therapist_id || profileId;
   const activityId = objectId(body.activityId, 'activity ID');
-  const activity = await TherapistActivity.findOne({ _id: activityId, author_therapist_id: therapistId }).lean();
+  const activity = await TherapistActivity.findOne({
+    _id: activityId,
+    author_therapist_id: therapistId,
+  }).lean();
   if (!activity) throw new HttpError(404, 'Activity was not found in your library.');
   const assignment = await PatientAssignment.create({
     activity_id: activityId,
     patient_id: patient._id,
     therapist_id: therapistId,
+    assigned_by_teacher_id: user.role === 'teacher' ? profileId : undefined,
     status: 'assigned',
     instructions: boundedString(body.instructions, 'Assignment instructions', 1000),
     due_date: validDate(body.dueDate, 'Due date', true),
@@ -682,6 +699,12 @@ router.post('/submissions', requireRoles('parent'), endpoint(async (req, res) =>
     throw new HttpError(400, 'Waveform sample must contain at most 256 numeric values.');
   }
   const assignmentId = body.assignmentId ? objectId(body.assignmentId, 'assignment ID') : null;
+  const practiceItemId = body.practiceItemId
+    ? boundedString(body.practiceItemId, 'Practice item ID', 200, true)
+    : undefined;
+  if (!assignmentId && !practiceItemId) {
+    throw new HttpError(400, 'An assignment or practice item is required.');
+  }
   let created;
   await runTransaction(async (session) => {
     const patient = await findAccessiblePatient(user, {
@@ -696,14 +719,22 @@ router.post('/submissions', requireRoles('parent'), endpoint(async (req, res) =>
       }).session(session).lean();
       if (!assignment) throw new HttpError(404, 'Assignment was not found for this patient.');
     }
+    if (practiceItemId && !await PracticeItem.findById(practiceItemId).session(session).lean()) {
+      throw new HttpError(404, 'Practice item was not found.');
+    }
+    const starFilter = assignmentId
+      ? { patient_id: patient._id, assignment_id: assignmentId }
+      : { patient_id: patient._id, practice_item_id: practiceItemId };
+    const alreadyEarned = await Submission.exists(starFilter).session(session);
     const document = await Submission.create([{
       assignment_id: assignmentId,
       patient_id: patient._id,
-      practice_item_id: typeof body.practiceItemId === 'string' ? body.practiceItemId : undefined,
+      practice_item_id: practiceItemId,
       audio_recording_url: url,
       waveform_sample: waveform,
       duration_seconds: duration,
       status: 'pending',
+      stars_awarded: alreadyEarned ? 0 : 1,
       submitted_at: new Date(),
     }], { session });
     if (assignment) {
@@ -727,7 +758,12 @@ router.post('/submissions', requireRoles('parent'), endpoint(async (req, res) =>
   });
   return res.status(201).json({
     success: true,
-    submission: { id: String(created._id), patientId: String(created.patient_id), status: created.status },
+    submission: {
+      id: String(created._id),
+      patientId: String(created.patient_id),
+      status: created.status,
+      starsAwarded: created.stars_awarded || 0,
+    },
   });
 }));
 
@@ -828,11 +864,14 @@ router.get('/reviews', requireRoles('parent', 'therapist', 'admin'), endpoint(as
     ]));
     result.push({
       id: String(submission._id),
+      submissionId: String(submission._id),
+      assignmentId: submission.assignment_id ? String(submission.assignment_id) : '',
       student: patientName(patient),
       initial: `${patient.first_name?.[0] || ''}${patient.last_name?.[0] || ''}`.toUpperCase(),
       activity: activity ? activity.title : 'Practice submission',
       sound: activity ? activity.sound : '',
       level: activity ? LEVEL_FROM_DB[activity.level] || activity.level : '',
+      language: activity ? activity.language || '' : '',
       status: review ? 'Reviewed' : 'Pending',
       observations: review?.observations || '',
       parentFeedback: review?.parent_feedback || '',
@@ -883,6 +922,7 @@ router.get('/feedback', requireRoles('parent'), endpoint(async (req, res) => {
       feedback.push({
         id: String(review._id),
         submissionId: String(submission._id),
+        assignmentId: assignment ? String(assignment._id) : '',
         therapistName: therapist?.full_name || 'Therapist',
         specialty: 'Speech-Language Pathologist',
         title: activity ? activity.title : 'Practice review',
@@ -892,6 +932,7 @@ router.get('/feedback', requireRoles('parent'), endpoint(async (req, res) => {
         homePractice: review.home_practice_instructions || '',
         observations: review.observations || '',
         reviewedAt: review.reviewed_at,
+        averageScore: review.average_score ?? null,
       });
     }
   }
@@ -909,6 +950,7 @@ router.get('/progress', requireRoles('parent', 'therapist', 'teacher', 'admin'),
   const groupedLevels = new Map();
   const assignedByLevel = new Map();
   const levelByAssignment = new Map();
+  const activityByAssignment = new Map();
   const unlockedLevels = new Set();
   for (const assignment of assignments) {
     const activity = await TherapistActivity.findById(assignment.activity_id).lean();
@@ -916,6 +958,7 @@ router.get('/progress', requireRoles('parent', 'therapist', 'teacher', 'admin'),
     const level = LEVEL_FROM_DB[activity.level] || activity.level;
     unlockedLevels.add(level);
     levelByAssignment.set(String(assignment._id), level);
+    activityByAssignment.set(String(assignment._id), activity);
     assignedByLevel.set(level, (assignedByLevel.get(level) || 0) + 1);
     groupedLevels.set(level, (groupedLevels.get(level) || 0) + (assignment.status === 'completed' ? 1 : 0));
   }
@@ -940,8 +983,15 @@ router.get('/progress', requireRoles('parent', 'therapist', 'teacher', 'admin'),
       attemptsByLevel: Object.fromEntries(attemptsByLevel),
       recentSubmissions: submissions.slice(0, 10).map((item) => ({
         id: String(item._id),
+        assignmentId: item.assignment_id ? String(item.assignment_id) : '',
         status: item.status,
         submittedAt: item.submitted_at,
+        practiceItemId: item.practice_item_id || '',
+        starsAwarded: item.stars_awarded || 0,
+        activityTitle: activityByAssignment.get(String(item.assignment_id))?.title || 'Practice activity',
+        level: activityByAssignment.get(String(item.assignment_id))
+          ? LEVEL_FROM_DB[activityByAssignment.get(String(item.assignment_id)).level] || activityByAssignment.get(String(item.assignment_id)).level
+          : '',
       })),
     },
   });
@@ -1309,8 +1359,16 @@ router.get('/admin/users', requireRoles('admin'), endpoint(async (req, res) => {
     .lean();
   return res.json({
     success: true,
-    users: users.map((item) => ({
+    users: await Promise.all(users.map(async (item) => {
+      const profile = ['therapist', 'teacher'].includes(item.role)
+        ? await mongoose.connection.db.collection(`${item.role}_profiles`).findOne(
+          { user_id: item._id },
+          { projection: { _id: 1 } },
+        )
+        : null;
+      return {
       id: String(item._id),
+      profileId: profile ? String(profile._id) : '',
       name: item.full_name,
       email: item.email,
       role: item.role,
@@ -1320,6 +1378,7 @@ router.get('/admin/users', requireRoles('admin'), endpoint(async (req, res) => {
       childAge: item.child_age ?? null,
       studentId: item.student_id || '',
       contact: item.phone_number || '',
+      };
     })),
   });
 }));

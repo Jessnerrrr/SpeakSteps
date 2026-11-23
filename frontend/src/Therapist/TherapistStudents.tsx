@@ -1,3 +1,5 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { TherapistChecklistFilter } from '@/components/therapist/TherapistChecklistFilter';
 // =============================================================================
 // THERAPIST STUDENTS — All students directory & clinical record in one file
 // Replaces: therapist-patients/pages, components, data
@@ -5,7 +7,7 @@
 
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 
 import { TherapistShell } from '@/components/therapist/TherapistShell';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
@@ -20,18 +22,17 @@ const toneColors: Record<AccuracyTone, { background: string; text: string }> = {
   blue: { background: '#E3F4FC', text: '#0EA5E9' },
 };
 
-// ─── 1. Patient Directory List ───────────────────────────────────────────────
+// ─── 1. Student Directory List ───────────────────────────────────────────────
 
 export function PatientDirectory() {
-  const { palette, patients, setAddPatientOpen } = useTherapist();
+  const { palette, patients } = useTherapist();
   const [query, setQuery] = useState('');
-  const [target, setTarget] = useState('All Targets');
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [targets, setTargets] = useState<(typeof targetSounds)[number][]>([]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return patients.filter((patient) => {
-      const targetMatch = target === 'All Targets' || patient.targetSound === target;
+      const targetMatch = targets.length === 0 || targets.some((target) => target === patient.targetSound);
       if (!targetMatch) return false;
       if (!needle) return true;
       const haystack = [patientName(patient), patient.diagnosis, patient.targetSound, patientMeta(patient), patient.initials]
@@ -39,29 +40,15 @@ export function PatientDirectory() {
         .toLowerCase();
       return haystack.includes(needle);
     });
-  }, [patients, query, target]);
+  }, [patients, query, targets]);
+
+  const pagination = useListPagination(visible.length, 10, JSON.stringify([query, targets]));
 
   return (
     <View style={studentStyles.fill}>
       <View style={studentStyles.header}>
-        <Pressable
-          accessibilityLabel="Back to home"
-          onPress={() => router.push('/therapist' as never)}
-          style={[studentStyles.back, { borderColor: palette.line }]}
-        >
-          <ChevronLeftIcon color={palette.text} size={18} />
-        </Pressable>
-        <View style={studentStyles.titleBlock}>
-          <Text style={[studentStyles.title, { color: palette.primary }]}>Patients</Text>
-          <Text style={[studentStyles.subtitle, { color: palette.muted }]}>Track sound targets & case histories</Text>
-        </View>
-        <Pressable
-          accessibilityLabel="Add patient"
-          onPress={() => setAddPatientOpen(true)}
-          style={[studentStyles.plus, { backgroundColor: palette.primarySoft }]}
-        >
-          <Text style={[studentStyles.plusText, { color: palette.primary }]}>+</Text>
-        </Pressable>
+        <Text accessibilityRole="header" style={[studentStyles.title, { color: '#0284C7' }]}>Students</Text>
+        <Text style={[studentStyles.subtitle, { color: palette.muted }]}>Track sound targets & case histories</Text>
       </View>
 
       <View style={studentStyles.tools}>
@@ -75,82 +62,111 @@ export function PatientDirectory() {
             style={[studentStyles.searchInput, { color: palette.text }]}
           />
         </View>
-        <View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Filter by target sound"
-            onPress={() => setMenuOpen((open) => !open)}
-            style={[studentStyles.filter, { backgroundColor: palette.card, borderColor: palette.line }]}
-          >
-            <Text style={[studentStyles.filterText, { color: palette.muted }]} numberOfLines={1}>
-              {target}
-            </Text>
-            <Text style={{ color: palette.faint }}>▾</Text>
-          </Pressable>
-          {menuOpen ? (
-            <View style={[studentStyles.menu, { backgroundColor: palette.card, borderColor: palette.line }]}>
-              {['All Targets', ...targetSounds].map((option) => (
-                <Pressable
-                  key={option}
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setTarget(option);
-                    setMenuOpen(false);
-                  }}
-                  style={[studentStyles.menuItem, option === target && { backgroundColor: palette.primarySoft }]}
-                >
-                  <Text style={[studentStyles.menuText, { color: option === target ? palette.primaryText : palette.text }]}>
-                    {option}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-        </View>
+        <TherapistChecklistFilter
+          label="Target sound"
+          options={targetSounds}
+          selected={targets}
+          onChange={setTargets}
+          emptyLabel="All Targets"
+          allLabel="All Targets"
+          compact
+          resetOnAll
+        />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={studentStyles.list}>
         {visible.length === 0 ? (
-          <Text style={[studentStyles.empty, { color: palette.muted }]}>No patients match this search.</Text>
+          <Text style={[studentStyles.empty, { color: palette.muted }]}>No students match this search.</Text>
         ) : (
-          visible.map((patient) => <PatientCard key={patient.id} patient={patient} />)
+          visible.slice(pagination.start, pagination.end).map((patient) => (
+            <PatientCard
+              key={patient.id}
+              patient={patient}
+            />
+          ))
         )}
+      <ListPagination {...pagination} total={visible.length} noun="students" accent={palette.primary} muted={palette.muted} border={palette.line} surface={palette.card} />
       </ScrollView>
     </View>
   );
 }
 
-function PatientCard({ patient }: { patient: PatientRecord }) {
+function PatientCard({
+  patient,
+}: {
+  patient: PatientRecord;
+}) {
   const { palette } = useTherapist();
-  const tone = toneColors[patient.tone];
+  const tone = (patient?.tone && toneColors[patient.tone]) ? toneColors[patient.tone] : toneColors.green;
+  const name = patientName(patient);
+  const meta = patientMeta(patient);
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={patientName(patient)}
+      accessibilityLabel={name}
       onPress={() => router.push(`/therapist/patients/${patient.id}` as never)}
       style={[studentStyles.card, { backgroundColor: palette.card, borderColor: palette.line }]}
     >
       <View style={studentStyles.cardTop}>
         <View style={studentStyles.avatar}>
-          <Text style={studentStyles.initials}>{patient.initials}</Text>
+          <Text style={studentStyles.initials}>{patient.initials || 'S'}</Text>
         </View>
         <View style={studentStyles.copy}>
-          <Text style={[studentStyles.name, { color: palette.text }]}>{patientName(patient)}</Text>
-          <Text style={[studentStyles.meta, { color: palette.faint }]}>{patientMeta(patient)}</Text>
+          <Text style={[studentStyles.name, { color: palette.text }]}>{name}</Text>
+          <Text style={[studentStyles.meta, { color: palette.faint }]}>{meta}</Text>
         </View>
         <View style={[studentStyles.badge, { backgroundColor: tone.background }]}>
-          <Text style={[studentStyles.badgeText, { color: tone.text }]}>{patient.accuracy}%</Text>
+          <Text style={[studentStyles.badgeText, { color: tone.text }]}>{patient.accuracy ?? 0}%</Text>
         </View>
       </View>
       <View style={[studentStyles.divider, { backgroundColor: palette.line }]} />
-      <Text style={[studentStyles.diagnosis, { color: palette.muted }]}>{patient.diagnosis}</Text>
+      <View style={studentStyles.cardBottom}>
+        <Text style={[studentStyles.diagnosis, { color: palette.muted, flex: 1 }]}>{patient.diagnosis || ''}</Text>
+      </View>
     </Pressable>
   );
 }
 
-// ─── 2. Patient Record / Detail Screen ───────────────────────────────────────
+// ─── 2. Student Record / Detail Screen ───────────────────────────────────────
+
+function AccomplishmentAudioPlayer({ item }: { item: { id: string; audioLabel: string; bars: number[] } }) {
+  const { palette } = useTherapist();
+  const [playing, setPlaying] = useState(false);
+  return (
+    <View style={[studentStyles.audio, { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD', borderWidth: 1 }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={playing ? 'Pause audio' : 'Play audio'}
+        onPress={() => setPlaying((p) => !p)}
+        style={[studentStyles.playButtonCircle, { backgroundColor: '#0284C7' }]}
+      >
+        <Text style={studentStyles.playButtonIcon}>{playing ? '❚❚' : '▶'}</Text>
+      </Pressable>
+      <View style={{ flex: 1, marginHorizontal: 8 }}>
+        <Text style={[studentStyles.audioTitle, { color: '#0369A1' }]}>Child Audio</Text>
+        <Text style={[studentStyles.audioMeta, { color: palette.faint }]}>
+          {playing ? 'Playing demo…' : item.audioLabel}
+        </Text>
+      </View>
+      <View style={studentStyles.bars}>
+        {item.bars.map((height, index) => (
+          <View
+            key={`${item.id}-${index}`}
+            style={[
+              studentStyles.bar,
+              {
+                height: playing ? Math.min(22, height + 4) : height,
+                backgroundColor: playing ? '#0284C7' : '#38BDF8',
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
 
 export function PatientRecordScreen({ patientId }: { patientId: string }) {
+  const navigation = useNavigation();
   const { palette, patients, addSoapNote } = useTherapist();
   const patient = patients.find((item) => item.id === patientId);
   const [composing, setComposing] = useState(false);
@@ -161,10 +177,18 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
   const [plan, setPlan] = useState('');
   const [formError, setFormError] = useState('');
 
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      router.replace('/therapist/patients' as never);
+    }
+  };
+
   if (!patient) {
     return (
       <View style={studentStyles.missing}>
-        <Text style={{ color: palette.muted }}>This patient is no longer on the list.</Text>
+        <Text style={{ color: palette.muted }}>This student is no longer on the list.</Text>
       </View>
     );
   }
@@ -176,33 +200,38 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
   };
 
   const saveNote = () => {
-    if (!subjective.trim() || !objective.trim() || !assessment.trim() || !plan.trim()) {
-      setFormError('Complete the subjective, objective, assessment, and plan.');
-      return;
+    try {
+      if (!subjective.trim() || !objective.trim() || !assessment.trim() || !plan.trim()) {
+        setFormError('Complete all Subjective, Objective, Assessment, and Plan fields.');
+        return;
+      }
+      const note: SoapNote = {
+        id: `soap-${Date.now()}`,
+        number: patient.sessions.length + 1,
+        dateLabel: formatSoapDate(),
+        subjective: subjective.trim(),
+        objective: objective.trim(),
+        assessment: assessment.trim(),
+        plan: plan.trim(),
+      };
+      addSoapNote(patient.id, note);
+      setSubjective('');
+      setObjective('');
+      setAssessment('');
+      setPlan('');
+      setComposing(false);
+      setSaved(true);
+      setFormError('');
+    } catch (err: any) {
+      setFormError(err?.message || 'Failed to save clinical note. Please try again.');
     }
-    const note: SoapNote = {
-      id: `soap-${Date.now()}`,
-      number: patient.sessions.length + 1,
-      dateLabel: formatSoapDate(),
-      subjective: subjective.trim(),
-      objective: objective.trim(),
-      assessment: assessment.trim(),
-      plan: plan.trim(),
-    };
-    addSoapNote(patient.id, note);
-    setSubjective('');
-    setObjective('');
-    setAssessment('');
-    setPlan('');
-    setComposing(false);
-    setSaved(true);
   };
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={studentStyles.recordContent}>
       <Pressable
-        accessibilityLabel="Back to patients"
-        onPress={() => router.push('/therapist/patients' as never)}
+        accessibilityLabel="Back to students"
+        onPress={handleBack}
         style={[studentStyles.recordBack, { borderColor: palette.line, backgroundColor: palette.card }]}
       >
         <ChevronLeftIcon color={palette.text} size={18} />
@@ -230,7 +259,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
           />
           <StatCard
             label="Current Stage"
-            value={patient.hierarchyLevel === 'Isolation' ? 'Isolated Sounds' : patient.hierarchyLevel}
+            value={patient.hierarchyLevel === 'Sound' ? 'Sound' : patient.hierarchyLevel}
             caption="Target Mode"
             background="#E7F6FD"
             color="#0EA5E9"
@@ -247,7 +276,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
 
       <Text style={[studentStyles.section, { color: palette.muted }]}>OVERVIEW</Text>
       <View style={[studentStyles.overview, { backgroundColor: palette.card, borderColor: palette.line }]}>
-        <Text style={[studentStyles.overviewTitle, { color: palette.primary }]}>Phoneme Target & Error Profile</Text>
+        <Text style={[studentStyles.overviewTitle, { color: '#0284C7' }]}>Phoneme Target & Error Profile</Text>
         <OverviewRow label="Primary Phoneme Target:" value={patient.targetDetail} />
         <OverviewRow label="Secondary Targets:" value={patient.secondaryTargets} />
         <OverviewRow label="Error Pattern Taxonomy:" value={patient.patternDetail} />
@@ -259,7 +288,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
         <Pressable
           accessibilityRole="button"
           onPress={openForm}
-          style={[studentStyles.soapButton, { backgroundColor: palette.primary }]}
+          style={[studentStyles.soapButton, { backgroundColor: '#0284C7' }]}
         >
           <Text style={studentStyles.soapButtonText}>+ New SOAP Note</Text>
         </Pressable>
@@ -276,7 +305,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
           <Pressable
             accessibilityRole="button"
             onPress={saveNote}
-            style={[studentStyles.saveNote, { backgroundColor: palette.primary }]}
+            style={[studentStyles.saveNote, { backgroundColor: '#0284C7' }]}
           >
             <Text style={studentStyles.soapButtonText}>Save Clinical Note</Text>
           </Pressable>
@@ -287,10 +316,10 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
         <View style={[studentStyles.emptyCard, { backgroundColor: palette.card, borderColor: palette.line }]}>
           <Text style={[studentStyles.emptyTitle, { color: palette.text }]}>No Sessions Recorded Yet.</Text>
           <Text style={[studentStyles.emptyBody, { color: palette.muted }]}>
-            This is a new patient profile. Add the first SOAP note to start tracking articulation progress over time.
+            This is a new student profile. Add the first SOAP note to start tracking articulation progress over time.
           </Text>
           <Pressable onPress={openForm}>
-            <Text style={[studentStyles.emptyLink, { color: palette.primary }]}>+ Create First SOAP Note</Text>
+            <Text style={[studentStyles.emptyLink, { color: '#0284C7' }]}>+ Create First SOAP Note</Text>
           </Pressable>
         </View>
       ) : null}
@@ -337,15 +366,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
                 <Text style={[studentStyles.accomplishmentBody, { color: palette.muted }]}>{item.clinicianNotes}</Text>
               ) : null}
               {item.quote ? <Text style={[studentStyles.quote, { color: '#E07A5F' }]}>{item.quote}</Text> : null}
-              <View style={[studentStyles.audio, { backgroundColor: '#FFF7ED' }]}>
-                <Text style={studentStyles.audioTitle}>Child Audio</Text>
-                <View style={studentStyles.bars}>
-                  {item.bars.map((height, index) => (
-                    <View key={`${item.id}-${index}`} style={[studentStyles.bar, { height, backgroundColor: '#F5A524' }]} />
-                  ))}
-                </View>
-                <Text style={[studentStyles.audioMeta, { color: palette.faint }]}>{item.audioLabel}</Text>
-              </View>
+              <AccomplishmentAudioPlayer item={item} />
             </View>
           ))}
         </View>
@@ -448,9 +469,7 @@ export function TherapistStudentDetail() {
 
 const studentStyles = StyleSheet.create({
   fill: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12 },
-  back: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  titleBlock: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingBottom: 12 },
   title: { fontFamily: 'SourGummy-Bold', fontSize: 24, lineHeight: 30 },
   subtitle: { fontSize: 12, marginTop: 2 },
   plus: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -459,8 +478,6 @@ const studentStyles = StyleSheet.create({
   search: { flex: 1, height: 42, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, gap: 6 },
   searchIcon: { fontSize: 16 },
   searchInput: { flex: 1, fontSize: 13, paddingVertical: 0 },
-  filter: { height: 42, minWidth: 118, maxWidth: 150, borderRadius: 12, borderWidth: 1, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  filterText: { flex: 1, fontSize: 12, fontWeight: '600' },
   menu: { position: 'absolute', top: 46, right: 0, width: 160, borderWidth: 1, borderRadius: 12, overflow: 'hidden', zIndex: 5 },
   menuItem: { paddingHorizontal: 12, paddingVertical: 10 },
   menuText: { fontSize: 13 },
@@ -526,9 +543,18 @@ const studentStyles = StyleSheet.create({
   accomplishmentTitle: { fontSize: 14, fontWeight: '700' },
   accomplishmentBody: { fontSize: 12, lineHeight: 17 },
   quote: { fontSize: 12, lineHeight: 17, fontStyle: 'italic' },
-  audio: { marginTop: 8, borderRadius: 12, padding: 10, gap: 6 },
-  audioTitle: { fontSize: 12, fontWeight: '700', color: '#C2410C' },
+  cardPlayBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginHorizontal: 4 },
+  cardPlayIcon: { color: '#FFFFFF', fontSize: 11, fontWeight: '700', marginLeft: 2 },
+  cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  miniPlayingBadge: { backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  miniPlayingText: { color: '#0284C7', fontSize: 10, fontWeight: '600' },
+  playButtonCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  playButtonIcon: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', marginLeft: 2 },
+  audio: { marginTop: 8, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  audioTitle: { fontSize: 12, fontWeight: '700' },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 22 },
   bar: { width: 4, borderRadius: 2 },
-  audioMeta: { fontSize: 11 },
+  audioMeta: { fontSize: 11, marginTop: 2 },
+
+  // Popup Dropdown Styles
 });

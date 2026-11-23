@@ -120,7 +120,17 @@ export function ActivityEditor() {
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Pressable accessibilityLabel="Back" onPress={() => router.back()} style={[styles.back, { borderColor: palette.line }]}>
+      <Pressable
+        accessibilityLabel="Back"
+        onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.push('/therapist/activities' as never);
+          }
+        }}
+        style={[styles.back, { borderColor: palette.line }]}
+      >
         <ChevronLeftIcon color={palette.text} size={18} />
       </Pressable>
       <View style={styles.stepper}>
