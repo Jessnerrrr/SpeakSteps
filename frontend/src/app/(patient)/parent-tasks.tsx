@@ -49,14 +49,6 @@ export default function ParentTasksScreen() {
 
   if (!fontsLoaded) return null;
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.push('/parent-dashboard' as any);
-    }
-  };
-
   const filteredActivities = activities.filter((task: AssignedActivity) => {
     if (activeFilter === 'all') return true;
     return task.status === activeFilter;
@@ -88,8 +80,7 @@ export default function ParentTasksScreen() {
             
             <ParentHeader
               title="Assigned Activities"
-              showBack={true}
-              onBack={handleBack}
+              showBack={false}
             />
 
             <View style={styles.filterSection}>
@@ -541,36 +532,51 @@ const styles = StyleSheet.create({
   },
   countPillNeutral: {
     backgroundColor: '#E8F2FA',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    minWidth: 28,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   countPillTextNeutral: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11,
     color: '#0D68AC',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   countPillPending: {
     backgroundColor: '#FFEBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    minWidth: 28,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   countPillTextPending: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11,
     color: '#FF4D4D',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   countPillCompleted: {
     backgroundColor: '#E5F9EF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    minWidth: 28,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   countPillTextCompleted: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11,
     color: '#27AE60',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 
   /* Scrollable Content */
@@ -613,6 +619,7 @@ const styles = StyleSheet.create({
   taskInfoContainer: {
     flex: 1,
     marginLeft: 14,
+    marginRight: 10,
     justifyContent: 'center',
   },
   taskTitle: {
@@ -635,11 +642,17 @@ const styles = StyleSheet.create({
 
   /* Status Badges */
   statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 14,
+    width: 96,
+    minWidth: 96,
+    maxWidth: 96,
+    height: 32,
+    minHeight: 32,
+    maxHeight: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    marginLeft: 8,
   },
   statusBadgePending: {
     backgroundColor: '#FFD9D9',
@@ -648,8 +661,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#D7F5E8',
   },
   statusBadgeText: {
+    width: '100%',
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 16,
   },
   statusTextPending: {
     color: '#FF4D4D',

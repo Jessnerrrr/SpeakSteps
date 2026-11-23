@@ -76,7 +76,7 @@ export default function ParentDashboardScreen() {
                 <View style={styles.starRow}>
                   <Text style={styles.starCountText}>{completedActivities}</Text>
                   {/* FIXED IMAGE PATH */}
-                  <Image source={require('../../../assets/images/star-3d.png')} style={styles.starIcon} contentFit="contain" />
+                  <Image source={require('../../../assets/images/speaksteps_star_3d.gif')} style={styles.starIcon} contentFit="contain" />
                 </View>
                 <View style={styles.progressTrackContainer}>
                   <View style={[styles.progressBarFill, { width: `${progressPercentage}%` }]} />
@@ -140,16 +140,16 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   parentCardContainer: { flex: 1, width: '100%', backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6, position: 'relative' },
-  
+
   parentCardTablet: { maxWidth: 600, alignSelf: 'center', width: '100%' },
-  
+
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20, gap: 14 },
-  
+
   progressHeroCard: { borderRadius: 22, paddingVertical: 18, paddingHorizontal: 18, shadowColor: '#0865AD', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 5 },
   heroTitle: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#FFFFFF', textAlign: 'center', marginBottom: 6 },
   starRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 12 },
   starCountText: { fontFamily: 'SourGummy-Bold', fontSize: 38, color: '#FFFFFF' },
-  starIcon: { width: 34, height: 34 },
+  starIcon: { width: 50, height: 50, marginTop: -2, },
   progressTrackContainer: { height: 12, backgroundColor: '#FFFFFF', borderRadius: 6, overflow: 'hidden', marginBottom: 10 },
   progressBarFill: { height: '100%', backgroundColor: '#F5A623', borderRadius: 6 },
   heroSubText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#FFFFFF', textAlign: 'center' },

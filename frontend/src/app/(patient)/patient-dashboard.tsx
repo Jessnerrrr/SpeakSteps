@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
+import Svg, { Path } from 'react-native-svg';
 import {
   ImageBackground,
   SafeAreaView,
@@ -25,6 +26,13 @@ import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
 
+const ADVENTURE_ICONS: Record<string, any> = {
+  sounds: require('../../../assets/images/adventure-sounds.png'),
+  words: require('../../../assets/images/adventure-words.png'),
+  phrases: require('../../../assets/images/adventure-phrases.png'),
+  sentences: require('../../../assets/images/adventure-sentences.png'),
+};
+
 export default function PatientDashboardScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -42,6 +50,11 @@ export default function PatientDashboardScreen() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
+
+  // Clean dialogue text without emoji
+  const dialogueText = (activeBuddy?.dashboardSpeech || data?.activeBuddy?.speechBubbleText || '')
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .trim();
 
   // FIXED TS ERROR: Added explicit : Buddy type
   useEffect(() => {
@@ -166,25 +179,62 @@ export default function PatientDashboardScreen() {
                   activeOpacity={0.8}
                   style={styles.mascotContainer}
                   onPress={() => router.push('/pick-buddy' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${activeBuddy.name} buddy`}
                 >
                   <Image
                     source={activeBuddy.image}
-                    style={[
-                      styles.mascotImage,
-                      activeBuddy.id !== 'chirpy' && styles.mascotImageOther,
-                    ]}
+                    style={styles.mascotImage}
                     contentFit="contain"
                   />
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={styles.speechBubble}
+                  style={styles.speechBubbleWrapper}
                   onPress={() => router.push('/pick-buddy' as any)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Buddy speech dialogue"
                 >
-                  <Text style={styles.speechBubbleText}>
-                    {activeBuddy.dashboardSpeech}
-                  </Text>
+                  <View style={styles.speechBubble}>
+                    {/* Speech bubble tail matching reference image (bottom-left curved tail pointing down-left toward buddy) */}
+                    <View pointerEvents="none" style={styles.speechBubbleTailContainer}>
+                      <Svg width={40} height={18} viewBox="0 0 40 18">
+                        {/* Solid white fill for curved tail */}
+                        <Path
+                          d="M 14 0 C 12 7, 7 12, 1 15 C 12 11, 24 7, 34 0 Z"
+                          fill="#FFFFFF"
+                        />
+                        {/* Mask to completely erase the bubble's bottom border line across the tail opening */}
+                        <Path
+                          d="M 13.5 -2 L 34.5 -2 L 34.5 2 L 13.5 2 Z"
+                          fill="#FFFFFF"
+                        />
+                        {/* Left curved stroke pointing down-left toward buddy */}
+                        <Path
+                          d="M 14 0 C 12 7, 7 12, 1 15"
+                          stroke="#D4E7F6"
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                        {/* Right curved stroke */}
+                        <Path
+                          d="M 1 15 C 12 11, 24 7, 34 0"
+                          stroke="#D4E7F6"
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                      </Svg>
+                    </View>
+
+                    <Text style={styles.speechBubbleText}>
+                      {dialogueText}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 
@@ -202,7 +252,7 @@ export default function PatientDashboardScreen() {
                   <Text style={styles.starNumberText}>{data.stepsProgress.earnedStars}</Text>
                   {/* FIXED IMAGE PATH (3 levels up) */}
                   <Image
-                    source={require('../../../assets/images/star-3d.png')}
+                    source={require('../../../assets/images/speaksteps_star_3d.gif')}
                     style={styles.starAssetImage}
                     contentFit="contain"
                   />
@@ -236,21 +286,19 @@ export default function PatientDashboardScreen() {
                           <TouchableOpacity
                             style={[styles.stepCircle, { backgroundColor: adv.bgColor }]}
                             activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={adv.name}
                             onPress={() =>
                               router.push(
                                 (adv.id === 'sentences' ? '/sentences' : '/practice') as any,
                               )
                             }
                           >
-                            {adv.iconType === 'sounds' ? (
-                              <Ionicons name="musical-notes" size={26} color="#FFFFFF" />
-                            ) : adv.iconType === 'words' ? (
-                              <Text style={styles.stepAaText}>Aa</Text>
-                            ) : adv.iconType === 'phrases' ? (
-                              <Text style={styles.stepQuotesText}>❝❞</Text>
-                            ) : (
-                              <Ionicons name="clipboard" size={24} color="#FFFFFF" />
-                            )}
+                            <Image
+                              source={ADVENTURE_ICONS[adv.iconType] || ADVENTURE_ICONS[adv.id]}
+                              style={styles.stepIconImage}
+                              contentFit="contain"
+                            />
                           </TouchableOpacity>
 
                           {!isLast && <View style={styles.stepConnectingLine} />}
@@ -270,7 +318,7 @@ export default function PatientDashboardScreen() {
               >
                 <Text style={styles.continuePracticeText}>Continue Practice</Text>
                 <View style={styles.playArrowIcon}>
-                  <Ionicons name="play" size={26} color="#0D68AC" />
+                  <Ionicons name="play" size={26} color="#0C66AE" />
                 </View>
               </TouchableOpacity>
 
@@ -305,7 +353,7 @@ export default function PatientDashboardScreen() {
                   <View style={styles.cardIconWrapper}>
                     {/* FIXED IMAGE PATH (3 levels up) */}
                     <Image
-                      source={require('../../../assets/images/medal.png')}
+                      source={require('../../../assets/images/my-progress-icon 1.png')}
                       style={styles.cardImageIllustration}
                       contentFit="contain"
                     />
@@ -453,18 +501,79 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: { paddingHorizontal: 14, paddingTop: 6, paddingBottom: 16 },
-  mascotSpeechRow: { flexDirection: 'row', alignItems: 'center', marginBottom: -16, zIndex: 10 },
-  mascotContainer: { position: 'relative', marginRight: 10, marginLeft: 4, width: 82, height: 82, justifyContent: 'flex-end', alignItems: 'center', overflow: 'visible' },
-  mascotImage: { width: 82, height: 82 },
-  mascotImageOther: { transform: [{ scale: 1.22 }], marginBottom: -4 },
-  speechBubble: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1.5, borderColor: '#D4E7F6', shadowColor: '#0865AD', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
-  speechBubbleText: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#0D68AC', lineHeight: 18 },
+  mascotSpeechRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: -22,
+    zIndex: 10,
+    width: '100%',
+    overflow: 'visible',
+  },
+  mascotContainer: {
+    width: 135,
+    height: 146,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: -2,
+    opacity: 1,
+  },
+  mascotImage: {
+    width: 135,
+    height: 146,
+    opacity: 1,
+  },
+  speechBubbleWrapper: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: 266,
+    position: 'relative',
+    justifyContent: 'center',
+    marginTop: 2,
+    paddingRight: 4,
+    overflow: 'visible',
+    transform: [{ translateX: -20 }],
+  },
+  speechBubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 11,
+    minHeight: 52,
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#D4E7F6',
+    shadowColor: '#0865AD',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+    position: 'relative',
+    overflow: 'visible',
+    alignSelf: 'stretch',
+  },
+  speechBubbleTailContainer: {
+    position: 'absolute',
+    bottom: -15,
+    left: 10,
+    width: 40,
+    height: 18,
+    zIndex: 10,
+  },
+  speechBubbleText: {
+    fontFamily: 'SourGummy-Bold',
+    fontSize: 12.5,
+    color: '#0D68AC',
+    lineHeight: 16.5,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+  },
 
   myStepsCard: { borderRadius: 22, paddingVertical: 18, paddingHorizontal: 20, alignItems: 'center', marginBottom: 14, shadowColor: '#0865AD', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 6, elevation: 5 },
   myStepsTitle: { fontFamily: 'SourGummy-Bold', fontSize: 24, color: '#FFFFFF', marginBottom: 4 },
   starNumberRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 10, gap: 3 },
   starNumberText: { fontFamily: 'SourGummy-Bold', fontSize: 44, color: '#FFFFFF' },
-  starAssetImage: { width: 42, height: 42, marginTop: -2 },
+  starAssetImage: { width: 66, height: 65, marginTop: -2 },
   capsuleProgressTrack: { width: '100%', height: 18, backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden', padding: 3, marginBottom: 8 },
   capsuleProgressFill: { height: '100%', backgroundColor: '#F5A623', borderRadius: 10 },
   myStepsSubtext: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.12)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
@@ -475,12 +584,13 @@ const styles = StyleSheet.create({
   stepperItemWrapper: { alignItems: 'center', flex: 1 },
   stepperNodeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' },
   stepCircle: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
+  stepIconImage: { width: 26, height: 26 },
   stepAaText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#FFFFFF' },
   stepQuotesText: { fontSize: 22, color: '#FFFFFF', fontWeight: 'bold' },
   stepConnectingLine: { position: 'absolute', right: -14, width: 28, height: 6, backgroundColor: '#B6D7F2', borderRadius: 3, zIndex: -1 },
   stepLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0D68AC', marginTop: 8 },
 
-  continuePracticeBtn: { backgroundColor: '#F5A623', borderRadius: 28, paddingVertical: 15, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderBottomWidth: 5, borderBottomColor: '#C47B09', shadowColor: '#C47B09', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 5, elevation: 4 },
+  continuePracticeBtn: { backgroundColor: '#FEB723', borderRadius: 28, paddingVertical: 15, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderBottomWidth: 5, borderBottomColor: '#C47B09', shadowColor: '#C47B09', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 5, elevation: 4 },
   continuePracticeText: { fontFamily: 'SourGummy-Bold', fontSize: 21, color: '#FFFFFF', marginRight: 10, textShadowColor: 'rgba(0,0,0,0.15)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   playArrowIcon: { marginLeft: 2 },
 
@@ -488,8 +598,8 @@ const styles = StyleSheet.create({
   bottomCard: { flex: 1, borderRadius: 22, paddingVertical: 14, paddingHorizontal: 10, alignItems: 'center', borderWidth: 1.5, borderBottomWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
   activitiesCard: { backgroundColor: '#A0C6E8', borderColor: '#8AB7DF', borderBottomColor: '#6B9DC9' },
   progressCard: { backgroundColor: '#EFE0B6', borderColor: '#E6D4A0', borderBottomColor: '#CCA95B' },
-  cardIconWrapper: { marginBottom: 8, height: 56, width: 56, justifyContent: 'center', alignItems: 'center' },
-  cardImageIllustration: { width: 54, height: 54 },
+  cardIconWrapper: { marginBottom: 8, height: 68, width: 68, justifyContent: 'center', alignItems: 'center' },
+  cardImageIllustration: { width: 64, height: 64 },
   cardHeading: { fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#000000', marginBottom: 2 },
   cardSubtext: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#444444' },
 });

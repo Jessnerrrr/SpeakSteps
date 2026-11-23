@@ -47,6 +47,11 @@ export const ChildProfileStore = {
       displayName = parts[0] || currentProfile.displayName;
     }
 
+    // Validation guard: Minimum age is 5 years old
+    if (updates.age !== undefined && updates.age < 5) {
+      updates.age = 5;
+    }
+
     currentProfile = {
       ...currentProfile,
       ...updates,

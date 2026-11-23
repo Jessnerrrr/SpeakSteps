@@ -23,6 +23,13 @@ import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
 import { NotificationBellButton } from '../../components/notification-popover';
 import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
 
+const ADVENTURE_ICONS: Record<string, any> = {
+  sounds: require('../../../assets/images/adventure-sounds.png'),
+  words: require('../../../assets/images/adventure-words.png'),
+  phrases: require('../../../assets/images/adventure-phrases.png'),
+  sentences: require('../../../assets/images/adventure-sentences.png'),
+};
+
 export default function PatientStarsScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -50,7 +57,7 @@ export default function PatientStarsScreen() {
       <SafeAreaView style={styles.safeArea}>
         {/* FIXED IMAGE PATH: 3 levels up to reach root assets */}
         <ImageBackground source={require('../../../assets/images/split-bg.png')} style={styles.background} imageStyle={{ opacity: 0.25 }} resizeMode="cover">
-          
+
           <View style={[styles.starsCard, isTablet && styles.starsCardTablet]}>
             <View style={styles.topHeader}>
               <Text style={styles.headerTitle}>My Stars</Text>
@@ -99,7 +106,7 @@ export default function PatientStarsScreen() {
                 <View style={styles.starNumberRow}>
                   <Text style={styles.starNumberText}>{data.totalStarsEarned}</Text>
                   {/* FIXED IMAGE PATH */}
-                  <Image source={require('../../../assets/images/star-3d.png')} style={styles.starAssetImage} contentFit="contain" />
+                  <Image source={require('../../../assets/images/speaksteps_star_3d.gif')} style={styles.starAssetImage} contentFit="contain" />
                 </View>
                 <View style={styles.capsuleProgressTrack}>
                   <View style={[styles.capsuleProgressFill, { width: `${Math.min(totalProgressPercentage, 100)}%` }]} />
@@ -117,26 +124,34 @@ export default function PatientStarsScreen() {
                 {data.categories.map((cat) => {
                   const catPercentage = (cat.completed / cat.total) * 100;
                   return (
-                    <View key={cat.id} style={styles.categoryCard}>
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={styles.categoryCard}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${cat.title} activity, ${cat.completed} of ${cat.total} done`}
+                      onPress={() =>
+                        router.push(
+                          (cat.id === 'sentences' ? '/sentences' : '/practice') as any,
+                        )
+                      }
+                    >
                       <View style={styles.categoryCardHeader}>
                         <View style={[styles.categoryBadge, { backgroundColor: cat.badgeBgColor }]}>
-                          {cat.iconType === 'sounds' ? (
-                            <Ionicons name="musical-notes" size={16} color="#FFFFFF" />
-                          ) : cat.iconType === 'words' ? (
-                            <Text style={styles.categoryAaText}>Aa</Text>
-                          ) : cat.iconType === 'phrases' ? (
-                            <Text style={styles.categoryQuotesText}>❝❞</Text>
-                          ) : (
-                            <Ionicons name="clipboard" size={15} color="#FFFFFF" />
-                          )}
+                          <Image
+                            source={ADVENTURE_ICONS[cat.iconType] || ADVENTURE_ICONS[cat.id]}
+                            style={styles.categoryBadgeIcon}
+                            contentFit="contain"
+                          />
                         </View>
                         <Text style={styles.categoryTitle}>{cat.title}</Text>
+                        <Ionicons name="chevron-forward" size={16} color="#B6D7F2" style={styles.categoryChevron} />
                       </View>
                       <View style={styles.categoryProgressTrack}>
                         <View style={[styles.categoryProgressFill, { width: `${Math.min(catPercentage, 100)}%` }]} />
                       </View>
                       <Text style={styles.categoryCounterText}>{cat.completed}/{cat.total} done</Text>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -157,10 +172,10 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#8CBFE6' },
   background: { flex: 1, backgroundColor: '#8CBFE6', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
   starsCard: { flex: 1, width: '100%', backgroundColor: '#E7F2FA', borderRadius: 36, overflow: 'hidden', borderWidth: 1.5, borderColor: '#C7DFEE', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 6 },
-  
+
   // Tablet Responsive Constraint
   starsCardTablet: { maxWidth: 600, alignSelf: 'center' },
-  
+
   topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, backgroundColor: '#E7F2FA' },
   headerTitle: { fontFamily: 'SourGummy-Bold', fontSize: 30, color: '#0D68AC', letterSpacing: -0.5 },
   headerRightActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -168,7 +183,7 @@ const styles = StyleSheet.create({
 
   // Fixed absoluteFillObject TS Error
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.15)', zIndex: 30 },
-  
+
   menuDropdownCard: { position: 'absolute', top: 66, right: 18, backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 8, paddingHorizontal: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 8, elevation: 8, borderWidth: 1.5, borderColor: '#D4E7F5', zIndex: 40, minWidth: 190 },
   menuItemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 4, gap: 8 },
   menuParentIcon: { width: 26, height: 26, borderRadius: 13 },
@@ -181,7 +196,7 @@ const styles = StyleSheet.create({
   collectingStarsTitle: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#FFFFFF', letterSpacing: 0.8, marginBottom: 6 },
   starNumberRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 10, gap: 3 },
   starNumberText: { fontFamily: 'SourGummy-Bold', fontSize: 44, color: '#FFFFFF' },
-  starAssetImage: { width: 42, height: 42, marginTop: -2 },
+  starAssetImage: { width: 52, height: 52, marginTop: -2 },
   capsuleProgressTrack: { width: '100%', height: 18, backgroundColor: '#FFFFFF', borderRadius: 12, overflow: 'hidden', padding: 3, marginBottom: 8 },
   capsuleProgressFill: { height: '100%', backgroundColor: '#F5A623', borderRadius: 10 },
   encouragementSubtext: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.12)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
@@ -193,10 +208,12 @@ const styles = StyleSheet.create({
   categoriesList: { gap: 10, marginBottom: 6 },
   categoryCard: { backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1.5, borderColor: '#C7DFEE', borderBottomWidth: 4, borderBottomColor: '#B6D7F2', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
   categoryCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  categoryBadge: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 2, elevation: 2 },
+  categoryBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 2, elevation: 2 },
+  categoryBadgeIcon: { width: 22, height: 22 },
   categoryAaText: { fontFamily: 'SourGummy-Bold', fontSize: 14, color: '#FFFFFF' },
   categoryQuotesText: { fontSize: 13, color: '#FFFFFF', fontWeight: 'bold' },
   categoryTitle: { fontFamily: 'SourGummy-Bold', fontSize: 15, color: '#0D68AC', marginLeft: 10 },
+  categoryChevron: { marginLeft: 'auto' },
   categoryProgressTrack: { width: '100%', height: 10, backgroundColor: '#D8ECFA', borderRadius: 6, overflow: 'hidden', marginBottom: 6 },
   categoryProgressFill: { height: '100%', backgroundColor: '#F5A623', borderRadius: 6 },
   categoryCounterText: { fontFamily: 'SourGummy-Medium', fontSize: 10, color: '#8FA5B8', marginLeft: 2 },
