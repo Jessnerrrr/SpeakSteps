@@ -13,11 +13,61 @@ const { learning: learningRoutes } = require('./learning/routes');
 const { audio: audioRoutes } = require('./audio/routes');
 const Patient = require('./patients/Patient');
 
-fs.mkdirSync(path.join(__dirname, 'uploads', 'audio'), { recursive: true });
+const isVercel = Boolean(process.env.VERCEL);
+const uploadsRoot = isVercel ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+
+try {
+  fs.mkdirSync(path.join(uploadsRoot, 'audio'), { recursive: true });
+} catch (err) {
+  console.warn('[Server] Skipping uploads directory creation:', err.message);
+}
 
 app.use(cors());
 app.use(express.json({ limit: '3mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(uploadsRoot));
+
+// Ensure DB & indexes are initialized before handling API requests (cached across warm invocations)
+let initPromise = null;
+const ensureInitialized = () => {
+  if (!initPromise) {
+    initPromise = (async () => {
+      getJwtSecret();
+      const connection = await connectDB();
+      await connection.connection.db.collection('audit_logs').createIndex(
+        { createdAt: -1 },
+        { name: 'createdAt_-1' },
+      );
+      await connection.connection.db.collection('user_sessions').createIndex(
+        { sessionId: 1 },
+        { name: 'sessionId_1', unique: true },
+      );
+      await connection.connection.db.collection('login_challenges').createIndex(
+        { expiresAt: 1 },
+        { name: 'loginChallengeExpiry_ttl', expireAfterSeconds: 0 },
+      );
+      await connection.connection.db.collection('user_sessions').createIndex(
+        { expiresAt: 1 },
+        { name: 'expiresAt_ttl', expireAfterSeconds: 0 },
+      );
+      await Patient.createIndexes();
+    })().catch((error) => {
+      initPromise = null;
+      throw error;
+    });
+  }
+  return initPromise;
+};
+
+app.use('/api', async (req, res, next) => {
+  try {
+    await ensureInitialized();
+    return next();
+  } catch (error) {
+    console.error(`[Server] Database initialization failed: ${redactUri(error.message)}`);
+    return res.status(500).json({ success: false, error: 'Database connection failed.' });
+  }
+});
+
 app.use('/api/audio', audioRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
@@ -73,33 +123,18 @@ app.use((error, req, res, next) => {
   return res.status(500).json({ success: false, error: 'An unexpected server error occurred.' });
 });
 
-// Start server after connecting to database
-const startServer = async () => {
-  getJwtSecret();
-  const connection = await connectDB();
-  await connection.connection.db.collection('audit_logs').createIndex(
-    { createdAt: -1 },
-    { name: 'createdAt_-1' },
-  );
-  await connection.connection.db.collection('user_sessions').createIndex(
-    { sessionId: 1 },
-    { name: 'sessionId_1', unique: true },
-  );
-  await connection.connection.db.collection('login_challenges').createIndex(
-    { expiresAt: 1 },
-    { name: 'loginChallengeExpiry_ttl', expireAfterSeconds: 0 },
-  );
-  await connection.connection.db.collection('user_sessions').createIndex(
-    { expiresAt: 1 },
-    { name: 'expiresAt_ttl', expireAfterSeconds: 0 },
-  );
-  await Patient.createIndexes();
-  app.listen(PORT, () => {
-    console.log(`[Server] SpeakSteps backend running on http://localhost:${PORT}`);
-  });
-};
+// Only bind a local port when running outside Vercel serverless
+if (!isVercel) {
+  ensureInitialized()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`[Server] SpeakSteps backend running on http://localhost:${PORT}`);
+      });
+    })
+    .catch((error) => {
+      console.error(`[Server] Startup failed: ${redactUri(error.message)}`);
+      process.exitCode = 1;
+    });
+}
 
-startServer().catch((error) => {
-  console.error(`[Server] Startup failed: ${redactUri(error.message)}`);
-  process.exitCode = 1;
-});
+module.exports = app;
