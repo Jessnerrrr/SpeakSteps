@@ -32,7 +32,14 @@
       "@react-native-community/datetimepicker",
       "expo-web-browser",
       "expo-status-bar",
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow SpeakSteps to record your practice so you can listen to it.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

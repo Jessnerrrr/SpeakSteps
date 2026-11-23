@@ -1,5 +1,6 @@
 import { AssignmentCalendar } from '@/components/assignment-calendar';
 import { ProfileEditWarning } from '@/components/profile-edit-warning';
+import { reviewStudentNameChange, useStudentNameRequests, type StudentNameRequest } from '@/data/student-name-requests';
 import { parseCalendarDate, todayCalendarDate } from '@/data/calendar-date';
 import { ListPagination, useListPagination } from '@/components/list-pagination';
 import { useLearningActivity } from '@/data/learning-workflow';
@@ -406,6 +407,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const [requestStageFilters, setRequestStageFilters] = useState<string[]>([]);
   const [requestFollowupFilters, setRequestFollowupFilters] = useState<string[]>([]);
   const [requestView, setRequestView] = useState<'Pending' | 'Reviewed' | 'All Requests'>('Pending');
+  const studentNameRequests = useStudentNameRequests();
   const [requestSearch, setRequestSearch] = useState('');
   const [requestAction, setRequestAction] = useState('');
   const [requestHistoryExpanded, setRequestHistoryExpanded] = useState(false);
@@ -1561,11 +1563,55 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   };
   const requestPagination = useListPagination(filteredStudentRequests.length, 10, JSON.stringify([requestView, requestSearch, requestTypeFilters, requestStageFilters, requestStatusFilters, requestFollowupFilters]));
   const logPagination = useListPagination(visibleLogs.length, 10, JSON.stringify([logSearch, logCategoriesSelected]));
+  const visibleNameRequests = studentNameRequests.filter((request) => {
+    const matchesView = requestView === 'All Requests' || (requestView === 'Pending' ? request.status === 'Pending' : request.status !== 'Pending');
+    const query = requestSearch.trim().toLowerCase();
+    return matchesView && (!query || [request.currentName, request.proposedName, request.id, request.studentId].some((value) => value.toLowerCase().includes(query)));
+  });
+
+  const confirmNameRequest = (request: StudentNameRequest, decision: 'Approved' | 'Declined') => {
+    const approve = decision === 'Approved';
+    setConfirmation({
+      title: approve ? 'Approve this name change?' : 'Decline this name change?',
+      message: `${request.currentName} → ${request.proposedName}. ${approve ? 'The guardian can apply this approved name.' : 'The student will keep their current name.'}`,
+      actionLabel: approve ? 'Approve name change' : 'Decline name change',
+      danger: !approve,
+      run: () => {
+        const reviewed = reviewStudentNameChange(request.id, decision);
+        setConfirmation(null);
+        if (!reviewed) { flash('This request has already been reviewed.'); return; }
+        addLog('Student name change ' + decision.toLowerCase(), 'Guardian request ' + request.id, 'Request', profileName, {
+          subject: { name: request.currentName, identifier: request.studentId, type: 'Student' }, result: decision,
+        });
+        flash('Name change request ' + decision.toLowerCase() + '.');
+      },
+    });
+  };
 
   const studentRequestsPage = () => <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
-    <Header title="Student Requests" subtitle="Review enrollment, assignment, and access requests using their existing verification history." />
+    <Header title="Student Requests" subtitle="Review enrollment, assignment, access, and name-change requests." />
     <View style={styles.accountRoleTabs} accessibilityRole="tablist" accessibilityLabel="Filter requests by review status">{(['Pending', 'Reviewed', 'All Requests'] as const).map((view) => { const selected = requestView === view; return <Pressable key={view} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => changeRequestView(view)} style={({ hovered, pressed }) => [styles.accountRoleTab, hovered && styles.accountRoleTabHover, pressed && styles.accountRoleTabPressed]}><Text style={[styles.accountRoleTabText, selected && styles.accountRoleTabTextSelected]}>{view}</Text>{selected ? <View style={styles.accountRoleTabIndicator} /> : null}</Pressable>; })}</View>
     <View style={styles.accountSearchRow}><SearchBox value={requestSearch} onChange={setRequestSearch} placeholder="Search Student, Student Number, or Request ID" fullWidth /></View>
+    {visibleNameRequests.length > 0 && (
+      <View style={styles.activityPanel}>
+        <View style={styles.sectionHeading}><Text accessibilityRole="header" style={styles.sectionTitle}>Name change requests</Text></View>
+        {visibleNameRequests.map((request) => (
+          <View key={request.id} style={styles.nameRequestRow}>
+            <View style={styles.nameRequestCopy}>
+              <Text style={styles.personName}>{request.currentName} → {request.proposedName}</Text>
+              <Text style={styles.secondaryText}>Guardian · {formatDate(request.submittedAt)} · {request.id}</Text>
+            </View>
+            <Status label={request.status} tone={request.status === 'Pending' ? 'yellow' : request.status === 'Declined' ? 'red' : 'green'} />
+            {request.status === 'Pending' && (
+              <View style={styles.nameRequestActions}>
+                <Button label="Decline" onPress={() => confirmNameRequest(request, 'Declined')} />
+                <Button label="Approve" kind="primary" onPress={() => confirmNameRequest(request, 'Approved')} />
+              </View>
+            )}
+          </View>
+        ))}
+      </View>
+    )}
     {requestFilterTags.length ? <View style={styles.accountFilterTagRow}>{requestFilterTags.map((tag) => <TouchableOpacity key={tag.label} accessibilityRole="button" accessibilityLabel={`Remove ${tag.label} filter`} onPress={tag.clear} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>{tag.label}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}</View> : null}
     <View style={styles.directoryMeta}><Text style={styles.resultCount}>{filteredStudentRequests.length} {filteredStudentRequests.length === 1 ? 'request' : 'requests'}</Text><View style={styles.requestMetaControls}><TouchableOpacity onPress={resetStudentRequestFilters} style={[styles.accountFilterReset, { marginLeft: 0 }]} accessibilityRole="button" accessibilityLabel="Reset request search and filters"><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity></View></View>
     <ScrollView horizontal={requestTableHorizontal} showsHorizontalScrollIndicator={requestTableHorizontal} contentContainerStyle={{ width: '100%' as any, minWidth: requestTableHorizontal ? 1052 : '100%', flexGrow: 1 }}><View style={[styles.requestList, { width: '100%' as any }]}><View style={styles.requestTableHeader}><Text style={[styles.requestColumnHeader, requestColumnStyles.student]}>Student</Text><View style={requestColumnStyles.type}><ColumnFilter label="Request Type" active={requestTypeFilters.length > 0} multiSelect options={requestTypeOptions.map((value) => ({ label: value, selected: requestTypeFilters.includes(value), onSelect: () => toggleFilterValue(requestTypeFilters, value, setRequestTypeFilters) }))} /></View><Text style={[styles.requestColumnHeader, requestColumnStyles.submitter]}>Submitted By</Text><View style={requestColumnStyles.stage}><ColumnFilter label="Workflow Stage" active={requestStageFilters.length > 0} multiSelect options={requestStageOptions.map((value) => ({ label: value, selected: requestStageFilters.includes(value), onSelect: () => toggleFilterValue(requestStageFilters, value, setRequestStageFilters) }))} /></View><View style={requestColumnStyles.status}><ColumnFilter label="Status" active={requestStatusFilters.length > 0 || requestFollowupFilters.length > 0} multiSelect options={[
@@ -2015,6 +2061,9 @@ const detailPanelStyles = {
 };
 
 const styles = StyleSheet.create({
+  nameRequestRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.line },
+  nameRequestCopy: { flexGrow: 1, flexShrink: 1, minWidth: 170, gap: 3 },
+  nameRequestActions: { flexDirection: 'row', gap: 8 },
   professionalDrawerOverlay: { justifyContent: 'flex-start', alignItems: 'flex-end', padding: 0 },
   professionalDrawer: { width: '100%', maxWidth: 500, height: '100%', maxHeight: '100%', alignSelf: 'stretch', padding: 24, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },
   studentDrawer: { width: 560, maxWidth: '100%', height: '100%', maxHeight: '100%', alignSelf: 'stretch', padding: 24, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderTopLeftRadius: 12, borderBottomLeftRadius: 12 },

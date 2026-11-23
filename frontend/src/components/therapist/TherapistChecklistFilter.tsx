@@ -58,7 +58,8 @@ export function ChecklistFilter<T extends string>({
   const [query, setQuery] = useState('');
   const sections: ChecklistSection<T>[] = [{ label: sectionLabel ?? label, options, selected, onChange, allLabel, headerContent }, ...extraSections];
   const section = sections[sectionIndex] ?? sections[0];
-  const allSelected = resetOnAll ? section.selected.length === 0 : section.options.every((option) => section.selected.includes(option));
+  const allMeansUnfiltered = resetOnAll || section.single;
+  const allSelected = allMeansUnfiltered ? section.selected.length === 0 : section.options.every((option) => section.selected.includes(option));
   const summary = !selected.length ? emptyLabel : options.every((option) => selected.includes(option)) && !resetOnAll ? allLabel : selected.join(', ');
   const search = query.trim().toLowerCase();
   const visibleOptions = section.options.filter((option) =>
@@ -130,13 +131,13 @@ export function ChecklistFilter<T extends string>({
               <Pressable
                 accessibilityRole={section.single ? 'radio' : 'checkbox'}
                 accessibilityState={{ checked: allSelected }}
-                onPress={() => section.onChange(resetOnAll || allSelected ? [] : [...section.options])}
+                onPress={() => section.onChange(allMeansUnfiltered || allSelected ? [] : [...section.options])}
                 style={[styles.popupOption, extraSections.length > 0 && styles.groupedOption, { borderBottomWidth: 1, borderBottomColor: palette.line }]}
               >
                 <View style={[styles.checkSquare, section.single && styles.radioCircle, allSelected && styles.checkSquareOn]}>
                   {allSelected ? <Text style={styles.checkMark}>{section.single ? '•' : '✓'}</Text> : null}
                 </View>
-                <Text style={[styles.popupOptionText, { color: palette.text, fontWeight: '700' }]}>{resetOnAll ? section.allLabel : 'Select all'}</Text>
+                <Text style={[styles.popupOptionText, { color: palette.text, fontWeight: '700' }]}>{allMeansUnfiltered ? section.allLabel : 'Select all'}</Text>
               </Pressable>
               {visibleOptions.map((option) => {
                 const checked = section.selected.includes(option);

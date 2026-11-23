@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -11,22 +11,19 @@ export function ParentBottomNav({ activeTab = 'home' }: ParentBottomNavProps) {
     {
       id: 'home',
       label: 'Home',
-      icon: 'home-outline' as const,
-      activeIcon: 'home' as const,
+      icon: 'house',
       route: '/parent-dashboard',
     },
     {
       id: 'tasks',
       label: 'Tasks',
-      icon: 'list-outline' as const,
-      activeIcon: 'list' as const,
+      icon: 'clipboard-list',
       route: '/parent-tasks',
     },
     {
       id: 'progress',
       label: 'Progress',
-      icon: 'stats-chart-outline' as const,
-      activeIcon: 'stats-chart' as const,
+      icon: 'chart-column',
       route: '/parent-progress',
     },
   ];
@@ -48,11 +45,12 @@ export function ParentBottomNav({ activeTab = 'home' }: ParentBottomNavProps) {
               }
             }}
           >
-            <View style={styles.iconWrapper}>
-              <Ionicons
-                name={isActive ? tab.activeIcon : tab.icon}
-                size={24}
-                color={isActive ? '#0D68AC' : '#5F8BAE'}
+            <View style={[styles.iconWrapper, isActive && styles.activeIconWrapper]}>
+              <FontAwesome6
+                name={tab.icon}
+                solid
+                size={21}
+                color={isActive ? '#0D68AC' : '#648199'}
               />
             </View>
             <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
@@ -70,13 +68,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#E7F2FA',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1.5,
     borderTopColor: '#CBE0EF',
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
@@ -85,12 +84,15 @@ const styles = StyleSheet.create({
   iconWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 28,
+    width: 48,
+    height: 32,
+    borderRadius: 16,
   },
+  activeIconWrapper: { backgroundColor: '#E7F4FF', borderColor: '#BBDDF7', borderWidth: 1 },
   tabLabel: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 11,
-    color: '#5F8BAE',
+    color: '#56758E',
     marginTop: 3,
     letterSpacing: 0.2,
   },

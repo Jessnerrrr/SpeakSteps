@@ -25,6 +25,7 @@ import {
 import { MOCK_PATIENT_DASHBOARD } from '@/data/patient-dashboard-mock';
 import { PARTICIPATION_STARS, usePracticeSubmissions } from '@/data/practice-submissions';
 import { BuddyStore, Buddy } from '@/data/buddy-store';
+import { ChildActivityEmpty } from '@/components/child-activity-empty';
 import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
 import { adventurePracticeLevels, practiceLevelIcons } from '@/components/adventure-icon';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
@@ -254,17 +255,17 @@ export default function PatientDashboardScreen() {
                       <View key={adv.id} style={styles.stepperItemWrapper}>
                         <View style={styles.stepperNodeRow}>
                           <Pressable
-                            style={(state) => [[styles.stepCircle, { backgroundColor: adv.bgColor }], styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
+                            style={(state) => [styles.stepCircle, width < 380 && styles.stepCircleCompact, { backgroundColor: adv.bgColor }, styles.interactiveMotion, state.pressed ? styles.interactivePressed : 'hovered' in state && state.hovered && styles.interactiveHovered]}
                             accessibilityRole="button"
                             accessibilityLabel={adv.name}
                             onPress={() => router.push({ pathname: '/sentences', params: { level: adventurePracticeLevels[adv.iconType] } })}
                           >
-                            <Ionicons name={practiceLevelIcons[adventurePracticeLevels[adv.iconType]]} size={26} color="#FFFFFF" />
+                            <Ionicons name={practiceLevelIcons[adventurePracticeLevels[adv.iconType]]} size={width < 380 ? 22 : 26} color="#FFFFFF" />
                           </Pressable>
 
                           {!isLast && <View style={styles.stepConnectingLine} />}
                         </View>
-                        <Text style={styles.stepLabel}>{adv.name}</Text>
+                        <Text style={[styles.stepLabel, width < 380 && styles.stepLabelCompact]}>{adv.name}</Text>
                       </View>
                     );
                   })}
@@ -366,7 +367,9 @@ export default function PatientDashboardScreen() {
                     <Text style={styles.cardSubtext}>{activity.level}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}</Text>
                   </Pressable>
                 ))}
-                {submissions.length === 0 && assignedPractice.length === 0 ? <Text style={styles.cardSubtext}>Submit a practice activity to see it here.</Text> : null}
+                {submissions.length === 0 && assignedPractice.length === 0 ? (
+                  <ChildActivityEmpty buddy={activeBuddy} hint="Pick something fun to try in Play!" />
+                ) : null}
                 {submissions.map((activity) => (
                   <View key={activity.id} style={styles.activityEntry}>
                     <Text style={styles.cardHeading}>{activity.title}</Text>
@@ -566,10 +569,12 @@ const styles = StyleSheet.create({
   stepperItemWrapper: { alignItems: 'center', flex: 1 },
   stepperNodeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%' },
   stepCircle: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 4, elevation: 4 },
+  stepCircleCompact: { width: 44, height: 44, borderRadius: 22 },
 
   stepQuotesText: { fontSize: 22, color: '#FFFFFF', fontWeight: 'bold' },
   stepConnectingLine: { position: 'absolute', right: -14, width: 28, height: 6, backgroundColor: '#B6D7F2', borderRadius: 3, zIndex: -1 },
-  stepLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0D68AC', marginTop: 8 },
+  stepLabel: { fontFamily: 'SourGummy-Bold', fontSize: 12, color: '#0D68AC', marginTop: 8, textAlign: 'center' },
+  stepLabelCompact: { fontSize: 11 },
 
   continuePracticeBtn: {
     minHeight: 70,
