@@ -1400,16 +1400,15 @@ export default function TeacherDashboardScreen() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await clearSession();
-      setShowLogoutConfirm(false);
-      setShowMenu(false);
-      setShowSettingsModal(false);
-      if (router.canDismiss()) router.dismissAll();
-    } catch (error) {
-      triggerToast(error instanceof Error ? error.message : 'Could not sign out.');
+  const handleLogout = () => {
+    setShowLogoutConfirm(false);
+    setShowMenu(false);
+    setShowSettingsModal(false);
+    triggerToast('Logged out successfully.');
+    if (router.canDismiss()) {
+      router.dismissAll();
     }
+    router.replace('/login' as any);
   };
 
   const handleMarkAllNotificationsRead = () => {
