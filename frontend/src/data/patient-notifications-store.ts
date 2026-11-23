@@ -1,18 +1,15 @@
 /**
  * SpeakSteps - Shared Patient (Child Mode) & Parent Notifications Store
  *
- * Syncs live with ChildProfileStore, BuddyStore, TaskStore, and Parent Progress
- * feedback data using existing local assets, preserving read/unread state across
- * Child Mode and Parent Mode navigation.
+ * Uses shared assignment and practice data, with read state across both modes.
  */
 
 import type { ImageSource } from 'expo-image';
 
 import { BuddyStore } from './buddy-store';
 import { ChildProfileStore } from './child-profile-store';
-import { MOCK_FEEDBACK_ITEMS } from './parent-progress-mock';
-import { TaskStore } from './parent-tasks-mock';
-import { MOCK_PATIENT_DASHBOARD } from './patient-dashboard-mock';
+import { getLearningAssignments, subscribeLearningWorkflow } from './learning-workflow';
+import { getPracticeSubmissions, PARTICIPATION_STARS, subscribePracticeSubmissions } from './practice-submissions';
 
 export type NotificationAudience = 'child' | 'parent';
 
@@ -34,10 +31,6 @@ const initialReadState: Record<string, boolean> = {
   'child-great-job': true,
   'child-welcome': true,
   // Parent Mode notifications
-  'parent-therapist-feedback': false,
-  'parent-pending-tasks': false,
-  'parent-milestone': true,
-  'parent-daily-tip': true,
 };
 
 let readState: Record<string, boolean> = { ...initialReadState };
@@ -56,14 +49,14 @@ function buildChildNotifications(): PatientNotificationItem[] {
   const childProfile = ChildProfileStore.getProfile();
   const activeBuddy = BuddyStore.getActiveBuddy();
   const buddyName = formatBuddyDisplayName(activeBuddy.name);
-  const activitiesCount = MOCK_PATIENT_DASHBOARD.quickActions.activitiesCount;
+  const activitiesCount = getLearningAssignments().filter((item) => item.studentId === childProfile.id && !item.submittedAt).length;
 
   return [
     {
       id: 'child-buddy-waiting',
       audience: 'child',
       title: `${buddyName} is waiting!`,
-      message: `You have ${activitiesCount} ${activitiesCount === 1 ? 'activity' : 'activities'} to play today.`,
+      message: activitiesCount ? `You have ${activitiesCount} assigned ${activitiesCount === 1 ? 'activity' : 'activities'} to try.` : 'Pick an activity in Play.',
       badgeImage: activeBuddy.image,
       read: readState['child-buddy-waiting'] ?? false,
       targetRoute: '/sentences',
@@ -90,56 +83,47 @@ function buildChildNotifications(): PatientNotificationItem[] {
 
 function buildParentNotifications(): PatientNotificationItem[] {
   const childProfile = ChildProfileStore.getProfile();
-  const activities = TaskStore.getActivities();
-  const pendingCount = activities.filter((item) => item.status === 'pending').length;
-  const completedCount = activities.filter((item) => item.status === 'completed').length;
-  const latestFeedback = MOCK_FEEDBACK_ITEMS[0];
-
-  return [
-    {
-      id: 'parent-therapist-feedback',
+  const assignments = getLearningAssignments().filter((item) => item.studentId === childProfile.id);
+  const pending = assignments.filter((item) => !item.submittedAt);
+  const stars = getPracticeSubmissions().length * PARTICIPATION_STARS;
+  const feedbackItems = assignments.flatMap((item): PatientNotificationItem[] => {
+    if (!item.feedback) return [];
+    const id = 'parent-feedback:' + item.id + ':' + item.feedback.date;
+    return [{
+      id,
       audience: 'parent',
-      title: `New Feedback from ${latestFeedback?.therapistName ?? 'Teacher Jadey'}`,
-      message: `${childProfile.displayName}'s ${latestFeedback?.title ?? 'practice'} note is ready to review.`,
-      timeLabel: 'Today • 10:30 AM',
+      title: 'Feedback from ' + item.feedback.reviewedBy,
+      message: item.title + ' feedback is ready to read.',
+      timeLabel: new Date(item.feedback.date).toLocaleDateString(),
       actionHint: 'View feedback',
       badgeImage: require('../../assets/images/therapist_blue.gif'),
-      read: readState['parent-therapist-feedback'] ?? false,
+      read: readState[id] ?? false,
       targetRoute: '/parent-therapist-feedback',
-    },
-    {
-      id: 'parent-pending-tasks',
-      audience: 'parent',
-      title: 'Pending Activities Waiting',
-      message: `${pendingCount} assigned ${pendingCount === 1 ? 'activity is' : 'activities are'} ready for ${childProfile.displayName}.`,
-      timeLabel: 'Today • 8:00 AM',
+    }];
+  });
+  const pendingId = 'parent-pending:' + pending.map((item) => item.id).join('|');
+  return [
+    ...feedbackItems,
+    ...(pending.length ? [{
+      id: pendingId,
+      audience: 'parent' as const,
+      title: 'Activities to practice',
+      message: childProfile.displayName + ' has ' + pending.length + (pending.length === 1 ? ' activity to practice.' : ' activities to practice.'),
       actionHint: 'View tasks',
       badgeImage: require('../../assets/images/sheep.png'),
-      read: readState['parent-pending-tasks'] ?? false,
+      read: readState[pendingId] ?? false,
       targetRoute: '/parent-tasks',
-    },
-    {
-      id: 'parent-milestone',
-      audience: 'parent',
-      title: `${childProfile.displayName} Earned ${completedCount} Stars!`,
-      message: 'Sounds & Words accuracy is improving. Check the latest progress report.',
-      timeLabel: 'Yesterday',
+    }] : []),
+    ...(stars ? [{
+      id: 'parent-milestone:' + stars,
+      audience: 'parent' as const,
+      title: childProfile.displayName + ' earned ' + stars + (stars === 1 ? ' star' : ' stars'),
+      message: 'See completed practice in Progress & History.',
       actionHint: 'View progress',
       badgeImage: require('../../assets/images/star-3d.png'),
-      read: readState['parent-milestone'] ?? true,
+      read: readState['parent-milestone:' + stars] ?? true,
       targetRoute: '/parent-progress',
-    },
-    {
-      id: 'parent-daily-tip',
-      audience: 'parent',
-      title: 'Home Tip from Teacher Anna',
-      message: 'Short 5-minute playful sessions help reinforce daily speech milestones.',
-      timeLabel: 'Nov 4',
-      actionHint: 'Open tasks',
-      badgeImage: require('../../assets/images/teacher-icon.gif'),
-      read: readState['parent-daily-tip'] ?? true,
-      targetRoute: '/parent-tasks',
-    },
+    }] : []),
   ];
 }
 
@@ -175,8 +159,12 @@ export const PatientNotificationsStore = {
 
   subscribe(listener: () => void) {
     listeners.add(listener);
+    const unsubscribeAssignments = subscribeLearningWorkflow(listener);
+    const unsubscribePractice = subscribePracticeSubmissions(listener);
     return () => {
       listeners.delete(listener);
+      unsubscribeAssignments();
+      unsubscribePractice();
     };
   },
 };

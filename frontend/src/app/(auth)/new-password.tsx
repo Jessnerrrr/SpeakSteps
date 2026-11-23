@@ -1,13 +1,13 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function NewPasswordScreen() {
-  // Responsive Hooks
-  const { width } = useWindowDimensions();
-  const isTablet = width > 600;
+  const insets = useSafeAreaInsets();
 
   const { role, flow } = useLocalSearchParams();
   const currentRole = Array.isArray(role) ? role[0] : role;
@@ -16,7 +16,7 @@ export default function NewPasswordScreen() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -36,7 +36,7 @@ export default function NewPasswordScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  if (!fontsLoaded) return null; 
+  if (!fontsLoaded) return null;
 
   // --- Real-time Password Validation Logic ---
   const isLengthValid = newPassword.length >= 8 && newPassword.length <= 20;
@@ -128,132 +128,121 @@ export default function NewPasswordScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} /> 
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <ImageBackground 
-        source={require('../../../assets/images/split-bg.png')} 
+      <ImageBackground
+        source={require('../../../assets/images/split-bg.png')}
         style={styles.background}
-        imageStyle={{ opacity: 1 }} 
+        imageStyle={{ opacity: 1 }}
         resizeMode="cover"
       >
-        <KeyboardAvoidingView 
-          style={{ flex: 1 }} 
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.topHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButtonWhite}>
-              <Text style={styles.backIconBlue}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.topHeaderText}>
-              {isSetupFlow ? 'Account Setup' : 'Forgot Password'}
-            </Text>
-          </View>
-
-          <View style={styles.container}>
-            {/* Tablet Width Constraint applied here */}
-            <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
-              
-              <Image 
-                source={require('../../../assets/images/bird-logo.gif')} 
-                style={styles.overlappingBird}
-                contentFit="contain"
-              />
-              
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+          >
+            <View style={styles.bottomCard}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.backButton}>
+                <Ionicons name="chevron-back" size={22} color="#0865AD" />
+              </TouchableOpacity>
+              <View style={styles.titleRow}>
+                <Image source={require('../../../assets/images/bird-logo.gif')} style={styles.bird} contentFit="contain" />
                 <View style={styles.textContainer}>
-                  <Text style={styles.welcomeText}>Create new password</Text>
-                  <Text style={styles.subText}>
-                    {isSetupFlow ? 'Replace your temporary password' : 'Provide your new password'}
-                  </Text>
+                  <Text accessibilityRole="header" style={styles.welcomeText}>Create new password</Text>
+                  <Text style={styles.subText}>{isSetupFlow ? 'Replace your temporary password' : 'Provide your new password'}</Text>
                 </View>
+              </View>
 
-                <View style={styles.formContainer}>
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>
-                      {isSetupFlow ? 'Temporary Password' : 'Old Password'}
+            <View style={styles.formContainer}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>
+                  {isSetupFlow ? 'Temporary Password' : 'Old Password'}
+                </Text>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter password"
+                    placeholderTextColor="#6A7985"
+                    secureTextEntry={!showOldPassword}
+                    value={oldPassword}
+                    onChangeText={setOldPassword}
+                  />
+                  <TouchableOpacity accessibilityRole="button" style={styles.eyeButton} onPress={() => setShowOldPassword(!showOldPassword)}>
+                    <Text style={styles.eyeButtonText}>{showOldPassword ? 'Hide' : 'Show'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>New Password</Text>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter password"
+                    placeholderTextColor="#6A7985"
+                    secureTextEntry={!showNewPassword}
+                    value={newPassword}
+                    maxLength={20}
+                    onChangeText={setNewPassword}
+                    onFocus={() => setIsPasswordFocused(true)}
+                    onBlur={() => setIsPasswordFocused(false)}
+                  />
+                  <TouchableOpacity accessibilityRole="button" style={styles.eyeButton} onPress={() => setShowNewPassword(!showNewPassword)}>
+                    <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Dynamic Password Requirements Box (Only visible when focused) */}
+              {isPasswordFocused && (
+                <View style={styles.requirementsBox}>
+                  <View style={styles.requirementsHeader}>
+                    <Text style={styles.requirementsHeaderText}>
+                      Your password needs:
                     </Text>
-                    <View style={styles.passwordWrapper}>
-                      <TextInput 
-                        style={[styles.input, { paddingRight: 50 }]} 
-                        placeholder="input password"
-                        placeholderTextColor="#999"
-                        secureTextEntry={!showOldPassword}
-                        value={oldPassword}
-                        onChangeText={setOldPassword}
-                      />
-                      <TouchableOpacity style={styles.eyeButton} onPress={() => setShowOldPassword(!showOldPassword)}>
-                        <Text style={styles.eyeButtonText}>{showOldPassword ? 'Hide' : 'Show'}</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
-
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>New Password</Text>
-                    <View style={styles.passwordWrapper}>
-                      <TextInput 
-                        style={[styles.input, { paddingRight: 50 }]} 
-                        placeholder="input password"
-                        placeholderTextColor="#999"
-                        secureTextEntry={!showNewPassword}
-                        value={newPassword}
-                        onChangeText={setNewPassword}
-                        onFocus={() => setIsPasswordFocused(true)}
-                        onBlur={() => setIsPasswordFocused(false)}
-                      />
-                      <TouchableOpacity style={styles.eyeButton} onPress={() => setShowNewPassword(!showNewPassword)}>
-                        <Text style={styles.eyeButtonText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Dynamic Password Requirements Box (Only visible when focused) */}
-                  {isPasswordFocused && (
-                    <View style={styles.requirementsBox}>
-                      <View style={styles.requirementsHeader}>
-                        <Text style={styles.requirementsHeaderText}>
-                          The password length is 8-20 characters and must contain at least 1 lowercase letter, 1 capital letter, 1 number, and 1 special character.
-                        </Text>
-                      </View>
-                      <View style={styles.requirementsList}>
-                        <RequirementItem text="Number of characters" isValid={isLengthValid} />
-                        <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
-                        <RequirementItem text="Capital letter" isValid={hasUppercase} />
-                        <RequirementItem text="Number" isValid={hasNumber} />
-                        <RequirementItem text="Special character" isValid={hasSpecial} />
-                      </View>
-                    </View>
-                  )}
-
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.inputLabel}>Confirm New Password</Text>
-                    <View style={styles.passwordWrapper}>
-                      <TextInput 
-                        style={[styles.input, { paddingRight: 50 }]} 
-                        placeholder="input password"
-                        placeholderTextColor="#999"
-                        secureTextEntry={!showConfirmPassword}
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                      />
-                      <TouchableOpacity style={styles.eyeButton} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                        <Text style={styles.eyeButtonText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
-                      </TouchableOpacity>
-                    </View>
+                  <View style={styles.requirementsList}>
+                    <RequirementItem text="8–20 characters" isValid={isLengthValid} />
+                    <RequirementItem text="Lowercase letter" isValid={hasLowercase} />
+                    <RequirementItem text="Capital letter" isValid={hasUppercase} />
+                    <RequirementItem text="Number" isValid={hasNumber} />
+                    <RequirementItem text="Special character" isValid={hasSpecial} />
                   </View>
                 </View>
+              )}
 
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                  <Text style={styles.saveBtnText}>Save</Text>
-                </TouchableOpacity>
-
-              </ScrollView>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Confirm New Password</Text>
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter password"
+                    placeholderTextColor="#6A7985"
+                    secureTextEntry={!showConfirmPassword}
+                    value={confirmPassword}
+                    maxLength={20}
+                    onChangeText={setConfirmPassword}
+                  />
+                  <TouchableOpacity accessibilityRole="button" style={styles.eyeButton} onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                    <Text style={styles.eyeButtonText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
+
+            <TouchableOpacity accessibilityRole="button" style={styles.saveBtn} onPress={handleSave}>
+              <Text style={styles.saveBtnText}>Save</Text>
+            </TouchableOpacity>
+
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
 
         {/* Custom Branded UI Alert Modal */}
-        <Modal visible={alertVisible} transparent={true} animationType="fade">
+        <Modal visible={alertVisible} transparent={true} animationType="fade" onRequestClose={handleAlertClose}>
           <View style={styles.modalOverlay}>
             <View style={styles.alertBox}>
               <Text style={[styles.alertTitle, alertType === 'error' ? { color: '#E74C3C' } : { color: '#0865AD' }]}>
@@ -274,50 +263,33 @@ export default function NewPasswordScreen() {
 
 const styles = StyleSheet.create({
   background: { flex: 1, backgroundColor: '#3487C6' },
-  container: { flex: 1, justifyContent: 'center' },
-  
-  topHeader: { position: 'absolute', top: 60, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, zIndex: 20 },
-  backButtonWhite: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginRight: 15, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 2 },
-  backIconBlue: { color: '#0865AD', fontSize: 24, lineHeight: 28, fontFamily: 'SourGummy-Bold' },
-  topHeaderText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 24 },
-  
-  bottomCard: { backgroundColor: '#FFFFFF', borderRadius: 40, marginHorizontal: 15, paddingHorizontal: 25, paddingTop: 40, paddingBottom: 20, position: 'relative', flex: 0.9 },
-  
-  // Tablet Responsive Constraint
-  bottomCardTablet: {
-    maxWidth: 500,
-    alignSelf: 'center',
-    width: '100%',
-  },
+  container: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
+  bottomCard: { width: '100%', maxWidth: 460, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, gap: 14 },
+  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EAF5FC', justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 2 },
+  bird: { width: 54, height: 54 },
+  textContainer: { flex: 1, minWidth: 0 },
+  welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 22, color: '#0865AD' },
+  subText: { fontFamily: 'SourGummy-Medium', fontSize: 14, color: '#536575', marginTop: 2 },
+  formContainer: { gap: 12 },
+  inputContainer: { gap: 5 },
+  inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#0865AD' },
+  passwordWrapper: { flexDirection: 'row', alignItems: 'center', minHeight: 48, borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, overflow: 'hidden' },
+  input: { flex: 1, minWidth: 0, minHeight: 46, paddingHorizontal: 12, fontFamily: 'SourGummy', fontSize: 15, color: '#243646' },
+  eyeButton: { minWidth: 52, minHeight: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
+  eyeButtonText: { fontFamily: 'SourGummy-Bold', fontSize: 13, color: '#0865AD' },
 
-  scrollContent: { paddingBottom: 30 },
-  
-  overlappingBird: { position: 'absolute', top: 2, left: 8, width: 90, height: 90, zIndex: 10 },
-  textContainer: { marginLeft: 75, marginBottom: 25 },
-  welcomeText: { fontFamily: 'SourGummy-Bold', fontSize: 20, color: '#0865AD', marginBottom: 3 },
-  subText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#666' },
-  
-  formContainer: { backgroundColor: '#FFFFFF', borderRadius: 15, padding: 15, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, marginBottom: 30 },
-  
-  inputContainer: { marginBottom: 12 },
-  inputLabel: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD', marginBottom: 5 },
-  passwordWrapper: { position: 'relative', justifyContent: 'center' },
-  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CBE6F6', borderRadius: 10, paddingHorizontal: 15, height: 45, fontFamily: 'SourGummy', color: '#333' },
-  
-  eyeButton: { position: 'absolute', right: 15, height: '100%', justifyContent: 'center' },
-  eyeButtonText: { fontFamily: 'SourGummy-Bold', fontSize: 10, color: '#0865AD' },
-  
   // --- Dynamic Requirements Styles ---
-  requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 4, overflow: 'hidden', marginBottom: 15 },
+  requirementsBox: { backgroundColor: '#F4F6F8', borderRadius: 8, overflow: 'hidden' },
   requirementsHeader: { backgroundColor: '#2C7FB8', padding: 12 },
   requirementsHeaderText: { color: '#FFFFFF', fontFamily: 'SourGummy-Medium', fontSize: 11, lineHeight: 16 },
   requirementsList: { padding: 12, gap: 10 },
   reqItem: { flexDirection: 'row', alignItems: 'center' },
   reqCircle: { width: 16, height: 16, borderRadius: 8, borderWidth: 2.5, borderColor: '#2C7FB8', marginRight: 10 },
-  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 }, 
+  reqCircleFilled: { backgroundColor: '#2C7FB8', borderWidth: 0 },
   reqText: { fontFamily: 'SourGummy-Medium', fontSize: 12, color: '#2C7FB8' },
-  
-  saveBtn: { backgroundColor: '#F5B041', alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 60, borderRadius: 10, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
+
+  saveBtn: { minHeight: 48, backgroundColor: '#0865AD', justifyContent: 'center', alignItems: 'center', borderRadius: 10 },
   saveBtnText: { fontFamily: 'SourGummy-Bold', color: '#FFFFFF', fontSize: 16 },
 
   // Custom Modal Alert Styles

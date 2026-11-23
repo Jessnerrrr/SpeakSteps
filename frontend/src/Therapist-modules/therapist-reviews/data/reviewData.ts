@@ -1,3 +1,5 @@
+import type { LearningPrompt } from '@/data/learning-workflow';
+
 export type ReviewStatus = 'Pending' | 'Reviewed';
 export type WordPosition = 'Initial' | 'Medial' | 'Final';
 
@@ -14,13 +16,16 @@ export type ReviewTarget = {
 export type ReviewRecord = {
   id: string;
   student: string;
+  assignmentId?: string;
   initial: string;
   avatar: string;
   activity: string;
   sound: string;
   level: string;
+  language?: string;
   status: ReviewStatus;
   targets: ReviewTarget[];
+  practicePrompts?: readonly LearningPrompt[];
   observations: string;
   parentFeedback: string;
   homePractice: string;
@@ -55,6 +60,7 @@ export const sampleReviews: ReviewRecord[] = statuses.map((status, index) => ({
   activity: 'Ready, set, /r/',
   sound: '/r/',
   level: 'Phrases',
+  language: 'English',
   status,
   targets: targets(status === 'Reviewed'),
   observations: '',

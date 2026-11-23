@@ -1,3 +1,8 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { matchesPracticeLanguage, PRACTICE_LANGUAGES } from '@/types/sentences';
+import { AssignmentCalendar } from '@/components/assignment-calendar';
+import { todayCalendarDate } from '@/data/calendar-date';
+import { TherapistChecklistFilter } from '@/components/therapist/TherapistChecklistFilter';
 // =============================================================================
 // THERAPIST ACTIVITIES — Library, Creator/Editor, Detail & Assignment in one file
 // Replaces: therapist-activities/pages, components, data
@@ -38,6 +43,7 @@ import {
   targetSounds,
   usesPhraseFields,
   wordPositions,
+  isAssignmentDate,
   type Activity,
   type PracticeLevel,
   type TargetSound,
@@ -76,11 +82,13 @@ function FieldMenu({
   value,
   options,
   onChange,
+  optionLabels,
 }: {
   label?: string;
   value: string;
   options: readonly string[];
   onChange: (value: string) => void;
+  optionLabels?: ReadonlyMap<string, string>;
 }) {
   const { palette } = useTherapist();
   const [open, setOpen] = useState(false);
@@ -93,7 +101,7 @@ function FieldMenu({
         style={[actStyles.menuControl, { borderColor: palette.line, backgroundColor: palette.card }]}
       >
         <Text style={[actStyles.menuValue, { color: palette.text }]} numberOfLines={1}>
-          {value}
+          {optionLabels?.get(value) ?? value}
         </Text>
         <View style={{ transform: [{ rotate: '90deg' }] }}>
           <ChevronRightIcon color={palette.faint} size={16} />
@@ -122,7 +130,7 @@ function FieldMenu({
               </Pressable>
             </View>
 
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
               {options.map((option) => {
                 const isSelected = option === value;
                 return (
@@ -145,7 +153,7 @@ function FieldMenu({
                         isSelected && { color: '#0284C7', fontWeight: '700' },
                       ]}
                     >
-                      {option}
+                      {optionLabels?.get(option) ?? option}
                     </Text>
                     {isSelected && <Text style={{ color: '#0284C7', fontWeight: '700', fontSize: 16 }}>✓</Text>}
                   </Pressable>
@@ -159,112 +167,10 @@ function FieldMenu({
   );
 }
 
-function ChecklistMenu({
-  label,
-  options,
-  selected,
-  onChange,
-}: {
-  label: string;
-  options: readonly string[];
-  selected: string[];
-  onChange: (selected: string[]) => void;
-}) {
-  const { palette } = useTherapist();
-  const [open, setOpen] = useState(false);
-  const allSelected = options.every((option) => selected.includes(option));
-  const summary = selected.length === 0 ? 'Select sounds' : allSelected ? 'All sounds' : selected.join(', ');
-
-  const toggle = (option: string) => {
-    onChange(selected.includes(option) ? selected.filter((item) => item !== option) : [...selected, option]);
-  };
-
-  return (
-    <View style={actStyles.menuWrap}>
-      <Text style={[actStyles.menuLabel, { color: palette.text }]}>{label}</Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setOpen(true)}
-        style={[actStyles.menuControl, { borderColor: palette.line, backgroundColor: palette.card }]}
-      >
-        <Text style={[actStyles.menuValue, { color: selected.length ? palette.text : palette.faint }]} numberOfLines={1}>
-          {summary}
-        </Text>
-        <View style={{ transform: [{ rotate: '90deg' }] }}>
-          <ChevronRightIcon color={palette.faint} size={16} />
-        </View>
-      </Pressable>
-
-      <Modal
-        transparent
-        visible={open}
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={actStyles.popupOverlay} onPress={() => setOpen(false)}>
-          <Pressable style={[actStyles.popupCard, { backgroundColor: palette.card, borderColor: palette.line }]} onPress={(e) => e.stopPropagation?.()}>
-            <View style={[actStyles.popupHeader, { borderBottomColor: palette.line }]}>
-              <Text style={[actStyles.popupTitle, { color: palette.text }]}>
-                {`Select ${label}`}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setOpen(false)}
-                style={actStyles.popupCloseBtn}
-                hitSlop={8}
-              >
-                <Text style={[actStyles.popupCloseText, { color: palette.faint }]}>✕</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: allSelected }}
-                onPress={() => onChange(allSelected ? [] : [...options])}
-                style={[actStyles.popupOption, { borderBottomWidth: 1, borderBottomColor: palette.line }]}
-              >
-                <View style={[actStyles.checkSquare, allSelected && actStyles.checkSquareOn]}>
-                  {allSelected ? <Text style={actStyles.checkMark}>✓</Text> : null}
-                </View>
-                <Text style={[actStyles.popupOptionText, { color: palette.text, fontWeight: '700' }]}>Select all</Text>
-              </Pressable>
-              {options.map((option) => {
-                const checked = selected.includes(option);
-                return (
-                  <Pressable
-                    key={option}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked }}
-                    onPress={() => toggle(option)}
-                    style={[actStyles.popupOption, checked && { backgroundColor: '#F0F9FF' }]}
-                  >
-                    <View style={[actStyles.checkSquare, checked && actStyles.checkSquareOn]}>
-                      {checked ? <Text style={actStyles.checkMark}>✓</Text> : null}
-                    </View>
-                    <Text style={[actStyles.popupOptionText, { color: palette.text }]}>{option}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setOpen(false)}
-              style={[actStyles.popupDoneBtn, { backgroundColor: palette.primary }]}
-            >
-              <Text style={actStyles.popupDoneBtnText}>Done</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </View>
-  );
-}
-
 // ─── 1. Activity Library & Word Bank ─────────────────────────────────────────
 
 const tabs = ['Unassigned', 'Assigned', 'Completed'] as const;
+const activitiesPerPage = 8;
 
 export function ActivityLibrary() {
   const { palette } = useTherapist();
@@ -272,23 +178,26 @@ export function ActivityLibrary() {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<(typeof tabs)[number]>('Unassigned');
   const [filters, setFilters] = useState<PracticeLevel[]>([]);
+  const [languageFilter, setLanguageFilter] = useState('All languages');
   const [section, setSection] = useState<'library' | 'bank'>('library');
 
-  if (section === 'bank') return <WordBank onOpenLibrary={() => setSection('library')} />;
+
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return activities.filter((activity) => {
       if (activity.status !== tab) return false;
       if (filters.length > 0 && !filters.includes(activity.level)) return false;
+      if (!matchesPracticeLanguage(activity.language, languageFilter === 'All languages' ? undefined : languageFilter)) return false;
       if (!needle) return true;
       return `${activity.title} ${activity.sound} ${activity.level}`.toLowerCase().includes(needle);
     });
-  }, [activities, filters, query, tab]);
+  }, [activities, filters, languageFilter, query, tab]);
 
-  const toggle = (level: PracticeLevel) => {
-    setFilters((current) => (current.includes(level) ? current.filter((item) => item !== level) : [...current, level]));
-  };
+  const pagination = useListPagination(visible.length, activitiesPerPage, JSON.stringify([query, tab, filters, languageFilter]));
+  const pageActivities = visible.slice(pagination.start, pagination.end);
+
+  if (section === 'bank') return <WordBank onOpenLibrary={() => setSection('library')} />;
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={actStyles.content}>
@@ -308,7 +217,7 @@ export function ActivityLibrary() {
       <View style={actStyles.searchRow}>
         <TextInput
           value={query}
-          onChangeText={setQuery}
+          onChangeText={(value) => setQuery(value)}
           placeholder="Search activities..."
           placeholderTextColor={palette.faint}
           style={[actStyles.search, { borderColor: palette.line, color: palette.text, backgroundColor: palette.card }]}
@@ -342,20 +251,18 @@ export function ActivityLibrary() {
         })}
       </View>
 
-      <View style={actStyles.filtersRow}>
-        {practiceLevels.map((level) => {
-          const selected = filters.includes(level);
-          return (
-            <Pressable key={level} accessibilityRole="button" onPress={() => toggle(level)} style={[actStyles.filterChip, selected && actStyles.filterChipOn]}>
-              <Text style={[actStyles.filterChipText, selected && actStyles.filterChipTextOn]}>{level}</Text>
-              {selected ? <Text style={actStyles.filterChipX}>×</Text> : null}
-            </Pressable>
-          );
-        })}
-      </View>
+      <TherapistChecklistFilter
+        label="Practice level"
+        options={practiceLevels}
+        selected={filters}
+        onChange={(value) => setFilters(value)}
+        emptyLabel="All levels"
+        allLabel="All levels"
+      />
+      <FieldMenu label="Language" options={['All languages', ...PRACTICE_LANGUAGES]} value={languageFilter} onChange={setLanguageFilter} />
 
       <View style={actStyles.grid}>
-        {visible.map((activity) => (
+        {pageActivities.map((activity) => (
           <Pressable
             key={activity.id}
             accessibilityRole="button"
@@ -377,6 +284,7 @@ export function ActivityLibrary() {
           </Pressable>
         ))}
       </View>
+      <ListPagination {...pagination} total={visible.length} noun="activities" accent={palette.primary} muted={palette.muted} border={palette.line} surface={palette.card} />
       {visible.length === 0 ? <Text style={[actStyles.empty, { color: palette.muted }]}>No activities in this view.</Text> : null}
     </ScrollView>
   );
@@ -393,7 +301,7 @@ function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
   const [editing, setEditing] = useState(false);
   const [sounds, setSounds] = useState<TargetSound[]>([]);
   const [positions, setPositions] = useState<WordPosition[]>([]);
-  const [languages, setLanguages] = useState<string[]>([]);
+  const [wordBankLanguage, setWordBankLanguage] = useState('All languages');
   const [word, setWord] = useState('');
   const [sound, setSound] = useState<TargetSound>('/r/');
   const [position, setPosition] = useState<WordPosition>('Initial');
@@ -410,15 +318,17 @@ function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
     return wordBank.filter((item) => {
       if (sounds.length > 0 && !sounds.includes(item.sound)) return false;
       if (positions.length > 0 && !positions.includes(item.position)) return false;
-      if (languages.length > 0 && !languages.includes(item.language)) return false;
+      if (!matchesPracticeLanguage(item.language, wordBankLanguage === 'All languages' ? undefined : wordBankLanguage)) return false;
       if (!needle) return true;
       return item.text.toLowerCase().includes(needle);
     });
-  }, [languages, positions, query, sounds, wordBank]);
+  }, [wordBankLanguage, positions, query, sounds, wordBank]);
 
   const toggle = <T extends string>(value: T, selected: T[], setSelected: (next: T[]) => void) => {
     setSelected(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]);
   };
+
+  const pagination = useListPagination(visible.length, 10, JSON.stringify([query, sounds, positions, wordBankLanguage]));
 
   const filterChips = useMemo(() => {
     const chips: { key: string; label: string; clear: () => void }[] = [];
@@ -436,15 +346,11 @@ function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
         clear: () => setPositions((curr) => curr.filter((x) => x !== pos)),
       });
     });
-    languages.forEach((lang) => {
-      chips.push({
-        key: `lang-${lang}`,
-        label: `Language: ${lang}`,
-        clear: () => setLanguages((curr) => curr.filter((x) => x !== lang)),
-      });
-    });
+    if (wordBankLanguage !== 'All languages') {
+      chips.push({ key: 'language', label: 'Language: ' + wordBankLanguage, clear: () => setWordBankLanguage('All languages') });
+    }
     return chips;
-  }, [sounds, positions, languages]);
+  }, [sounds, positions, wordBankLanguage]);
 
   const save = () => {
     const trimmed = word.trim().toLowerCase();
@@ -567,13 +473,14 @@ function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
 
           <Text style={[actStyles.wbFilterHeading, { color: palette.muted, marginTop: 10 }]}>Language</Text>
           <View style={actStyles.wbFilterOptionsWrap}>
-            {['English', 'Tagalog'].map((lang) => {
-              const isSel = languages.includes(lang);
+            {['All languages', ...PRACTICE_LANGUAGES].map((lang) => {
+              const isSel = wordBankLanguage === lang;
               return (
                 <Pressable
                   key={lang}
                   accessibilityRole="button"
-                  onPress={() => toggle(lang, languages, setLanguages)}
+                  accessibilityState={{ selected: isSel }}
+                  onPress={() => setWordBankLanguage(lang)}
                   style={[
                     actStyles.wbChoicePill,
                     { borderColor: palette.line, backgroundColor: palette.card },
@@ -737,7 +644,7 @@ function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
 
       {/* Word Bank List */}
       <View style={[actStyles.wbListCard, { borderColor: palette.line, backgroundColor: palette.card }]}>
-        {visible.map((item, index) => (
+        {visible.slice(pagination.start, pagination.end).map((item, index) => (
           <View
             key={item.id}
             style={[
@@ -775,6 +682,7 @@ function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
           </View>
         )}
       </View>
+    <ListPagination {...pagination} total={visible.length} noun="words" accent={palette.primary} muted={palette.muted} border={palette.line} surface={palette.card} />
     </ScrollView>
   );
 }
@@ -932,6 +840,18 @@ export function ActivityDetail({ activityId }: { activityId: string }) {
       </View>
 
       {/* ── Bottom Action Buttons ── */}
+      {activity.assignments?.length ? (
+        <View style={[actStyles.infoCard, { backgroundColor: palette.card, borderColor: palette.line }]}>
+          <Text style={[actStyles.infoCardTitle, { color: palette.text }]}>Assigned Students</Text>
+          {activity.assignments.map((assignment) => (
+            <View key={assignment.studentId}>
+              <Text style={[actStyles.infoCardBody, { color: palette.text }]}>{assignment.studentName} · Due {assignment.dueDate}</Text>
+              <Text style={[actStyles.infoCardBody, { color: palette.muted }]}>{assignment.instructions}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       <View style={actStyles.bottomActionBar}>
         <Pressable
           accessibilityRole="button"
@@ -1017,7 +937,7 @@ const steps = [
 
 export function ActivityEditor() {
   const navigation = useNavigation();
-  const { palette, isDark } = useTherapist();
+  const { palette, isDark, showActionNotice } = useTherapist();
   const { draft, setDraft, saveActivity, wordBank, addBankWord } = useActivities();
   const [error, setError] = useState('');
   const [bankQuery, setBankQuery] = useState('');
@@ -1305,6 +1225,7 @@ export function ActivityEditor() {
               onPress={() => {
                 if (!draft.title.trim()) { setError('Enter an activity title.'); return; }
                 saveActivity();
+                showActionNotice('Activity draft saved.');
                 router.push('/therapist/activities' as never);
               }}
               style={[actStyles.actionBtnSecondary, { borderColor: palette.line, backgroundColor: palette.card }]}
@@ -1370,7 +1291,7 @@ export function ActivityEditor() {
                 </View>
 
                 <View style={{ marginTop: 12, marginBottom: 8 }}>
-                  <ChecklistMenu label="Target Sound" options={targetSounds} selected={draft.selectedSounds} onChange={(s) => setDraft({ selectedSounds: s as TargetSound[] })} />
+                  <TherapistChecklistFilter label="Target Sound" options={targetSounds} selected={draft.selectedSounds} onChange={(s) => setDraft({ selectedSounds: s as TargetSound[] })} />
                 </View>
 
                 <TextInput
@@ -1612,6 +1533,7 @@ export function ActivityEditor() {
               onPress={() => {
                 try {
                   saveActivity();
+                  showActionNotice('Activity saved.');
                   router.push('/therapist/activities' as never);
                 } catch (err: any) {
                   setError(err?.message || 'Failed to save activity.');
@@ -1674,20 +1596,20 @@ function StudentChecklistDropdown({
   onChange,
 }: {
   label: string;
-  options: readonly string[];
+  options: readonly { id: string; name: string }[];
   selected: string[];
   onChange: (selected: string[]) => void;
 }) {
   const { palette } = useTherapist();
   const [open, setOpen] = useState(false);
-  const allSelected = options.length > 0 && options.every((option) => selected.includes(option));
+  const allSelected = options.length > 0 && options.every((option) => selected.includes(option.id));
   const summary =
     selected.length === 0
       ? 'Select student(s)...'
       : allSelected
       ? `All Students (${options.length})`
       : selected.length === 1
-      ? selected[0]
+      ? options.find((option) => option.id === selected[0])?.name ?? 'Select student(s)...'
       : `${selected.length} Students Selected`;
 
   const toggle = (option: string) => {
@@ -1732,11 +1654,11 @@ function StudentChecklistDropdown({
               </Pressable>
             </View>
 
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
               <Pressable
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: allSelected }}
-                onPress={() => onChange(allSelected ? [] : [...options])}
+                onPress={() => onChange(allSelected ? [] : options.map((option) => option.id))}
                 style={[actStyles.popupOption, { borderBottomWidth: 1, borderBottomColor: palette.line }]}
               >
                 <View style={[actStyles.checkSquare, allSelected && actStyles.checkSquareOn]}>
@@ -1745,19 +1667,19 @@ function StudentChecklistDropdown({
                 <Text style={[actStyles.popupOptionText, { color: palette.text, fontWeight: '700' }]}>Select all</Text>
               </Pressable>
               {options.map((option) => {
-                const checked = selected.includes(option);
+                const checked = selected.includes(option.id);
                 return (
                   <Pressable
-                    key={option}
+                    key={option.id}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked }}
-                    onPress={() => toggle(option)}
+                    onPress={() => toggle(option.id)}
                     style={[actStyles.popupOption, checked && { backgroundColor: '#F0F9FF' }]}
                   >
                     <View style={[actStyles.checkSquare, checked && actStyles.checkSquareOn]}>
                       {checked ? <Text style={actStyles.checkMark}>✓</Text> : null}
                     </View>
-                    <Text style={[actStyles.popupOptionText, { color: palette.text }]}>{option}</Text>
+                    <Text style={[actStyles.popupOptionText, { color: palette.text }]}>{option.name}</Text>
                   </Pressable>
                 );
               })}
@@ -1779,15 +1701,15 @@ function StudentChecklistDropdown({
 
 export function AssignActivity() {
   const navigation = useNavigation();
-  const { palette, patients } = useTherapist();
+  const { palette, patients, showActionNotice, isDark } = useTherapist();
   const { activities, assignActivity, beginEdit } = useActivities();
   const params = useLocalSearchParams<{ id?: string }>();
-  const initialId = (Array.isArray(params.id) ? params.id[0] : params.id) || 'ready-set-r';
-  const studentNames = patients.map((patient) => patientName(patient));
-  const [selectedStudents, setSelectedStudents] = useState<string[]>(studentNames.length > 0 ? [studentNames[0]] : []);
-  const [activityId, setActivityId] = useState(initialId || activities[0]?.id || '');
-  const [dueDate, setDueDate] = useState('01/11/2026');
-  const activity = activities.find((item) => item.id === activityId) || activities[0];
+  const initialId = (Array.isArray(params.id) ? params.id[0] : params.id) || activities[0]?.id || '';
+  const students = patients.map((patient) => ({ id: patient.id, name: patientName(patient) }));
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [activityId, setActivityId] = useState(initialId);
+  const [dueDate, setDueDate] = useState('');
+  const activity = activities.find((item) => item.id === activityId);
   const [instructions, setInstructions] = useState(activity?.instructions || '');
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState('');
@@ -1800,8 +1722,8 @@ export function AssignActivity() {
     }
   };
 
-  const chooseActivity = (title: string) => {
-    const next = activities.find((item) => item.title === title);
+  const chooseActivity = (id: string) => {
+    const next = activities.find((item) => item.id === id);
     if (!next) return;
     setActivityId(next.id);
     setInstructions(next.instructions);
@@ -1810,7 +1732,8 @@ export function AssignActivity() {
 
   const assign = () => {
     try {
-      if (selectedStudents.length === 0) {
+      const recipients = students.filter(({ id }) => selectedStudents.includes(id));
+      if (recipients.length === 0) {
         setError('Please select at least one student.');
         return;
       }
@@ -1818,18 +1741,19 @@ export function AssignActivity() {
         setError('Please select an activity.');
         return;
       }
-      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dueDate.trim())) {
-        setError('Enter the due date as mm/dd/yyyy.');
+      if (!isAssignmentDate(dueDate)) {
+        setError('Enter a valid due date today or later (mm/dd/yyyy).');
         return;
       }
       if (!instructions.trim()) {
         setError('Please provide activity instructions.');
         return;
       }
-      for (const student of selectedStudents) {
+      for (const student of recipients) {
         assignActivity(activity.id, student, dueDate, instructions);
       }
       setError('');
+      showActionNotice(recipients.length === 1 ? 'Activity assigned to ' + recipients[0].name + '.' : 'Activity assigned to ' + recipients.length + ' students.');
       router.push('/therapist/activities' as never);
     } catch (err: any) {
       setError(err?.message || 'Failed to assign activity. Please try again.');
@@ -1846,8 +1770,10 @@ export function AssignActivity() {
         <ChevronLeftIcon color={palette.text} size={18} />
       </Pressable>
       <Text style={[actStyles.assignTitle, { color: palette.text }]}>Assign Activity</Text>
-      <StudentChecklistDropdown label="Student(s)" options={studentNames} selected={selectedStudents} onChange={setSelectedStudents} />
-      <FieldMenu label="Activity" value={activity?.title || 'Select activity'} options={activities.map((item) => item.title)} onChange={chooseActivity} />
+      <StudentChecklistDropdown label="Student(s)" options={students} selected={selectedStudents} onChange={setSelectedStudents} />
+      <FieldMenu label="Activity" value={activity?.id || 'Select activity'} options={activities.map((item) => item.id)}
+        optionLabels={new Map(activities.map((item) => [item.id, [item.title, item.language, item.level].join(' · ')]))}
+        onChange={chooseActivity} />
       <Pressable accessibilityRole="button" onPress={() => setPreview((open) => !open)} style={[actStyles.previewToggleBtn, preview && { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0 }]}>
         <Text style={actStyles.previewToggleText}>Activity Preview</Text>
         <Text style={actStyles.previewToggleText}>{preview ? '▲' : '▼'}</Text>
@@ -1878,13 +1804,7 @@ export function AssignActivity() {
 
       <View style={{ marginTop: preview ? 16 : 0, marginBottom: 14 }}>
         <Text style={[actStyles.fieldLabel, { color: palette.text }]}>Due Date</Text>
-        <TextInput
-          value={dueDate}
-          onChangeText={setDueDate}
-          placeholder="mm/dd/yyyy"
-          placeholderTextColor={palette.faint}
-          style={[actStyles.editorInput, { borderColor: palette.line, color: palette.text, backgroundColor: palette.card }]}
-        />
+        <AssignmentCalendar value={dueDate} onSelect={setDueDate} isDark={isDark} minDate={todayCalendarDate()} showDueDatePresets />
       </View>
 
       <View style={{ marginBottom: 14 }}>
@@ -1971,12 +1891,6 @@ const actStyles = StyleSheet.create({
   statusRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   statusBtn: { flex: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   statusBtnText: { fontSize: 13, fontWeight: '700' },
-  filtersRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  filterChip: { borderWidth: 1, borderColor: '#E6EBEF', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  filterChipOn: { borderColor: '#0284C7' },
-  filterChipText: { fontSize: 12, color: '#63778A' },
-  filterChipTextOn: { color: '#0284C7', fontWeight: '700' },
-  filterChipX: { color: '#0284C7', fontSize: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: { width: '47%', borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
   swatch: { height: 92, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
@@ -1998,7 +1912,7 @@ const actStyles = StyleSheet.create({
   wbAddBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   wbFilterBtn: { width: 42, height: 42, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   wbFilterBtnActive: { borderColor: '#0284C7', backgroundColor: '#E0F2FE' },
-  wbFilterPanel: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 12 },
+  wbFilterPanel: { width: '100%', maxWidth: 480, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 12, padding: 10, marginBottom: 10 },
   wbFilterHeading: { fontSize: 12, fontWeight: '700', marginBottom: 8 },
   wbFilterOptionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   wbChoicePill: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
@@ -2229,11 +2143,11 @@ const actStyles = StyleSheet.create({
   },
   popupCard: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 320,
     maxHeight: '80%',
     borderRadius: 20,
     borderWidth: 1,
-    padding: 16,
+    padding: 12,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 16,
@@ -2243,7 +2157,7 @@ const actStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 12,
+    paddingBottom: 8,
     marginBottom: 8,
     borderBottomWidth: 1,
   },
@@ -2267,17 +2181,17 @@ const actStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 9,
     borderRadius: 10,
     marginVertical: 2,
   },
   popupOptionText: {
-    fontSize: 15,
+    fontSize: 14,
   },
   popupDoneBtn: {
     marginTop: 14,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },

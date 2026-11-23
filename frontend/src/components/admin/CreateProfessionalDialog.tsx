@@ -4,7 +4,7 @@ import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import type { Professional, ProfessionalRole, TeacherSchoolRecord, TherapistStaffRecord } from '../../data/center-admin';
 import { teacherSchoolRecords, therapistStaffRecords } from '../../data/center-admin';
 
-const palette = { ink: '#17364D', muted: '#48657A', subtle: '#60788D', blue: '#0865AD', soft: '#EAF7FF', line: '#D9E5EE', white: '#FFFFFF', red: '#AD3B42', redSoft: '#FDEBED', green: '#287A4B', greenSoft: '#E8F5EC' };
+const palette = { ink: '#17364D', muted: '#48657A', subtle: '#60788D', blue: '#0865AD', soft: '#EAF7FF', line: '#D9E5EE', white: '#FFFFFF', red: '#AD3B42', redSoft: '#FDEBED', green: '#287A4B', greenSoft: '#E8F4EC', violet: '#6941C6', violetSoft: '#F1EBFF' };
 
 type TherapistDraft = TherapistStaffRecord & { role: 'Therapist' };
 type TeacherDraft = TeacherSchoolRecord & { role: 'Teacher' };
@@ -67,9 +67,11 @@ export default function CreateProfessionalDialog({ role, existingProfessionals, 
     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 13 }}>
       {(['Student', 'Therapist', 'Teacher'] as const).map((option) => {
         const selected = option === role;
-        return <TouchableOpacity key={option} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => onSwitchRole(option)} style={{ flex: 1, minHeight: 42, borderWidth: 1, borderColor: selected ? palette.blue : palette.line, backgroundColor: selected ? palette.soft : palette.white, borderRadius: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <Ionicons name={option === 'Student' ? 'person-outline' : option === 'Therapist' ? 'heart-outline' : 'school-outline'} size={17} color={selected ? palette.blue : palette.muted} />
-          <Text style={{ color: selected ? palette.blue : palette.muted, fontFamily: selected ? 'Geist-SemiBold' : 'Geist-Regular', fontSize: 12 }}>{option}</Text>
+        const color = option === 'Student' ? palette.green : option === 'Therapist' ? palette.blue : palette.violet;
+        const soft = option === 'Student' ? palette.greenSoft : option === 'Therapist' ? palette.soft : palette.violetSoft;
+        return <TouchableOpacity key={option} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => onSwitchRole(option)} style={{ flex: 1, minHeight: 42, borderWidth: 1, borderColor: selected ? color : palette.line, backgroundColor: selected ? soft : palette.white, borderRadius: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Ionicons name={option === 'Student' ? 'person-outline' : option === 'Therapist' ? 'heart-outline' : 'school-outline'} size={17} color={color} />
+          <Text style={{ color, fontFamily: selected ? 'Geist-SemiBold' : 'Geist-Regular', fontSize: 12 }}>{option}</Text>
         </TouchableOpacity>;
       })}
     </View>

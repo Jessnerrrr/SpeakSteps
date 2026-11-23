@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 
 import { useTherapist } from '@/components/therapist/TherapistProvider';
+import { AssignmentCalendar } from '@/components/assignment-calendar';
+import { studentAgeFromBirthDate, studentBirthDateLimits, studentBirthDateNotice } from '@/data/calendar-date';
 import { SelectField } from '@/Therapist-modules/therapist-patients/components/SelectField';
 import {
   dominantErrorPatterns,
@@ -47,7 +49,7 @@ const emptyForm = (): NewPatientInput => ({
 });
 
 export function AddPatientModal() {
-  const { palette, setAddPatientOpen, addPatient } = useTherapist();
+  const { palette, isDark, setAddPatientOpen, addPatient } = useTherapist();
   const [form, setForm] = useState<NewPatientInput>(emptyForm);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -64,9 +66,9 @@ export function AddPatientModal() {
     }));
   };
 
-  const onDobChange = (value: string) => {
-    const age = ageFromDob(value);
-    setForm((current) => ({ ...current, dateOfBirth: value, age: age || current.age }));
+  const onDobChange = (dateOfBirth: string) => {
+    const age = studentAgeFromBirthDate(dateOfBirth);
+    setForm((current) => ({ ...current, dateOfBirth, age: age === null ? '' : String(age) }));
   };
 
   const save = () => {
@@ -108,8 +110,12 @@ export function AddPatientModal() {
               <SelectField label="Suffix" value={form.suffix} placeholder="Suffix" options={patientSuffixes} onChange={(value) => set('suffix', value)} />
             </View>
             <View style={styles.row}>
-              <Field label="Date of Birth" required value={form.dateOfBirth} onChangeText={onDobChange} placeholder="mm/dd/yyyy" />
-              <Field label="Age" required value={form.age} onChangeText={(value) => set('age', value.replace(/[^\d]/g, ''))} placeholder="Age" keyboardType="number-pad" />
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: palette.muted }]}>Date of Birth <Text style={{ color: palette.alert }}>*</Text></Text>
+                <AssignmentCalendar label="Date of birth" value={form.dateOfBirth} onSelect={onDobChange} isDark={isDark}
+                  {...studentBirthDateLimits()} dateNotice={studentBirthDateNotice} />
+              </View>
+              <Field label="Age" value={form.age} placeholder="Calculated from birth date" />
             </View>
             <SelectField
               label="Language Profile"
@@ -217,7 +223,7 @@ function Field({
   label: string;
   required?: boolean;
   value: string;
-  onChangeText: (value: string) => void;
+  onChangeText?: (value: string) => void;
   placeholder: string;
   keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'number-pad';
 }) {
@@ -229,32 +235,18 @@ function Field({
         {required ? <Text style={{ color: palette.alert }}> *</Text> : null}
       </Text>
       <TextInput
+        accessibilityLabel={label}
+        editable={Boolean(onChangeText)}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={palette.faint}
         keyboardType={keyboardType}
         autoCapitalize={keyboardType === 'email-address' ? 'none' : 'words'}
-        style={[styles.input, { color: palette.text, backgroundColor: palette.input, borderColor: palette.line }]}
+        style={[styles.input, { color: onChangeText ? palette.text : palette.muted, backgroundColor: palette.input, borderColor: palette.line }]}
       />
     </View>
   );
-}
-
-function ageFromDob(value: string) {
-  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return '';
-  const month = Number(match[1]);
-  const day = Number(match[2]);
-  const year = Number(match[3]);
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return '';
-  const today = new Date();
-  if (date > today) return '';
-  let age = today.getFullYear() - date.getFullYear();
-  const monthDiff = today.getMonth() - date.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) age -= 1;
-  return age >= 0 && age < 120 ? String(age) : '';
 }
 
 function validatePatient(form: NewPatientInput) {
@@ -271,31 +263,8 @@ function validatePatient(form: NewPatientInput) {
   if (!form.lastName.trim()) return ['Last name is required. Please fill in this field.'];
   if (!nameRegex.test(form.lastName.trim())) return ['Last name should only contain letters, spaces, and hyphens (no numbers or special characters).'];
 
-  // 2. Birthday Field (Required, Format, and No Future Dates)
-  if (!form.dateOfBirth.trim()) return ['Date of birth is required. Please fill in this field.'];
-  const dobMatch = form.dateOfBirth.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!dobMatch) {
-    return ['Please enter a valid Date of Birth format (mm/dd/yyyy, e.g. 05/14/2018).'];
-  }
-  const m = Number(dobMatch[1]);
-  const d = Number(dobMatch[2]);
-  const y = Number(dobMatch[3]);
-  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) {
-    return ['Please enter a valid calendar date for Date of Birth.'];
-  }
-  const birthDate = new Date(y, m - 1, d);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (birthDate > today) {
-    return ['Date of birth cannot be later than today (future dates are not allowed).'];
-  }
-
-  // 3. Age validation
-  if (!form.age.trim()) return ['Age is required. Please fill in this field.'];
-  const ageNum = parseInt(form.age, 10);
-  if (isNaN(ageNum) || ageNum < 0 || ageNum > 120) {
-    return ['Please enter a valid age between 0 and 120.'];
-  }
+  if (!form.dateOfBirth.trim()) return ['Choose a date of birth.'];
+  if (studentAgeFromBirthDate(form.dateOfBirth) === null) return [studentBirthDateNotice];
 
   // 4. Language & Diagnosis
   if (!form.languageProfile) return ['Language profile is required. Please select an option.'];

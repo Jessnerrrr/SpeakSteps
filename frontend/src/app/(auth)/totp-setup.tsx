@@ -24,6 +24,11 @@ export default function TotpSetupScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [otpPin, setOtpPin] = useState('');
+  const [showValidation, setShowValidation] = useState(false);
+  const emailWarning = !emailAccount.trim() ? 'Enter your email address.'
+    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAccount.trim()) ? 'Enter a valid email address.' : '';
+  const passwordWarning = password.trim() ? '' : 'Enter your password.';
+  const pinWarning = /^\d{6}$/.test(otpPin) ? '' : 'Enter the 6-digit PIN.';
 
   // Change Password Alert Modal State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -37,6 +42,11 @@ export default function TotpSetupScreen() {
   if (!fontsLoaded) return null;
 
   const handleNext = () => {
+    if ((step === 1 && (emailWarning || passwordWarning)) || (step === 3 && pinWarning)) {
+      setShowValidation(true);
+      return;
+    }
+    setShowValidation(false);
     if (step < 4) {
       setStep(step + 1);
     } else {
@@ -57,6 +67,7 @@ export default function TotpSetupScreen() {
   };
 
   const handleBack = () => {
+    setShowValidation(false);
     if (step > 1) setStep(step - 1);
     else router.back();
   };
@@ -100,35 +111,41 @@ export default function TotpSetupScreen() {
         <View style={styles.step1Inputs}>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Email Account *</Text>
+            <View nativeID="sign-in-verification-email-field" style={[styles.field, emailAccount.length > 0 && styles.filledField, showValidation && !!emailWarning && styles.invalidInput]}>
             <TextInput
-              style={styles.input}
+              style={styles.passwordInput}
+              accessibilityLabel="Email account"
               value={emailAccount}
               onChangeText={setEmailAccount}
               autoCapitalize="none"
+              autoComplete="email"
               keyboardType="email-address"
             />
+            </View>
+            {showValidation && emailWarning ? <Text accessibilityRole="alert" style={styles.fieldWarning}>{emailWarning}</Text> : null}
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.passwordWrapper}>
+            <Text style={styles.inputLabel}>Password *</Text>
+            <View nativeID="sign-in-verification-password-field" style={[styles.field, password.length > 0 && styles.filledField, showValidation && !!passwordWarning && styles.invalidInput]}>
               <TextInput
                 style={styles.passwordInput}
+                accessibilityLabel="Password"
                 value={password}
                 onChangeText={setPassword}
+                autoComplete="current-password"
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity
                 style={styles.eyeButton}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
                 onPress={() => setShowPassword((prev) => !prev)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#64748B"
-                />
+                <Text style={styles.eyeLabel}>{showPassword ? 'Hide' : 'Show'}</Text>
               </TouchableOpacity>
             </View>
+            {showValidation && passwordWarning ? <Text accessibilityRole="alert" style={styles.fieldWarning}>{passwordWarning}</Text> : null}
           </View>
         </View>
       </View>
@@ -181,13 +198,15 @@ export default function TotpSetupScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>One-Time Pin</Text>
         <TextInput
-          style={[styles.input, styles.pinInput]}
+          style={[styles.input, styles.pinInput, showValidation && !!pinWarning && styles.invalidInput]}
+          accessibilityLabel="One-time PIN"
           value={otpPin}
-          onChangeText={setOtpPin}
+          onChangeText={(value) => setOtpPin(value.replace(/[^0-9]/g, ''))}
           keyboardType="number-pad"
           maxLength={6}
           textAlign="center"
         />
+        {showValidation && pinWarning ? <Text accessibilityRole="alert" style={styles.fieldWarning}>{pinWarning}</Text> : null}
       </View>
     </View>
   );
@@ -241,7 +260,7 @@ export default function TotpSetupScreen() {
                     {step === 4 ? 'Continue' : 'Next'}
                   </Text>
                   <Ionicons 
-                    name="chevron-forward-circle" 
+                    name="chevron-forward"
                     size={20} 
                     color="#FFFFFF" 
                   />
@@ -309,13 +328,17 @@ const styles = StyleSheet.create({
   phoneMockupText: { fontFamily: 'Inter-Bold', fontSize: 10, color: '#0F172A', marginBottom: 16 },
   phoneMockupDots: { flexDirection: 'row', gap: 4 },
   mockupDot: { width: 6, height: 6, borderRadius: 3, borderWidth: 1, borderColor: '#CBD5E1' },
-  step1Inputs: { flex: 1 },
+  step1Inputs: { flex: 1, minWidth: 0 },
   inputGroup: { marginBottom: 16 },
   inputLabel: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#0F172A', marginBottom: 6 },
   input: { borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, height: 44, paddingHorizontal: 12, fontFamily: 'Inter-Medium', fontSize: 14, color: '#0F172A' },
-  passwordWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, height: 44 },
-  passwordInput: { flex: 1, height: '100%', paddingHorizontal: 12, fontFamily: 'Inter-Medium', fontSize: 14, color: '#0F172A' },
-  eyeButton: { paddingHorizontal: 10, justifyContent: 'center', alignItems: 'center' },
+  field: { flexDirection: 'row', alignItems: 'stretch', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, height: 44, overflow: 'hidden' },
+  filledField: { backgroundColor: '#FFF3C4' },
+  passwordInput: { flex: 1, minWidth: 0, paddingHorizontal: 12, fontFamily: 'Inter-Medium', fontSize: 14, color: '#0F172A', backgroundColor: 'transparent' },
+  eyeButton: { minWidth: 48, height: '100%', paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center' },
+  eyeLabel: { color: '#0066A4', fontFamily: 'Inter-Bold', fontSize: 12 },
+  invalidInput: { borderColor: '#C63232', backgroundColor: '#FFF1F1' },
+  fieldWarning: { color: '#A82020', fontFamily: 'Inter-Medium', fontSize: 12, marginTop: 6 },
   pinInput: { fontSize: 24, fontFamily: 'Inter-Bold', letterSpacing: 8, height: 56 },
   instructionsBox: { marginBottom: 20 },
   instructionsTitle: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#0F172A', marginBottom: 6 },
@@ -332,7 +355,7 @@ const styles = StyleSheet.create({
   successIconCircle: { marginRight: 12 },
   successText: { flex: 1, fontFamily: 'Inter-Medium', fontSize: 14, color: '#064E3B', lineHeight: 20, marginTop: 4 },
   footerAction: { alignItems: 'flex-end', marginTop: 32 },
-  nextButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5A623', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 24, shadowColor: '#F5A623', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  nextButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', backgroundColor: '#0066A4', paddingHorizontal: 16, borderRadius: 12 },
   nextButtonText: { fontFamily: 'Inter-Bold', fontSize: 15, color: '#FFFFFF', marginRight: 8 },
 
   // Change Password Alert Modal Styles

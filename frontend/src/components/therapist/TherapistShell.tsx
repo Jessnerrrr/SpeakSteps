@@ -1,3 +1,6 @@
+import { SessionRevokeWarning } from '@/components/session-revoke-warning';
+import { ProfileEditWarning } from '@/components/profile-edit-warning';
+import { CENTER_NAME } from '@/data/center-name';
 import { StatusBar } from 'expo-status-bar';
 import { useState, useMemo } from 'react';
 import {
@@ -41,21 +44,10 @@ import type { ReactNode } from 'react';
 // --- Mock Data & Theme Setup ---
 // ==========================================
 const INITIAL_NOTIFICATIONS = [
-  { id: 'notif-1', name: 'Khyll', action: 'submitted an audio recording', detail: '/r/ Isolated Sounds (Target: 35% accuracy)', time: '5m ago', unread: true },
+  { id: 'notif-1', name: 'Khyll', action: 'submitted an audio recording', detail: '/r/ Sound (Target: 35% accuracy)', time: '5m ago', unread: true },
   { id: 'notif-2', name: 'Angelica', action: 'completed Sentences practice', detail: 'Achieved 80% accuracy score on Sibilant /s/ targets', time: '1h ago', unread: true },
   { id: 'notif-3', name: 'Jhonas', action: 'submitted Syllables home practice', detail: '15/20 correct trials recorded by parent', time: '3h ago', unread: true },
   { id: 'notif-4', name: 'Mcgravy', action: 'completed Phrases practice', detail: 'Achieved 75% accuracy rate', time: 'Today at 09:09 AM', unread: false },
-];
-
-const SPECIALTY_PALETTE = [
-  { border: '#38BDF8', text: '#0284C7', darkText: '#7DD3FC', darkBg: 'rgba(56, 189, 248, 0.14)' },
-  { border: '#FB923C', text: '#EA580C', darkText: '#FDBA74', darkBg: 'rgba(251, 146, 60, 0.14)' },
-  { border: '#FBBF24', text: '#D97706', darkText: '#FDE68A', darkBg: 'rgba(251, 191, 36, 0.14)' },
-  { border: '#4ADE80', text: '#16A34A', darkText: '#86EFAC', darkBg: 'rgba(74, 222, 128, 0.14)' },
-  { border: '#FBBF24', text: '#D97706', darkText: '#FDE68A', darkBg: 'rgba(251, 191, 36, 0.14)' },
-  { border: '#FB923C', text: '#EA580C', darkText: '#FDBA74', darkBg: 'rgba(251, 146, 60, 0.14)' },
-  { border: '#94A3B8', text: '#475569', darkText: '#CBD5E1', darkBg: 'rgba(148, 163, 184, 0.14)' },
-  { border: '#38BDF8', text: '#0284C7', darkText: '#7DD3FC', darkBg: 'rgba(56, 189, 248, 0.14)' },
 ];
 
 const getThemeColors = (isDark: boolean) => ({
@@ -90,7 +82,7 @@ const getThemeColors = (isDark: boolean) => ({
 // ==========================================
 export function TherapistShell({ active, children }: { active: TherapistTab; children: ReactNode }) {
   // Grab global theme state directly from Provider
-  const { isDark, themeMode, setThemeMode } = useTherapist();
+  const { isDark, themeMode, setThemeMode, actionNotice, profile, updateProfile } = useTherapist();
   const { width } = useWindowDimensions();
   const wide = width >= 760;
   const columnWidth = Math.min(width, wide ? 520 : width);
@@ -102,6 +94,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
   // Modal States
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
@@ -111,27 +104,12 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Profile Form State (Screenshot 1 Exact Data)
-  const [therapistProfile, setTherapistProfile] = useState({
-    name: 'Dr. Ameer Andres',
+  const therapistProfile = {
+    ...profile,
+    name: profile.fullName.replace(/,\s*SLP-CCC$/, ''),
     credentials: 'SLP-CCC',
-    fullName: 'Dr. Ameer Andres, SLP-CCC',
-    title: 'Speech-Language Pathologist',
-    license: 'PRC #0048291',
-    clinic: 'LittleVoices Pediatric Speech Center',
-    contact: '+63 9000 000 000',
-    email: 'ameer@speakstep.com',
-    photoUri: null as string | null,
-    specializations: [
-      'Articulation',
-      'Phonological',
-      'Fluency',
-      'Voice',
-      'Early intervention',
-      'Bilingual',
-      'AAC',
-    ],
-  });
+    title: profile.role,
+  };
   const [editProfileForm, setEditProfileForm] = useState({ ...therapistProfile });
 
   // Settings State (Screenshot 2 Toggles)
@@ -142,14 +120,13 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
   const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(true);
 
   // Active Sessions (Screenshot 2 Sessions)
+  const [sessionToRevoke, setSessionToRevoke] = useState<{ id: string; device: string } | null>(null);
+  const [sessionNotice, setSessionNotice] = useState('');
   const [activeSessions, setActiveSessions] = useState([
     { id: '1', device: 'Redmi 15', isCurrent: true, location: 'Quezon City', lastActive: 'Active now' },
     { id: '2', device: 'Samsung Galaxy Tab S9 FE', isCurrent: false, location: 'Android App', lastActive: 'Yesterday' },
     { id: '3', device: 'Samsung Galaxy S24', isCurrent: false, location: 'Chrome', lastActive: 'Nov 10' },
   ]);
-
-  // Specialty Input
-  const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
 
   // Handlers
   const triggerToast = (msg: string) => {
@@ -184,32 +161,26 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
     }
   };
 
-  const handleAddSpecialty = () => {
-    const trimmed = newSpecialtyInput.trim();
-    if (!trimmed) return;
-    if (!editProfileForm.specializations.includes(trimmed)) {
-      setEditProfileForm((prev) => ({
-        ...prev,
-        specializations: [...prev.specializations, trimmed],
-      }));
-    }
-    setNewSpecialtyInput('');
-  };
-
-  const handleRemoveSpecialty = (item: string) => {
-    setEditProfileForm((prev) => ({
-      ...prev,
-      specializations: prev.specializations.filter((s) => s !== item),
-    }));
-  };
-
   const handleRevokeSession = (id: string) => {
     setActiveSessions((current) => current.filter((s) => s.id !== id));
-    triggerToast('Session revoked successfully.');
+    setSessionNotice('Session revoked successfully.');
+  };
+
+  const openProfile = () => {
+    setEditProfileForm({ ...therapistProfile });
+    setEditingProfile(false);
+    setShowProfileModal(true);
+  };
+
+  const startProfileEditing = () => {
+    setEditProfileForm({ ...therapistProfile });
+    setEditingProfile(true);
   };
 
   const handleSaveProfile = () => {
-    if (!editProfileForm.fullName.trim()) {
+    if (!editingProfile) return;
+    const name = editProfileForm.name.trim();
+    if (!name) {
       triggerToast('Full name is required.');
       return;
     }
@@ -221,12 +192,12 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
       triggerToast('Please provide a contact number.');
       return;
     }
-    // License number and clinic/school name are read-only and cannot be edited
-    setTherapistProfile((prev) => ({
-      ...editProfileForm,
-      license: prev.license,
-      clinic: prev.clinic,
-    }));
+    updateProfile({
+      fullName: name + ', ' + editProfileForm.credentials,
+      role: editProfileForm.title.trim(),
+      contact: editProfileForm.contact.trim(),
+      photoUri: editProfileForm.photoUri,
+    });
     setShowProfileModal(false);
     triggerToast('Credentials saved successfully!');
     if (profileOpenedFromSettings) {
@@ -254,6 +225,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
               ========================================== */}
           <View style={[styles.topHeader, { backgroundColor: colors.card }]}>
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Open menu"
               style={styles.iconButton}
               activeOpacity={0.7}
               onPress={() => {
@@ -300,9 +273,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                     activeOpacity={0.8}
                     onPress={() => {
                       setProfileOpenedFromSettings(false);
-                      setEditProfileForm({ ...therapistProfile });
                       setShowMenu(false);
-                      setShowProfileModal(true);
+                      openProfile();
                     }}
                   >
                     <View style={styles.menuAvatarCircle}>
@@ -323,11 +295,12 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                   <TouchableOpacity
                     style={styles.menuOptionRow}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="View profile and credentials"
                     onPress={() => {
                       setProfileOpenedFromSettings(false);
-                      setEditProfileForm({ ...therapistProfile });
                       setShowMenu(false);
-                      setShowProfileModal(true);
+                      openProfile();
                     }}
                   >
                     <View style={styles.menuIconCircle}>
@@ -429,7 +402,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
           visible={showSettingsModal}
           animationType="slide"
           presentationStyle="pageSheet"
-          onRequestClose={() => setShowSettingsModal(false)}
+          onRequestClose={() => sessionToRevoke ? setSessionToRevoke(null) : setShowSettingsModal(false)}
         >
           <View style={{ flex: 1, backgroundColor: wide ? '#E2E8F0' : colors.bgSecondary, alignItems: 'center' }}>
             <View style={{ flex: 1, width: columnWidth, backgroundColor: colors.bgSecondary }}>
@@ -453,9 +426,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 activeOpacity={0.8}
                 onPress={() => {
                   setProfileOpenedFromSettings(true);
-                  setEditProfileForm({ ...therapistProfile });
                   setShowSettingsModal(false);
-                  setShowProfileModal(true);
+                  openProfile();
                 }}
               >
                 <View style={styles.newProfileAvatar}>
@@ -475,7 +447,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                   <Text style={styles.newProfileSubtitle}>
                     {therapistProfile.license} {therapistProfile.title}
                   </Text>
-                  <Text style={styles.newProfileHint}>Tap to edit credentials & specializations</Text>
+                  <Text style={styles.newProfileHint}>Tap to edit credentials</Text>
                 </View>
                 <ChevronRight size={18} color={colors.textMuted} />
               </TouchableOpacity>
@@ -640,7 +612,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                       </View>
                       {!session.isCurrent ? (
                         <TouchableOpacity
-                          onPress={() => handleRevokeSession(session.id)}
+                          accessibilityRole="button"
+                        onPress={() => { setSessionNotice(''); setSessionToRevoke(session); }}
                           style={styles.newRevokeBtn}
                         >
                           <Text style={styles.newRevokeBtnText}>Revoke</Text>
@@ -651,6 +624,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                   </View>
                 ))}
               </View>
+
+              {sessionNotice ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.newRowSubtitle, { marginTop: 6 }]}>{sessionNotice}</Text> : null}
 
               {/* About Help Section */}
               <View style={styles.newSectionHeader}>
@@ -686,6 +661,17 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 <Text style={styles.newSignOutBtnText}>Log Out</Text>
               </TouchableOpacity>
             </ScrollView>
+          {sessionToRevoke ? (
+              <SessionRevokeWarning
+                device={sessionToRevoke.device}
+                isDark={isDark}
+                onCancel={() => setSessionToRevoke(null)}
+                onConfirm={() => {
+                  handleRevokeSession(sessionToRevoke.id);
+                  setSessionToRevoke(null);
+                }}
+              />
+            ) : null}
           </SafeAreaView>
             </View>
           </View>
@@ -743,15 +729,22 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
               >
                 <ChevronLeft size={22} color={colors.text} />
               </TouchableOpacity>
-              <Text style={styles.newHeaderTitle}>Profile & Credentials</Text>
+              <View style={styles.profileHeading}>
+                <Text accessibilityRole="header" style={styles.newHeaderTitle}>Profile & Credentials</Text>
+                <Text style={styles.profileMode}>{editingProfile ? 'Editing profile' : 'Profile overview'}</Text>
+              </View>
             </View>
 
+            {editingProfile && (
+              <ProfileEditWarning isDark={isDark} style={{ marginHorizontal: 16 }} />
+            )}
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
               {/* Upload Photo Card */}
               <TouchableOpacity
                 style={styles.newUploadPhotoCard}
                 activeOpacity={0.8}
                 onPress={handlePickPhoto}
+                disabled={!editingProfile}
               >
                 <View style={styles.newPhotoAvatarWrapper}>
                   <View style={styles.newPhotoAvatar}>
@@ -765,7 +758,7 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                     <Camera size={14} color="#FFFFFF" />
                   </View>
                 </View>
-                <Text style={styles.newUploadPhotoLabel}>Upload Photo</Text>
+                <Text style={styles.newUploadPhotoLabel}>{editingProfile ? 'Upload Photo' : 'Profile photo'}</Text>
               </TouchableOpacity>
 
               {/* Profile Section */}
@@ -775,6 +768,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                   <Text style={styles.newFieldLabel}>Name</Text>
                   <TextInput
                     style={styles.newFieldInput}
+                    accessibilityLabel="Name"
+                    editable={editingProfile}
                     value={editProfileForm.name}
                     onChangeText={(text) =>
                       setEditProfileForm((prev) => ({
@@ -793,6 +788,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                   <Text style={styles.newFieldLabel}>Professional Title</Text>
                   <TextInput
                     style={styles.newFieldInput}
+                    accessibilityLabel="Professional title"
+                    editable={editingProfile}
                     value={editProfileForm.title}
                     onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, title: text }))}
                     placeholder="Speech-Language Pathologist"
@@ -805,6 +802,8 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                   <Text style={styles.newFieldLabel}>Contact Number</Text>
                   <TextInput
                     style={styles.newFieldInput}
+                    accessibilityLabel="Contact number"
+                    editable={editingProfile}
                     value={editProfileForm.contact}
                     onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, contact: text }))}
                     placeholder="+63 9000 000 000"
@@ -814,89 +813,15 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 </View>
                 <View style={styles.newDivider} />
 
-                <View style={styles.newProfileFieldRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
-                    <TextInput
-                      style={[styles.newFieldInput, { opacity: 0.6 }]}
-                      value={therapistProfile.license}
-                      editable={false}
-                      placeholder="PRC #0048291"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.isDark ? '#1E293B' : '#F1F5F9' }}>
-                    <Lock size={12} color={colors.textMuted} />
-                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Locked</Text>
-                  </View>
+                <View style={[styles.newProfileFieldRow, styles.readOnlyCredential]}>
+                  <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
+                  <Text style={[styles.newFieldInput, styles.readOnlyCredentialValue]}>{therapistProfile.license || '—'}</Text>
                 </View>
                 <View style={styles.newDivider} />
 
-                <View style={styles.newProfileFieldRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.newFieldLabel}>Clinic/School</Text>
-                    <TextInput
-                      style={[styles.newFieldInput, { opacity: 0.6 }]}
-                      value={therapistProfile.clinic}
-                      editable={false}
-                      placeholder="LittleVoices Pediatric Speech Center"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.isDark ? '#1E293B' : '#F1F5F9' }}>
-                    <Lock size={12} color={colors.textMuted} />
-                    <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Locked</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Specialization Section */}
-              <Text style={styles.newSectionTitleStandalone}>Specialization</Text>
-              <View style={styles.newSpecialtyContainer}>
-                <View style={styles.newChipsRow}>
-                  {editProfileForm.specializations.map((spec, index) => {
-                    const colorInfo = SPECIALTY_PALETTE[index % SPECIALTY_PALETTE.length];
-                    return (
-                      <View
-                        key={spec}
-                        style={[
-                          styles.newChip,
-                          {
-                            borderColor: colorInfo.border,
-                            backgroundColor: colors.isDark ? colorInfo.darkBg : 'transparent',
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.newChipText,
-                            { color: colors.isDark ? colorInfo.darkText : colorInfo.text },
-                          ]}
-                        >
-                          {spec}
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveSpecialty(spec)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          style={styles.newChipRemove}
-                        >
-                          <X size={12} color={colors.isDark ? colorInfo.darkText : colorInfo.text} />
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                </View>
-
-                <View style={styles.newAddSpecialtyRow}>
-                  <TextInput
-                    style={styles.newAddSpecialtyInput}
-                    value={newSpecialtyInput}
-                    onChangeText={setNewSpecialtyInput}
-                    onSubmitEditing={handleAddSpecialty}
-                    placeholder="Add Specialty e.g., Articulation"
-                    placeholderTextColor={colors.textMuted}
-                    returnKeyType="done"
-                  />
+                <View style={[styles.newProfileFieldRow, styles.readOnlyCredential]}>
+                  <Text style={styles.newFieldLabel}>Clinic/School</Text>
+                  <Text style={[styles.newFieldInput, styles.readOnlyCredentialValue]}>{therapistProfile.clinic || CENTER_NAME}</Text>
                 </View>
               </View>
 
@@ -905,9 +830,10 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
                 <TouchableOpacity
                   style={styles.newSaveCredentialsBtn}
                   activeOpacity={0.8}
-                  onPress={handleSaveProfile}
+                  accessibilityRole="button"
+                onPress={editingProfile ? handleSaveProfile : startProfileEditing}
                 >
-                  <Text style={styles.newSaveCredentialsBtnText}>Save Credentials</Text>
+                  <Text style={styles.newSaveCredentialsBtnText}>{editingProfile ? 'Save Credentials' : 'Edit profile'}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -936,9 +862,9 @@ export function TherapistShell({ active, children }: { active: TherapistTab; chi
         </Modal>
 
         {/* Global Toast Feedback Banner */}
-        {toastMessage && (
-          <View style={styles.toastContainer}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
+        {(toastMessage || actionNotice) && (
+          <View style={styles.toastContainer} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            <Text style={styles.toastText}>{toastMessage ?? actionNotice?.message}</Text>
           </View>
         )}
 
@@ -1011,6 +937,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       fontSize: 20,
       color: colors.text,
     },
+    profileHeading: { flex: 1, minWidth: 0, gap: 2 },
+    profileMode: { color: colors.heading, fontSize: 13, fontWeight: '600' },
     newProfileCard: {
       borderWidth: 1,
       borderColor: colors.border,
@@ -1288,6 +1216,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       paddingVertical: 10,
       gap: 4,
     },
+    readOnlyCredential: { backgroundColor: colors.isDark ? '#263241' : '#F1F3F5' },
+    readOnlyCredentialValue: { color: colors.textSub },
     newFieldLabel: {
       fontSize: 13,
       fontWeight: '700',
@@ -1298,43 +1228,6 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       color: colors.text,
       padding: 0,
       minHeight: 22,
-    },
-    newSpecialtyContainer: {
-      gap: 12,
-    },
-    newChipsRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    newChip: {
-      borderWidth: 1,
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    newChipText: {
-      fontSize: 12,
-      fontWeight: '600',
-    },
-    newChipRemove: {
-      padding: 2,
-    },
-    newAddSpecialtyRow: {
-      width: '100%',
-    },
-    newAddSpecialtyInput: {
-      height: 42,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      fontSize: 13,
-      color: colors.text,
     },
     newSaveContainer: {
       alignItems: 'center',

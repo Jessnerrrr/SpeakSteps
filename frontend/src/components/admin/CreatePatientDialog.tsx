@@ -15,7 +15,7 @@ const SCHOOL_RECORDS: StudentRecord[] = [
   { studentNumber: 'SS-25016', name: 'Gabriel Flores', grade: 'Grade 3', section: 'Narra', guardian: 'Luis Flores', guardianEmail: 'luis.flores@example.org', guardianPhone: '+63 905 555 0136', school: 'Northview School', teacherId: 'pro-2' },
 ];
 
-const palette = { ink: '#17364D', muted: '#48657A', blue: '#0865AD', soft: '#EAF7FF', line: '#D9E5EE', white: '#FFFFFF', red: '#A33C3C' };
+const palette = { ink: '#17364D', muted: '#48657A', blue: '#0865AD', soft: '#EAF7FF', green: '#287A4B', greenSoft: '#E8F4EC', violet: '#6941C6', violetSoft: '#F1EBFF', line: '#D9E5EE', white: '#FFFFFF', red: '#A33C3C' };
 
 export default function CreatePatientDialog({ teachers, therapists, existingNumbers, onClose, onCreate, onSwitchRole }: {
   teachers: Teacher[]; therapists: Therapist[]; existingNumbers: string[];
@@ -55,8 +55,12 @@ export default function CreatePatientDialog({ teachers, therapists, existingNumb
       </View>
       <Text style={{ color: palette.ink, fontSize: 12, fontWeight: '700', marginBottom: 7 }}>Account type</Text>
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-        <TouchableOpacity accessibilityRole="radio" accessibilityState={{ checked: true }} style={{ flex: 1, minHeight: 42, borderWidth: 1, borderColor: palette.blue, backgroundColor: palette.soft, borderRadius: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Ionicons name="person-outline" size={17} color={palette.blue} /><Text style={{ color: palette.blue, fontSize: 12, fontWeight: '700' }}>Student</Text></TouchableOpacity>
-        {(['Therapist', 'Teacher'] as const).map((role) => <TouchableOpacity key={role} accessibilityRole="radio" accessibilityState={{ checked: false }} onPress={() => onSwitchRole(role)} style={{ flex: 1, minHeight: 42, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.white, borderRadius: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Ionicons name={role === 'Therapist' ? 'heart-outline' : 'school-outline'} size={17} color={palette.muted} /><Text style={{ color: palette.muted, fontSize: 12 }}>{role}</Text></TouchableOpacity>)}
+        {(['Student', 'Therapist', 'Teacher'] as const).map((role) => {
+          const color = role === 'Student' ? palette.green : role === 'Therapist' ? palette.blue : palette.violet;
+          const soft = role === 'Student' ? palette.greenSoft : role === 'Therapist' ? palette.soft : palette.violetSoft;
+          const selected = role === 'Student';
+          return <TouchableOpacity key={role} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={selected ? undefined : () => onSwitchRole(role as 'Therapist' | 'Teacher')} style={{ flex: 1, minHeight: 42, borderWidth: 1, borderColor: selected ? color : palette.line, backgroundColor: selected ? soft : palette.white, borderRadius: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Ionicons name={role === 'Student' ? 'person-outline' : role === 'Therapist' ? 'heart-outline' : 'school-outline'} size={17} color={color} /><Text style={{ color, fontSize: 12, fontWeight: selected ? '700' : '400' }}>{role}</Text></TouchableOpacity>;
+        })}
       </View>
       <ScrollView style={{ flex: 1, minHeight: 0 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
         <Text style={labelStyle}>Student number</Text>

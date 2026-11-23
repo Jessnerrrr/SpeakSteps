@@ -33,7 +33,7 @@ export default function SpeechCheckinResult() {
     if (router.canDismiss()) {
       router.dismissAll();
     }
-    router.replace('/patient-dashboard' as any);
+    router.replace('/user-mode-select' as any);
   };
 
   return (

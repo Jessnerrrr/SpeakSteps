@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { DEMO_STUDENT_ID } from '@/data/learning-workflow';
+import { studentAgeFromBirthDate, studentBirthDateNotice } from '@/data/calendar-date';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import {
   sampleNotifications,
@@ -11,11 +13,13 @@ import { darkPalette, lightPalette, type ThemeMode, type TherapistPalette } from
 
 type TherapistContextValue = {
   palette: TherapistPalette;
+  actionNotice: { message: string } | null;
+  showActionNotice: (message: string) => void;
   isDark: boolean;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   profile: TherapistProfile;
-  updateProfile: (patch: Pick<TherapistProfile, 'fullName' | 'clinic' | 'contact'>) => void;
+  updateProfile: (patch: Partial<Pick<TherapistProfile, 'fullName' | 'role' | 'contact' | 'photoUri'>>) => void;
   notifications: TherapistNotification[];
   unreadCount: number;
   notificationsOpen: boolean;
@@ -40,6 +44,14 @@ type TherapistContextValue = {
 const TherapistContext = createContext<TherapistContextValue | null>(null);
 
 export function TherapistProvider({ children }: { children: ReactNode }) {
+  const [actionNotice, setActionNotice] = useState<{ message: string } | null>(null);
+  const showActionNotice = useCallback((message: string) => setActionNotice({ message }), []);
+  useEffect(() => {
+    if (!actionNotice) return;
+    const timer = setTimeout(() => setActionNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [actionNotice]);
+
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [profile, setProfile] = useState<TherapistProfile>(sampleProfile);
   const [notifications, setNotifications] = useState<TherapistNotification[]>(sampleNotifications);
@@ -48,11 +60,26 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
   const [newRecordings, setNewRecordings] = useState(true);
   const [followUpAlerts, setFollowUpAlerts] = useState(true);
   const [passwordUpdated, setPasswordUpdated] = useState(false);
-  const [patients, setPatients] = useState<PatientRecord[]>(samplePatients);
+  const [patients, setPatients] = useState<PatientRecord[]>(() => [
+    ...samplePatients,
+    {
+      ...createPatient({
+        firstName: 'Mia', middleName: '', lastName: 'Santos', suffix: '', dateOfBirth: '',
+        age: '5', languageProfile: 'Bilingual Tagalog & English', diagnosis: '',
+        guardianName: '', relationship: '', contactNumber: '', guardianEmail: '',
+        targetSound: '/s/ Sound', hierarchyLevel: 'Sound', phonemePositions: [],
+        secondaryTargets: '', dominantErrorPattern: '', dominantErrorOther: '',
+        errorPatternTaxonomy: '', clinicalNotation: '',
+      }),
+      id: DEMO_STUDENT_ID,
+    },
+  ]);
   const [addPatientOpen, setAddPatientOpen] = useState(false);
 
   const addPatient = useCallback((input: NewPatientInput) => {
-    setPatients((current) => [createPatient(input), ...current]);
+    const age = studentAgeFromBirthDate(input.dateOfBirth);
+    if (age === null) throw new Error(studentBirthDateNotice);
+    setPatients((current) => [createPatient({ ...input, age: String(age) }), ...current]);
   }, []);
 
   const addSoapNote = useCallback((patientId: string, note: SoapNote) => {
@@ -64,7 +91,7 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
   const isDark = themeMode === 'dark';
   const palette = isDark ? darkPalette : lightPalette;
 
-  const updateProfile = useCallback((patch: Pick<TherapistProfile, 'fullName' | 'clinic' | 'contact'>) => {
+  const updateProfile = useCallback((patch: Partial<Pick<TherapistProfile, 'fullName' | 'role' | 'contact' | 'photoUri'>>) => {
     setProfile((current) => ({ ...current, ...patch }));
   }, []);
 
@@ -94,6 +121,8 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       palette,
+      actionNotice,
+      showActionNotice,
       isDark,
       themeMode,
       setThemeMode,
@@ -121,6 +150,8 @@ export function TherapistProvider({ children }: { children: ReactNode }) {
     }),
     [
       palette,
+      actionNotice,
+      showActionNotice,
       isDark,
       themeMode,
       profile,

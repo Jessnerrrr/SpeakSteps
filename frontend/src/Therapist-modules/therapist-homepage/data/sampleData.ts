@@ -1,3 +1,4 @@
+import { CENTER_NAME } from '@/data/center-name';
 import type { TherapistRoute } from '@/navigation/therapistTabs';
 
 export type StatTone = 'green' | 'alert' | 'primary' | 'orange';
@@ -36,14 +37,15 @@ export type TherapistProfile = {
   clinic: string;
   contact: string;
   email: string;
+  photoUri?: string | null;
 };
 
 export const sampleProfile: TherapistProfile = {
   fullName: 'Dr. Ameer Andres, SLP-CCC',
   role: 'Speech-Language Pathologist',
-  license: 'SLP-PH-2024-4891',
-  clinic: 'SpeakSteps',
-  contact: '+63 900 000 0000',
+  license: 'PRC #0048291',
+  clinic: CENTER_NAME,
+  contact: '+63 9000 000 000',
   email: 'ameer@speakstep.com',
 };
 
@@ -88,7 +90,7 @@ export const sampleSubmissions: Submission[] = [
     initials: 'KS',
     name: 'Khyl Shervin Sude',
     detail: '8 yrs old · Tagalog · /r/ Target',
-    stage: 'Stage: Isolated Sounds',
+    stage: 'Stage: Sound',
     progress: 0.35,
     timestamp: 'Today at 11:12 AM',
   },

@@ -1,3 +1,15 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { ChecklistFilter } from '@/components/therapist/TherapistChecklistFilter';
+import { matchesPracticeLanguage, PRACTICE_LANGUAGES } from '@/types/sentences';
+import { INITIAL_ACTIVITIES, getTeacherActivityPrompts, type ActivityItem } from '@/data/teacher-activities';
+import { practiceLevels } from '@/data/practice-levels';
+import { assignLearningActivity, DEMO_STUDENT_ID, useLearningAssignments } from '@/data/learning-workflow';
+import { AssignmentCalendar } from '@/components/assignment-calendar';
+import { ProfileEditWarning } from '@/components/profile-edit-warning';
+import { todayCalendarDate } from '@/data/calendar-date';
+import { isAssignmentDate } from '@/Therapist-modules/therapist-activities/data/activityData';
+import { SessionRevokeWarning } from '@/components/session-revoke-warning';
+import { CENTER_NAME } from '@/data/center-name';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
@@ -106,24 +118,6 @@ interface Accomplishment {
   audioDuration: string;
 }
 
-interface ActivityItem {
-  id: string;
-  sound: string;
-  soundBg: string;
-  soundColor: string;
-  category: 'Words' | 'Phrases' | 'Syllables' | 'Isolation' | 'Sentences';
-  title: string;
-  subtitle: string;
-  instructions: string;
-  articulatoryGuide: string;
-  language: 'English' | 'Tagalog';
-  targetSound: string;
-  practiceLevel: string;
-  wordPositions: string[];
-  initialWords: string[];
-  phrases: string[];
-}
-
 interface ReviewItem {
   id: string;
   initials: string;
@@ -145,7 +139,7 @@ const TARGET_SOUND_OPTIONS = [
   '/s/', '/r/', '/l/', '/t/', '/k/', '/p/', '/m/',
   '/b/', '/d/', '/f/', '/v/', '/th/', '/ch/', '/sh/'
 ];
-const PRACTICE_LEVEL_OPTIONS = ['Words', 'Phrases', 'Sentences', 'Isolation', 'Syllables'];
+const PRACTICE_LEVEL_OPTIONS = ['Words', 'Phrases', 'Sentences', 'Sound', 'Syllables'];
 
 // ==========================================
 // --- Initial Mock Data ---
@@ -156,13 +150,13 @@ const INITIAL_PATIENTS: Patient[] = [
     initials: 'KS',
     name: 'Khyl Shervin Sude',
     age: 5,
-    targetDescription: 'isolated sounds • target /r/ initial',
+    targetDescription: 'Sound • target /r/ initial',
     accuracy: 35,
     accuracyColor: '#DC2626',
     progressColor: '#F87171',
     badgeBg: '#FEE2E2',
     badgeTextColor: '#DC2626',
-    stage: 'Isolated sounds',
+    stage: 'Sound',
     compliance: '85%',
     complianceDays: '5/7 days',
     phonemeTarget: {
@@ -214,6 +208,22 @@ const INITIAL_PATIENTS: Patient[] = [
       languageProfile: 'Bilingual Tagalog & English',
     },
   },
+  {
+    id: DEMO_STUDENT_ID,
+    initials: 'MS',
+    name: 'Mia Santos',
+    age: 5,
+    targetDescription: 'Individual sounds',
+    accuracy: 0,
+    accuracyColor: '#0284C7',
+    progressColor: '#38BDF8',
+    badgeBg: '#E0F2FE',
+    badgeTextColor: '#0865AD',
+    stage: 'Sound',
+    compliance: '—',
+    complianceDays: '',
+    phonemeTarget: { primary: '/s/', secondary: '', errorPattern: '', languageProfile: 'Bilingual Tagalog & English' },
+  },
 ];
 
 const INITIAL_SUBMISSIONS = [
@@ -264,98 +274,6 @@ const SAMPLE_ACCOMPLISHMENTS: Accomplishment[] = [
   },
 ];
 
-const INITIAL_ACTIVITIES: ActivityItem[] = [
-  {
-    id: 'act-1',
-    sound: '/s/',
-    soundBg: '#DCFCE7',
-    soundColor: '#16A34A',
-    category: 'Words',
-    title: 'Sunny Sounds',
-    subtitle: 'English • Therapist-created',
-    instructions: 'Listen to the model. Say each target slowly, then try it on your own.',
-    articulatoryGuide: 'Place tongue behind front teeth, blow gentle air.',
-    language: 'English',
-    targetSound: '/s/',
-    practiceLevel: 'Words',
-    wordPositions: ['Initial', 'Medial'],
-    initialWords: ['sun', 'sand', 'soup'],
-    phrases: ['Warm sunny day.', 'Sand on the beach.', 'Hot soup is good.'],
-  },
-  {
-    id: 'act-2',
-    sound: '/r/',
-    soundBg: '#FFEDD5',
-    soundColor: '#EA580C',
-    category: 'Phrases',
-    title: 'Ready, set, /r/',
-    subtitle: 'English • Therapist-created',
-    instructions: 'Listen to the model. Say each target slowly, then try it on your own.',
-    articulatoryGuide: 'Pull tongue tip back, lips slightly relaxed.',
-    language: 'English',
-    targetSound: '/r/',
-    practiceLevel: 'Phrases',
-    wordPositions: ['Initial', 'Medial'],
-    initialWords: ['rabbit', 'red', 'run'],
-    phrases: [
-      '• I see a red apple.',
-      '• See the dog run fast.',
-      '• The little rabbit hid.',
-    ],
-  },
-  {
-    id: 'act-3',
-    sound: '/l/',
-    soundBg: '#FEF9C3',
-    soundColor: '#CA8A04',
-    category: 'Syllables',
-    title: 'Little /l/ steps',
-    subtitle: 'English • Therapist-created',
-    instructions: 'Lift tongue tip to alveolar ridge and vocalize.',
-    articulatoryGuide: 'Touch tongue tip behind top teeth.',
-    language: 'English',
-    targetSound: '/l/',
-    practiceLevel: 'Syllables',
-    wordPositions: ['Initial'],
-    initialWords: ['la', 'le', 'li'],
-    phrases: ['Sing la la la.', 'Lemon and lime.'],
-  },
-  {
-    id: 'act-4',
-    sound: '/s/',
-    soundBg: '#E0F2FE',
-    soundColor: '#0284C7',
-    category: 'Isolation',
-    title: 'Sound explorers',
-    subtitle: 'English • Therapist-created',
-    instructions: 'Hold the hiss sound like a friendly snake.',
-    articulatoryGuide: 'Keep teeth lightly touching, hiss steadily.',
-    language: 'English',
-    targetSound: '/s/',
-    practiceLevel: 'Isolation',
-    wordPositions: ['Initial'],
-    initialWords: ['sss'],
-    phrases: ['Hiss like a snake: sssss.'],
-  },
-  {
-    id: 'act-5',
-    sound: '/t/',
-    soundBg: '#FFE4E6',
-    soundColor: '#E11D48',
-    category: 'Sentences',
-    title: 'Say it in a sentence',
-    subtitle: 'English • Therapist-created',
-    instructions: 'Focus on clear tongue tap for /t/ at start of words.',
-    articulatoryGuide: 'Tap tongue tip sharply behind teeth.',
-    language: 'English',
-    targetSound: '/t/',
-    practiceLevel: 'Sentences',
-    wordPositions: ['Initial', 'Final'],
-    initialWords: ['tap', 'top', 'time'],
-    phrases: ['Take the top ticket.', 'Time to tap.'],
-  },
-];
-
 // Helper: Get student accuracy badge colors preserving Red, Yellow, Green in Dark & Light Modes
 const getStudentBadgeTheme = (item: Patient, isDark: boolean) => {
   if (!isDark) return { bg: item.badgeBg, color: item.badgeTextColor };
@@ -392,7 +310,7 @@ const getActivitySoundColors = (act: ActivityItem, isDark: boolean) => {
     return { bg: '#451A03', color: '#FACC15', categoryColor: '#FACC15' };
   }
   // 4. Blue (act-4: Sound explorers, #E0F2FE / #0284C7)
-  if (act.soundBg === '#E0F2FE' || act.soundColor === '#0284C7' || act.category === 'Isolation') {
+  if (act.soundBg === '#E0F2FE' || act.soundColor === '#0284C7' || act.category === 'Sound') {
     return { bg: '#082F49', color: '#38BDF8', categoryColor: '#38BDF8' };
   }
   // 5. Red (act-5: Say it in a sentence, #FFE4E6 / #E11D48)
@@ -420,8 +338,8 @@ const getCategoryLevelColors = (levelOrCategory: string, isDark: boolean) => {
       color: isDark ? '#FACC15' : '#CA8A04',
     };
   }
-  if (norm.includes('isolation')) {
-    // Isolation: Blue
+  if (norm === 'sound' || norm.includes('isolation')) {
+    // Sound: Blue
     return {
       bg: isDark ? '#082F49' : '#E0F2FE',
       color: isDark ? '#38BDF8' : '#0284C7',
@@ -548,7 +466,7 @@ const INITIAL_NOTIFICATIONS = [
     id: 'notif-1',
     name: 'Khyll',
     action: 'submitted an audio recording',
-    detail: '/r/ Isolated Sounds (Target: 35% accuracy)',
+    detail: '/r/ Sound (Target: 35% accuracy)',
     time: '5m ago',
     unread: true,
   },
@@ -654,6 +572,17 @@ export default function TeacherDashboardScreen() {
   });
 
   // --- Main Navigation Tabs ---
+  const learningAssignments = useLearningAssignments();
+  const teacherSubmissions = learningAssignments.flatMap((item) => {
+    if (item.source !== 'Teacher' || !item.submittedAt) return [];
+    return [{
+      id: item.id,
+      name: item.studentName,
+      initials: item.studentName.split(' ').map((part) => part[0]).slice(0, 2).join(''),
+      phrase: item.title,
+      time: new Date(item.submittedAt).toLocaleDateString(),
+    }];
+  });
   const [activeTab, setActiveTab] = useState<'home' | 'patients' | 'activities' | 'reviews'>('home');
   const routeParams = useLocalSearchParams<{ tab?: string; view?: string }>();
 
@@ -672,6 +601,7 @@ export default function TeacherDashboardScreen() {
   // --- Three Lines (Hamburger) Menu, Profile, Settings & Notifications State ---
   const [showMenu, setShowMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -687,7 +617,7 @@ export default function TeacherDashboardScreen() {
     fullName: 'Dr. Ameer Andres, SLP-CCC',
     title: 'Speech-Language Pathologist',
     license: 'PRC #0048291',
-    clinic: 'LittleVoices Pediatric Speech Center',
+    clinic: CENTER_NAME,
     contact: '+63 9000 000 000',
     email: 'ameer@speakstep.com',
     photoUri: null as string | null,
@@ -712,6 +642,8 @@ export default function TeacherDashboardScreen() {
   const [missedExercisesToggle, setMissedExercisesToggle] = useState(true);
   const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(true);
   const [themeMode, setThemeMode] = useState<'Light' | 'Dark'>('Light');
+  const [sessionToRevoke, setSessionToRevoke] = useState<{ id: string; device: string } | null>(null);
+  const [sessionNotice, setSessionNotice] = useState('');
   const [activeSessions, setActiveSessions] = useState([
     { id: '1', device: 'Redmi 15', isCurrent: true, location: 'Quezon City', lastActive: 'Active now' },
     { id: '2', device: 'Samsung Galaxy Tab S9 FE', isCurrent: false, location: 'Android App', lastActive: 'Yesterday' },
@@ -740,7 +672,7 @@ export default function TeacherDashboardScreen() {
 
   // --- Activities Sub-View State ---
   const [activitiesView, setActivitiesView] = useState<'library' | 'preview' | 'edit' | 'assign' | 'wordbank'>('library');
-  const [activityCategoryFilter, setActivityCategoryFilter] = useState<'ALL' | 'Words' | 'Phrases' | 'Syllables' | 'Isolation' | 'Sentences'>('ALL');
+  const [activityCategoryFilter, setActivityCategoryFilter] = useState<ActivityItem['category'][]>([]);
   const [activitySearch, setActivitySearch] = useState('');
   const [showActivityFilterPanel, setShowActivityFilterPanel] = useState(false);
   const [activitySortBy, setActivitySortBy] = useState<'default' | 'title-asc' | 'title-desc' | 'sound'>('default');
@@ -751,7 +683,8 @@ export default function TeacherDashboardScreen() {
     showActivityFilterPanel ||
     activitySortBy !== 'default' ||
     activitySoundFilter.length > 0 ||
-    activityLanguageFilter !== 'ALL';
+    activityLanguageFilter !== 'ALL' ||
+    activityCategoryFilter.length > 0;
   const [activitiesList, setActivitiesList] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
   const [currentActivity, setCurrentActivity] = useState<ActivityItem>(INITIAL_ACTIVITIES[0]);
 
@@ -891,8 +824,8 @@ export default function TeacherDashboardScreen() {
   };
 
   const handleSaveEditedActivity = () => {
-    const updatedPhrases = checkedWords.map((w) => wordPhrases[w] || '').filter(Boolean);
-    const updatedCategory = (['Words', 'Phrases', 'Syllables', 'Isolation', 'Sentences'].includes(editPracticeLevel)
+    const updatedPhrases = checkedWords.map((w) => wordPhrases[w] || '');
+    const updatedCategory = (['Words', 'Phrases', 'Syllables', 'Sound', 'Sentences'].includes(editPracticeLevel)
       ? editPracticeLevel
       : 'Words') as ActivityItem['category'];
 
@@ -931,8 +864,8 @@ export default function TeacherDashboardScreen() {
 
   // Assign Activity View State
   const [assignStudent, setAssignStudent] = useState('Mc Grady Andrea Andres');
-  const [assignActivityName, setAssignActivityName] = useState('Ready, set, /r/');
-  const [assignDueDate, setAssignDueDate] = useState('01/11/2026');
+  const [assignActivityId, setAssignActivityId] = useState('ready-set-r');
+  const [assignDueDate, setAssignDueDate] = useState('');
   const [assignInstructions, setAssignInstructions] = useState('Listen to the model. Say each target slowly, then try it on your own.');
   const [assignPreviewExpanded, setAssignPreviewExpanded] = useState(false);
 
@@ -943,9 +876,7 @@ export default function TeacherDashboardScreen() {
   const [playingAccId, setPlayingAccId] = useState<string | null>(null);
 
   // Multi-select Assign state
-  const [assignSelectedStudents, setAssignSelectedStudents] = useState<string[]>([
-    INITIAL_PATIENTS[0]?.name || 'Mc Grady Andrea Andres',
-  ]);
+  const [assignSelectedStudents, setAssignSelectedStudents] = useState<string[]>([]);
   const [showAssignStudentDropdown, setShowAssignStudentDropdown] = useState(false);
   const [showAssignActivityDropdown, setShowAssignActivityDropdown] = useState(false);
 
@@ -956,6 +887,10 @@ export default function TeacherDashboardScreen() {
   // --- Reviews Tab State (Image 2) ---
   const [reviewsList, setReviewsList] = useState<ReviewItem[]>(INITIAL_REVIEWS);
   const [reviewsFilter, setReviewsFilter] = useState<'All' | 'Pending' | 'Reviewed'>('All');
+  const [reviewActivities, setReviewActivities] = useState<string[]>([]);
+  const [reviewStudents, setReviewStudents] = useState<string[]>([]);
+  const [reviewLanguage, setReviewLanguage] = useState<string[]>([]);
+  const [reviewStudentSort, setReviewStudentSort] = useState<'A–Z' | 'Z–A'>('A–Z');
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null);
   const [reviewEvaluation, setReviewEvaluation] = useState<'Correct' | 'Approximate' | 'Incorrect' | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
@@ -978,7 +913,7 @@ export default function TeacherDashboardScreen() {
   const filteredActivities = useMemo(() => {
     let list = activitiesList.filter((act) => {
       const matchesCategory =
-        activityCategoryFilter === 'ALL' || act.category === activityCategoryFilter;
+        activityCategoryFilter.length === 0 || activityCategoryFilter.includes(act.category);
       const matchesSearch =
         act.title.toLowerCase().includes(activitySearch.toLowerCase()) ||
         act.sound.toLowerCase().includes(activitySearch.toLowerCase());
@@ -1009,10 +944,23 @@ export default function TeacherDashboardScreen() {
   ]);
 
   // Filtered Reviews
-  const filteredReviews = reviewsList.filter((rev) => {
-    if (reviewsFilter === 'All') return true;
-    return rev.status === reviewsFilter;
-  });
+  const reviewCatalog = new Map(activitiesList.map((item) => [item.title, item]));
+  const reviewActivityOptions = [...new Set([...reviewCatalog.keys(), ...reviewsList.map((review) => review.activityTitle)])].sort();
+  const reviewStudentOptions = [...new Set([...INITIAL_PATIENTS.map((student) => student.name), ...reviewsList.map((review) => review.studentName)])]
+    .sort((first, second) => reviewStudentSort === 'A–Z' ? first.localeCompare(second) : second.localeCompare(first));
+  const reviewActivityCaptions = new Map(activitiesList.map((item) => [item.title, item.language + ' · ' + item.category]));
+  const filteredReviews = reviewsList.filter((review) =>
+    (reviewsFilter === 'All' || review.status === reviewsFilter) &&
+    (!reviewActivities.length || reviewActivities.includes(review.activityTitle)) &&
+    (!reviewStudents.length || reviewStudents.includes(review.studentName)) &&
+    matchesPracticeLanguage(reviewCatalog.get(review.activityTitle)?.language, reviewLanguage[0]),
+  ).sort((first, second) => reviewStudentSort === 'A–Z'
+    ? first.studentName.localeCompare(second.studentName) : second.studentName.localeCompare(first.studentName));
+
+  const studentPages = useListPagination(filteredPatients.length, 10, JSON.stringify([studentFilter, patientSearch]));
+  const activityPages = useListPagination(filteredActivities.length, 10, JSON.stringify([activityCategoryFilter, activitySortBy, activitySoundFilter, activityLanguageFilter, activitySearch]));
+  const wordPages = useListPagination(filteredWordBank.length, 10, JSON.stringify([wordBankQuery, wordBankFilterSounds, wordBankFilterPositions, wordBankFilterLanguages]));
+  const reviewPages = useListPagination(filteredReviews.length, 10, JSON.stringify([reviewsFilter, reviewActivities, reviewStudents, reviewLanguage, reviewStudentSort]));
 
   // Trigger Toast Notification
   const triggerToast = (msg: string) => {
@@ -1021,37 +969,64 @@ export default function TeacherDashboardScreen() {
   };
 
   // Assign Multi-Select Helpers & Handler
-  const studentOptions = useMemo(() => INITIAL_PATIENTS.map((p) => p.name), []);
+  const studentOptions = INITIAL_PATIENTS;
+  const assignmentStudents = studentOptions.filter(({ id }) => assignSelectedStudents.includes(id));
+  const selectedAssignActivity = activitiesList.find((item) => item.id === assignActivityId);
   const allStudentsSelected =
-    studentOptions.length > 0 && studentOptions.every((name) => assignSelectedStudents.includes(name));
+    studentOptions.length > 0 && assignmentStudents.length === studentOptions.length;
   const studentDropdownSummary =
-    assignSelectedStudents.length === 0
+    assignmentStudents.length === 0
       ? 'Select student(s)...'
       : allStudentsSelected
       ? `All Students (${studentOptions.length})`
-      : assignSelectedStudents.length === 1
-      ? assignSelectedStudents[0]
-      : `${assignSelectedStudents.length} Students Selected`;
+      : assignmentStudents.length === 1
+      ? assignmentStudents[0].name
+      : `${assignmentStudents.length} Students Selected`;
+
+  const openAssignment = (activity?: ActivityItem) => {
+    setAssignActivityId(activity?.id ?? '');
+    setAssignInstructions(activity?.instructions ?? '');
+    setAssignSelectedStudents([]);
+    setAssignDueDate('');
+    setAssignPreviewExpanded(false);
+    setActiveTab('activities');
+    setActivitiesView('assign');
+  };
 
   const handleAssignActivity = () => {
     try {
-      if (assignSelectedStudents.length === 0) {
+      if (assignmentStudents.length === 0) {
         triggerToast('Please select at least one student.');
         return;
       }
-      if (!assignDueDate.trim() || !/^\d{2}\/\d{2}\/\d{4}$/.test(assignDueDate.trim())) {
-        triggerToast('Please provide a valid due date in mm/dd/yyyy format.');
+      if (!isAssignmentDate(assignDueDate)) {
+        triggerToast('Enter a valid due date today or later (mm/dd/yyyy).');
         return;
       }
       if (!assignInstructions.trim()) {
         triggerToast('Please provide activity instructions.');
         return;
       }
+      const activity = selectedAssignActivity;
+      if (!activity) {
+        triggerToast('Select an activity before assigning it.');
+        return;
+      }
+      for (const student of assignmentStudents) {
+        assignLearningActivity({
+          source: 'Teacher', activityId: activity.id, studentId: student.id, studentName: student.name,
+          title: activity.title, level: activity.category, dueDate: assignDueDate,
+          language: activity.language,
+          instructions: assignInstructions.trim(), assignedBy: therapistProfile.name,
+          prompts: getTeacherActivityPrompts(activity),
+          guidance: activity.articulatoryGuide,
+        });
+      }
       setActivitiesView('library');
       const msg =
-        assignSelectedStudents.length === 1
-          ? `Activity assigned to ${assignSelectedStudents[0]}`
-          : `Activity assigned to ${assignSelectedStudents.length} students`;
+        assignmentStudents.length === 1
+          ? `Activity assigned to ${assignmentStudents[0].name}`
+          : `Activity assigned to ${assignmentStudents.length} students`;
       triggerToast(msg);
     } catch (err: any) {
       triggerToast(err?.message || 'Failed to assign activity.');
@@ -1151,7 +1126,19 @@ export default function TeacherDashboardScreen() {
   };
 
   // --- Profile, Settings & Logout Handlers ---
+  const openProfile = () => {
+    setEditProfileForm({ ...therapistProfile });
+    setEditingProfile(false);
+    setShowProfileModal(true);
+  };
+
+  const startProfileEditing = () => {
+    setEditProfileForm({ ...therapistProfile });
+    setEditingProfile(true);
+  };
+
   const handleSaveProfile = () => {
+    if (!editingProfile) return;
     try {
       if (!editProfileForm.name.trim()) {
         triggerToast('Name is required. Please fill in this field.');
@@ -1211,7 +1198,7 @@ export default function TeacherDashboardScreen() {
 
   const handleRevokeSession = (id: string) => {
     setActiveSessions((current) => current.filter((s) => s.id !== id));
-    triggerToast('Session revoked successfully.');
+    setSessionNotice('Session revoked successfully.');
   };
 
   const handlePickPhoto = () => {
@@ -1266,7 +1253,9 @@ export default function TeacherDashboardScreen() {
     setShowMenu(false);
     setShowSettingsModal(false);
     triggerToast('Logged out successfully.');
-    router.replace('/login' as any);
+    if (router.canDismiss()) {
+      router.dismissAll();
+    }
   };
 
   const handleMarkAllNotificationsRead = () => {
@@ -1328,6 +1317,8 @@ export default function TeacherDashboardScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Open menu"
             style={styles.iconButton}
             activeOpacity={0.7}
             onPress={() => {
@@ -1379,8 +1370,7 @@ export default function TeacherDashboardScreen() {
                 style={[styles.assignButton, { backgroundColor: colors.primaryLight }]}
                 activeOpacity={0.8}
                 onPress={() => {
-                  setActiveTab('activities');
-                  setActivitiesView('assign');
+                  openAssignment(activitiesList.find((item) => item.id === 'ready-set-r') ?? activitiesList[0]);
                 }}
               >
                 <UserCheck size={18} color="#0F766E" style={{ marginRight: 6 }} />
@@ -1494,7 +1484,7 @@ export default function TeacherDashboardScreen() {
             </View>
 
             <View style={[styles.submissionsCardWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {INITIAL_SUBMISSIONS.map((sub) => (
+              {[...teacherSubmissions, ...INITIAL_SUBMISSIONS].map((sub) => (
                 <View key={sub.id} style={[styles.submissionItem, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
                   <View style={[styles.patientAvatarSmall, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Text style={[styles.avatarTextSmall, { color: colors.text }]}>{sub.initials}</Text>
@@ -1504,20 +1494,21 @@ export default function TeacherDashboardScreen() {
                     <Text style={[styles.subDetails, { color: colors.textSub }]}>
                       {sub.phrase} • {sub.time}
                     </Text>
-                    <View style={[styles.subProgressBar, { backgroundColor: colors.border }]}>
+                    {'progress' in sub && typeof sub.progress === 'number' ? <View style={[styles.subProgressBar, { backgroundColor: colors.border }]}>
                       <View style={[styles.subProgressFill, { width: `${sub.progress * 100}%` }]} />
-                    </View>
+                    </View> : <Text style={styles.subDetails}>Practice submitted</Text>}
                   </View>
-                  <TouchableOpacity
+                  {'progress' in sub && typeof sub.progress === 'number' ? <TouchableOpacity
                     style={styles.reviewButton}
                     activeOpacity={0.8}
                     onPress={() => {
-                      const match = reviewsList.find((r) => r.studentName.includes(sub.name)) || reviewsList[0];
+                      const match = reviewsList.find((r) => r.studentName === sub.name && r.activityTitle === sub.phrase);
+                      if (!match) { triggerToast('No matching review is available.'); return; }
                       setSelectedReview(match);
                     }}
                   >
                     <Text style={styles.reviewButtonText}>Review</Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity> : null}
                 </View>
               ))}
             </View>
@@ -1554,7 +1545,7 @@ export default function TeacherDashboardScreen() {
               </TouchableOpacity>
             </View>
 
-            {filteredPatients.map((item) => {
+            {filteredPatients.slice(studentPages.start, studentPages.end).map((item) => {
               return (
                 <TouchableOpacity
                   key={item.id}
@@ -1592,6 +1583,7 @@ export default function TeacherDashboardScreen() {
                 </TouchableOpacity>
               );
             })}
+            <ListPagination {...studentPages} total={filteredPatients.length} noun="students" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
           </View>
         )}
 
@@ -1671,7 +1663,7 @@ export default function TeacherDashboardScreen() {
                               setActivitySortBy('default');
                               setActivitySoundFilter([]);
                               setActivityLanguageFilter('ALL');
-                              setActivityCategoryFilter('ALL');
+                              setActivityCategoryFilter([]);
                             }}
                             style={{ marginRight: 12 }}
                           >
@@ -1747,6 +1739,23 @@ export default function TeacherDashboardScreen() {
                       })}
                     </View>
 
+                    <Text style={[styles.activityFilterSectionHeading, { marginTop: 10 }]}>Activity type</Text>
+                    <View style={styles.activityFilterPillsRow}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected: activityCategoryFilter.length === 0 }}
+                        style={[styles.activityFilterPill, activityCategoryFilter.length === 0 && styles.activityFilterPillActive]} onPress={() => setActivityCategoryFilter([])}>
+                        <Text style={[styles.activityFilterPillText, activityCategoryFilter.length === 0 && styles.activityFilterPillTextActive]}>All types</Text>
+                      </TouchableOpacity>
+                      {practiceLevels.map((level) => {
+                        const selected = activityCategoryFilter.includes(level);
+                        return (
+                          <TouchableOpacity key={level} accessibilityRole="checkbox" accessibilityState={{ checked: selected }}
+                            style={[styles.activityFilterPill, selected && styles.activityFilterPillActive]}
+                            onPress={() => setActivityCategoryFilter((current) => current.includes(level) ? current.filter((item) => item !== level) : [...current, level])}>
+                            <Text style={[styles.activityFilterPillText, selected && styles.activityFilterPillTextActive]}>{level}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                     {/* Language Filters */}
                     <Text style={[styles.activityFilterSectionHeading, { marginTop: 10 }]}>Language</Text>
                     <View style={styles.activityFilterPillsRow}>
@@ -1773,24 +1782,9 @@ export default function TeacherDashboardScreen() {
                   </View>
                 )}
 
-                {/* Category Filter Chips */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-                  {(['ALL', 'Words', 'Syllables', 'Isolation', 'Sentences'] as const).map((chip) => (
-                    <TouchableOpacity
-                      key={chip}
-                      style={[styles.chipButton, activityCategoryFilter === chip && styles.chipButtonActive]}
-                      onPress={() => setActivityCategoryFilter(chip)}
-                    >
-                      <Text style={[styles.chipText, activityCategoryFilter === chip && styles.chipTextActive]}>
-                        {chip}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
                 {/* 2-Column Activity Cards Grid */}
                 <View style={styles.activityGrid}>
-                  {filteredActivities.map((act) => {
+                  {filteredActivities.slice(activityPages.start, activityPages.end).map((act) => {
                     const soundTheme = getActivitySoundColors(act, isDark);
                     return (
                       <TouchableOpacity
@@ -1837,6 +1831,7 @@ export default function TeacherDashboardScreen() {
                     );
                   })}
                 </View>
+                  <ListPagination {...activityPages} total={filteredActivities.length} noun="activities" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
               </View>
             )}
 
@@ -1932,7 +1927,7 @@ export default function TeacherDashboardScreen() {
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <Text style={[styles.infoCardTitle, { color: colors.peachText }]}>Articulatory Guide</Text>
                         <View style={styles.guideBadge}>
-                          <Text style={styles.guideBadgeText}>Teacher Guidance</Text>
+                          <Text style={styles.guideBadgeText}>Therapist guidance</Text>
                         </View>
                       </View>
                     </View>
@@ -1955,50 +1950,18 @@ export default function TeacherDashboardScreen() {
                       </View>
                     </View>
 
-                    {/* Initial Position Content */}
-                    <View style={styles.posBlockCard}>
-                      <View style={styles.posBlockHead}>
-                        <View style={[styles.posBadgePeach, { backgroundColor: currentSoundTheme.bg, borderColor: currentSoundTheme.color }]}>
-                          <Text style={[styles.posBadgePeachText, { color: currentSoundTheme.color, fontWeight: '700' }]}>Initial</Text>
+                    {(['Initial', 'Medial', 'Final', undefined] as const).map((position) => {
+                      const prompts = getTeacherActivityPrompts(currentActivity).filter((prompt) => prompt.position === position);
+                      if (!prompts.length) return null;
+                      return (
+                        <View key={position ?? 'prompts'} style={styles.posBlockCard}>
+                          <Text style={styles.posBlockCountText}>{position ?? 'Practice prompts'}</Text>
+                          {prompts.map((prompt, index) => (
+                            <Text key={index} style={[styles.infoCardBody, { color: colors.text }]}>{prompt.text}</Text>
+                          ))}
                         </View>
-                        <Text style={styles.posBlockCountText}>{currentActivity.initialWords.length} targets</Text>
-                      </View>
-
-                      <View style={styles.wordPillsRow}>
-                        {currentActivity.initialWords.map((w) => (
-                          <View
-                            key={w}
-                            style={[
-                              styles.wordPillPeachWithIcon,
-                              { backgroundColor: currentSoundTheme.bg, borderColor: currentSoundTheme.color },
-                            ]}
-                          >
-                            <Volume2
-                              size={12}
-                              color={currentSoundTheme.color}
-                              style={{ marginRight: 4 }}
-                            />
-                            <Text
-                              style={[
-                                styles.wordPillText,
-                                { color: currentSoundTheme.color, fontWeight: '700' },
-                              ]}
-                            >
-                              {w}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-
-                      {currentActivity.phrases.map((phrase, i) => (
-                        <View key={i} style={styles.phraseRowCard}>
-                          <Text style={[styles.phraseBulletDot, { color: currentSoundTheme.color }]}>•</Text>
-                          <Text style={[styles.infoCardBody, { flex: 1, color: colors.text }]}>
-                            {phrase.replace(/^[•\s]+/, '')}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
+                      );
+                    })}
 
                     {/* Medial Position (Subtle in-card summary) */}
                     <View style={styles.posBlockCardSubtle}>
@@ -2082,8 +2045,7 @@ export default function TeacherDashboardScreen() {
                     <TouchableOpacity
                       style={styles.solidBlueBtn}
                       onPress={() => {
-                        setAssignActivityName(currentActivity.title);
-                        setActivitiesView('assign');
+                        openAssignment(currentActivity);
                       }}
                       activeOpacity={0.7}
                     >
@@ -2846,7 +2808,6 @@ export default function TeacherDashboardScreen() {
 
             {/* VIEW 4: ASSIGN ACTIVITY */}
             {activitiesView === 'assign' && (() => {
-              const selectedAssignActivity = activitiesList.find((act) => act.title === assignActivityName) || currentActivity;
               return (
               <View style={styles.assignScreenContainer}>
                 <View style={styles.assignHeaderBlock}>
@@ -2866,8 +2827,10 @@ export default function TeacherDashboardScreen() {
                     </View>
                   </View>
 
-                  <Text style={styles.formLabel}>Student</Text>
+                  <Text style={styles.formLabel}>Students</Text>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Select students"
                     style={styles.dropdownSelector}
                     onPress={() => setShowAssignStudentDropdown(true)}
                     activeOpacity={0.7}
@@ -2881,13 +2844,15 @@ export default function TeacherDashboardScreen() {
 
                   <Text style={[styles.formLabel, { marginTop: 8 }]}>Activity</Text>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Select activity"
                     style={styles.dropdownSelector}
                     onPress={() => setShowAssignActivityDropdown(true)}
                     activeOpacity={0.7}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                       <Layers size={15} color={colors.textMuted} style={{ marginRight: 8 }} />
-                      <Text style={styles.dropdownValue} numberOfLines={1}>{assignActivityName}</Text>
+                      <Text style={styles.dropdownValue} numberOfLines={1}>{selectedAssignActivity?.title ?? 'Select activity'}</Text>
                     </View>
                     <ChevronDown size={16} color={colors.text} />
                   </TouchableOpacity>
@@ -2901,11 +2866,11 @@ export default function TeacherDashboardScreen() {
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <View style={[styles.heroSoundBadgePeach, { width: 34, height: 34, borderRadius: 8, marginRight: 10 }]}>
-                      <Text style={[styles.heroSoundBadgeText, { fontSize: 14 }]}>{selectedAssignActivity.sound}</Text>
+                      <Text style={[styles.heroSoundBadgeText, { fontSize: 14 }]}>{selectedAssignActivity?.sound ?? '?'}</Text>
                     </View>
                     <View>
                       <Text style={[styles.accordionTitle, { color: colors.peachText }]}>Activity Preview</Text>
-                      <Text style={{ fontSize: 11, color: colors.textSub }}>{selectedAssignActivity.title} • {selectedAssignActivity.category}</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSub }}>{selectedAssignActivity ? selectedAssignActivity.title + ' - ' + selectedAssignActivity.category : 'Choose an activity to preview'}</Text>
                     </View>
                   </View>
                   {assignPreviewExpanded ? (
@@ -2915,73 +2880,27 @@ export default function TeacherDashboardScreen() {
                   )}
                 </TouchableOpacity>
 
-                {assignPreviewExpanded && (
+                {assignPreviewExpanded && selectedAssignActivity && (
                   <View style={{ marginBottom: 14 }}>
-                    {/* Practice Content Inside Preview */}
                     <View style={styles.infoCard}>
-                      <View style={styles.posBlockCard}>
-                        <View style={styles.posBlockHead}>
-                          <View style={styles.posBadgePeach}>
-                            <Text style={styles.posBadgePeachText}>Initial</Text>
+                      {(['Initial', 'Medial', 'Final', undefined] as const).map((position) => {
+                        const prompts = getTeacherActivityPrompts(selectedAssignActivity).filter((prompt) => prompt.position === position);
+                        if (!prompts.length) return null;
+                        return (
+                          <View key={position ?? 'prompts'} style={styles.posBlockCard}>
+                            <Text style={styles.posBlockCountText}>{position ?? 'Practice prompts'}</Text>
+                            {prompts.map((prompt, index) => (
+                              <Text key={index} style={[styles.infoCardBody, { color: colors.text }]}>{prompt.text}</Text>
+                            ))}
                           </View>
-                          <Text style={styles.posBlockCountText}>{(selectedAssignActivity.initialWords || []).length} targets</Text>
+                        );
+                      })}
+                      {selectedAssignActivity.articulatoryGuide.trim() ? (
+                        <View style={styles.posBlockCardSubtle}>
+                          <Text style={styles.posBlockCountText}>Therapist guidance</Text>
+                          <Text style={[styles.infoCardBody, { color: colors.text }]}>{selectedAssignActivity.articulatoryGuide}</Text>
                         </View>
-                        <View style={styles.wordPillsRow}>
-                          {(selectedAssignActivity.initialWords || []).map((w) => (
-                            <View key={w} style={styles.wordPillPeachWithIcon}>
-                              <Volume2 size={12} color={colors.peachAccent} style={{ marginRight: 4 }} />
-                              <Text style={styles.wordPillText}>{w}</Text>
-                            </View>
-                          ))}
-                        </View>
-                        {(selectedAssignActivity.phrases || []).map((phrase, i) => (
-                          <View key={i} style={styles.phraseRowCard}>
-                            <Text style={styles.phraseBulletDot}>•</Text>
-                            <Text style={[styles.infoCardBody, { flex: 1, color: colors.text }]}>{phrase}</Text>
-                          </View>
-                        ))}
-                      </View>
-
-                      {/* Medial & Final subtle summaries */}
-                      <View style={styles.posBlockCardSubtle}>
-                        <View style={styles.posBlockHead}>
-                          <View style={styles.posBadgeSubtle}>
-                            <Text style={styles.posBadgeSubtleText}>Medial</Text>
-                          </View>
-                          <Text style={styles.posBlockCountSubtle}>0 targets</Text>
-                        </View>
-                        <Text style={[styles.infoCardBody, { fontSize: 12, fontStyle: 'italic', color: colors.textMuted }]}>
-                          No targets in this position yet.
-                        </Text>
-                      </View>
-
-                      <View style={styles.posBlockCardSubtle}>
-                        <View style={styles.posBlockHead}>
-                          <View style={styles.posBadgeSubtle}>
-                            <Text style={styles.posBadgeSubtleText}>Final</Text>
-                          </View>
-                          <Text style={styles.posBlockCountSubtle}>0 targets</Text>
-                        </View>
-                        <Text style={[styles.infoCardBody, { fontSize: 12, fontStyle: 'italic', color: colors.textMuted }]}>
-                          No targets in this position yet.
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Audio Model inside preview */}
-                    <View style={styles.audioModelCard}>
-                      <View style={styles.audioPlayCircle}>
-                        <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-                      </View>
-                      <View style={{ flex: 1, marginHorizontal: 12 }}>
-                        <Text style={styles.audioModelTitle}>Pronunciation Model</Text>
-                        <Text style={styles.audioModelSub}>Demo Playback · 0:08</Text>
-                      </View>
-                      <View style={styles.audioWaveformRow}>
-                        {[12, 22, 14, 26, 18, 10, 20].map((h, i) => (
-                          <View key={i} style={[styles.audioWaveBar, { height: h }]} />
-                        ))}
-                      </View>
+                      ) : null}
                     </View>
                   </View>
                 )}
@@ -2999,16 +2918,7 @@ export default function TeacherDashboardScreen() {
                   </View>
 
                   <Text style={styles.formLabel}>Due Date</Text>
-                  <View style={styles.dateInputWrapper}>
-                    <TextInput
-                      style={styles.dateTextInput}
-                      value={assignDueDate}
-                      onChangeText={setAssignDueDate}
-                      placeholder="mm/dd/yyyy"
-                      placeholderTextColor={colors.textMuted}
-                    />
-                    <Calendar size={18} color={isDark ? '#38BDF8' : '#0284C7'} />
-                  </View>
+                  <AssignmentCalendar value={assignDueDate} onSelect={setAssignDueDate} isDark={isDark} minDate={todayCalendarDate()} showDueDatePresets />
 
                   <Text style={[styles.formLabel, { marginTop: 8 }]}>Instructions for Student / Facilitator</Text>
                   <TextInput
@@ -3033,6 +2943,7 @@ export default function TeacherDashboardScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.solidBlueBtn}
+                    accessibilityRole="button"
                     onPress={handleAssignActivity}
                     activeOpacity={0.7}
                   >
@@ -3258,7 +3169,7 @@ export default function TeacherDashboardScreen() {
 
                 {/* Word Bank List */}
                 <View style={styles.wbListCard}>
-                  {filteredWordBank.map((item, index) => (
+                  {filteredWordBank.slice(wordPages.start, wordPages.end).map((item, index) => (
                     <View
                       key={item.id}
                       style={[
@@ -3288,6 +3199,7 @@ export default function TeacherDashboardScreen() {
                       )}
                     </View>
                   ))}
+                  <ListPagination {...wordPages} total={filteredWordBank.length} noun="words" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
                   {filteredWordBank.length === 0 && (
                     <View style={{ padding: 24, alignItems: 'center' }}>
                       <Text style={{ color: colors.textMuted, fontSize: 13 }}>No words match your search or filters.</Text>
@@ -3329,8 +3241,31 @@ export default function TeacherDashboardScreen() {
             </View>
 
             {/* Reviews List Cards */}
+            <View style={styles.reviewFilterControl}>
+              <ChecklistFilter isDark={isDark}
+                palette={{ card: colors.card, line: colors.border, text: colors.text, faint: colors.textMuted, primary: isDark ? '#0369A1' : '#0865AD', muted: colors.textSub }}
+                label="Filter reviews" sectionLabel="Activities" options={reviewActivityOptions} optionCaptions={reviewActivityCaptions}
+                selected={reviewActivities} onChange={setReviewActivities} emptyLabel="All activities" allLabel="All activities" compact resetOnAll searchable
+                extraSections={[
+                  { label: 'Language', options: PRACTICE_LANGUAGES, selected: reviewLanguage, onChange: setReviewLanguage, allLabel: 'All languages', single: true },
+                  { label: 'Students', options: reviewStudentOptions, selected: reviewStudents, onChange: setReviewStudents, allLabel: 'All students',
+                    headerContent: (
+                      <View style={styles.reviewSortRow}>
+                        <Text style={styles.reviewsSubtitle}>Sort by name</Text>
+                        {(['A–Z', 'Z–A'] as const).map((order) => (
+                          <TouchableOpacity key={order} accessibilityRole="radio" accessibilityState={{ checked: order === reviewStudentSort }}
+                            onPress={() => setReviewStudentSort(order)} style={[styles.reviewSortButton, { borderColor: order === reviewStudentSort ? '#0284C7' : colors.border }]}>
+                            <Text style={{ color: colors.text }}>{order}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ),
+                  },
+                ]} />
+            </View>
             <View style={styles.reviewsListContainer}>
-              {filteredReviews.map((rev) => (
+              {filteredReviews.length === 0 && <Text style={styles.reviewsSubtitle}>No reviews match these filters.</Text>}
+              {filteredReviews.slice(reviewPages.start, reviewPages.end).map((rev) => (
                 <TouchableOpacity
                   key={rev.id}
                   style={styles.reviewCard}
@@ -3375,6 +3310,7 @@ export default function TeacherDashboardScreen() {
                   <ChevronRight size={16} color={colors.textMuted} />
                 </TouchableOpacity>
               ))}
+              <ListPagination {...reviewPages} total={filteredReviews.length} noun="reviews" accent="#0865AD" muted={colors.textMuted} border={colors.border} surface={colors.card} />
             </View>
           </View>
         )}
@@ -3572,7 +3508,7 @@ export default function TeacherDashboardScreen() {
                 if (allStudentsSelected) {
                   setAssignSelectedStudents([]);
                 } else {
-                  setAssignSelectedStudents([...studentOptions]);
+                  setAssignSelectedStudents(studentOptions.map(({ id }) => id));
                 }
               }}
             >
@@ -3595,11 +3531,13 @@ export default function TeacherDashboardScreen() {
             </TouchableOpacity>
 
             <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-              {studentOptions.map((name) => {
-                const checked = assignSelectedStudents.includes(name);
+              {studentOptions.map(({ id, name }) => {
+                const checked = assignSelectedStudents.includes(id);
                 return (
                   <TouchableOpacity
-                    key={name}
+                    key={id}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
                     style={[
                       styles.dropdownPopupOption,
                       checked && {
@@ -3608,9 +3546,9 @@ export default function TeacherDashboardScreen() {
                     ]}
                     onPress={() => {
                       if (checked) {
-                        setAssignSelectedStudents((prev) => prev.filter((n) => n !== name));
+                        setAssignSelectedStudents((prev) => prev.filter((selectedId) => selectedId !== id));
                       } else {
-                        setAssignSelectedStudents((prev) => [...prev, name]);
+                        setAssignSelectedStudents((prev) => [...prev, id]);
                       }
                     }}
                   >
@@ -3644,6 +3582,8 @@ export default function TeacherDashboardScreen() {
                 styles.dropdownPopupDoneBtn,
                 { backgroundColor: '#0284C7' },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel="Done selecting students"
               onPress={() => setShowAssignStudentDropdown(false)}
             >
               <Text style={styles.dropdownPopupDoneBtnText}>Done</Text>
@@ -3685,7 +3625,7 @@ export default function TeacherDashboardScreen() {
 
             <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
               {activitiesList.map((act) => {
-                const isSelected = assignActivityName === act.title;
+                const isSelected = assignActivityId === act.id;
                 return (
                   <TouchableOpacity
                     key={act.id}
@@ -3696,7 +3636,9 @@ export default function TeacherDashboardScreen() {
                       },
                     ]}
                     onPress={() => {
-                      setAssignActivityName(act.title);
+                      setAssignActivityId(act.id);
+                      setAssignInstructions(act.instructions);
+                      setAssignPreviewExpanded(false);
                       setShowAssignActivityDropdown(false);
                     }}
                   >
@@ -4160,7 +4102,7 @@ export default function TeacherDashboardScreen() {
                   activeOpacity={0.8}
                   onPress={() => {
                     setShowMenu(false);
-                    setShowProfileModal(true);
+                    openProfile();
                   }}
                 >
                   <View style={styles.menuAvatarCircle}>
@@ -4178,9 +4120,11 @@ export default function TeacherDashboardScreen() {
                 <TouchableOpacity
                   style={styles.menuOptionRow}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="View profile and credentials"
                   onPress={() => {
                     setShowMenu(false);
-                    setShowProfileModal(true);
+                    openProfile();
                   }}
                 >
                   <View style={styles.menuIconCircle}>
@@ -4316,7 +4260,7 @@ export default function TeacherDashboardScreen() {
         visible={showSettingsModal}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowSettingsModal(false)}
+        onRequestClose={() => sessionToRevoke ? setSessionToRevoke(null) : setShowSettingsModal(false)}
       >
         <View style={{ flex: 1, backgroundColor: wide ? (isDark ? '#0F172A' : '#E2E8F0') : colors.bgSecondary, alignItems: 'center' }}>
           <View style={{ flex: 1, width: columnWidth, backgroundColor: colors.bgSecondary }}>
@@ -4340,9 +4284,8 @@ export default function TeacherDashboardScreen() {
               activeOpacity={0.8}
               onPress={() => {
                 setProfileOpenedFromSettings(true);
-                setEditProfileForm({ ...therapistProfile });
                 setShowSettingsModal(false);
-                setShowProfileModal(true);
+                openProfile();
               }}
             >
               <View style={styles.newProfileAvatar}>
@@ -4544,7 +4487,8 @@ export default function TeacherDashboardScreen() {
                     </View>
                     {!session.isCurrent ? (
                       <TouchableOpacity
-                        onPress={() => handleRevokeSession(session.id)}
+                        accessibilityRole="button"
+                        onPress={() => { setSessionNotice(''); setSessionToRevoke(session); }}
                         style={styles.newRevokeBtn}
                       >
                         <Text style={styles.newRevokeBtnText}>Revoke</Text>
@@ -4556,7 +4500,9 @@ export default function TeacherDashboardScreen() {
               ))}
             </View>
 
-            {/* About Help Section */}
+            {sessionNotice ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.newRowSubtitle, { marginTop: 6 }]}>{sessionNotice}</Text> : null}
+
+              {/* About Help Section */}
             <View style={styles.newSectionHeader}>
               <Text style={styles.newSectionTitle}>About Help</Text>
             </View>
@@ -4590,7 +4536,18 @@ export default function TeacherDashboardScreen() {
               <Text style={styles.newSignOutBtnText}>Log Out</Text>
             </TouchableOpacity>
           </ScrollView>
-        </SafeAreaView>
+        {sessionToRevoke ? (
+              <SessionRevokeWarning
+                device={sessionToRevoke.device}
+                isDark={isDark}
+                onCancel={() => setSessionToRevoke(null)}
+                onConfirm={() => {
+                  handleRevokeSession(sessionToRevoke.id);
+                  setSessionToRevoke(null);
+                }}
+              />
+            ) : null}
+          </SafeAreaView>
           </View>
         </View>
       </Modal>
@@ -4628,15 +4585,22 @@ export default function TeacherDashboardScreen() {
             >
               <ChevronLeft size={22} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.newHeaderTitle}>Profile & Credentials</Text>
+            <View style={styles.profileHeading}>
+              <Text accessibilityRole="header" style={styles.newHeaderTitle}>Profile & Credentials</Text>
+              <Text style={styles.profileMode}>{editingProfile ? 'Editing profile' : 'Profile overview'}</Text>
+            </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
+          {editingProfile && (
+              <ProfileEditWarning isDark={isDark} style={{ marginHorizontal: 16 }} />
+            )}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsScrollContent}>
             {/* Upload Photo Card */}
             <TouchableOpacity
               style={styles.newUploadPhotoCard}
               activeOpacity={0.8}
               onPress={handlePickPhoto}
+                disabled={!editingProfile}
             >
               <View style={styles.newPhotoAvatarWrapper}>
                 <View style={styles.newPhotoAvatar}>
@@ -4650,7 +4614,7 @@ export default function TeacherDashboardScreen() {
                   <Camera size={14} color="#FFFFFF" />
                 </View>
               </View>
-              <Text style={styles.newUploadPhotoLabel}>Upload Photo</Text>
+              <Text style={styles.newUploadPhotoLabel}>{editingProfile ? 'Upload Photo' : 'Profile photo'}</Text>
             </TouchableOpacity>
 
             {/* Profile Section */}
@@ -4660,6 +4624,8 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.newFieldLabel}>Name</Text>
                 <TextInput
                   style={styles.newFieldInput}
+                  accessibilityLabel="Name"
+                  editable={editingProfile}
                   value={editProfileForm.name}
                   onChangeText={(text) =>
                     setEditProfileForm((prev) => ({
@@ -4678,6 +4644,8 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.newFieldLabel}>Professional Title</Text>
                 <TextInput
                   style={styles.newFieldInput}
+                  accessibilityLabel="Professional title"
+                  editable={editingProfile}
                   value={editProfileForm.title}
                   onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, title: text }))}
                   placeholder="Speech-Language Pathologist"
@@ -4690,6 +4658,8 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.newFieldLabel}>Contact Number</Text>
                 <TextInput
                   style={styles.newFieldInput}
+                  accessibilityLabel="Contact number"
+                  editable={editingProfile}
                   value={editProfileForm.contact}
                   onChangeText={(text) => setEditProfileForm((prev) => ({ ...prev, contact: text }))}
                   placeholder="+63 9000 000 000"
@@ -4699,45 +4669,21 @@ export default function TeacherDashboardScreen() {
               </View>
               <View style={styles.newDivider} />
 
-              <View style={styles.newProfileFieldRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
-                  <TextInput
-                    style={[styles.newFieldInput, { opacity: 0.6 }]}
-                    value={editProfileForm.license}
-                    editable={false}
-                    placeholder="PRC #0048291"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.isDark ? '#1E293B' : '#F1F5F9' }}>
-                  <Lock size={12} color={colors.textMuted} />
-                  <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Locked</Text>
-                </View>
+              <View style={[styles.newProfileFieldRow, styles.readOnlyCredential]}>
+                <Text style={styles.newFieldLabel}>PRC / Licensed Number</Text>
+                <Text style={[styles.newFieldInput, styles.readOnlyCredentialValue]}>{editProfileForm.license || '—'}</Text>
               </View>
               <View style={styles.newDivider} />
 
-              <View style={styles.newProfileFieldRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.newFieldLabel}>Clinic/School</Text>
-                  <TextInput
-                    style={[styles.newFieldInput, { opacity: 0.6 }]}
-                    value={editProfileForm.clinic}
-                    editable={false}
-                    placeholder="LittleVoices Pediatric Speech Center"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: colors.isDark ? '#1E293B' : '#F1F5F9' }}>
-                  <Lock size={12} color={colors.textMuted} />
-                  <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Locked</Text>
-                </View>
+              <View style={[styles.newProfileFieldRow, styles.readOnlyCredential]}>
+                <Text style={styles.newFieldLabel}>Clinic/School</Text>
+                <Text style={[styles.newFieldInput, styles.readOnlyCredentialValue]}>{editProfileForm.clinic || CENTER_NAME}</Text>
               </View>
             </View>
 
             {/* Specialization Section */}
             <Text style={styles.newSectionTitleStandalone}>Specialization</Text>
-            <View style={styles.newSpecialtyContainer}>
+            <View style={[styles.newSpecialtyContainer, !editProfileForm.specializations.length && { gap: 0 }]}>
               <View style={styles.newChipsRow}>
                 {editProfileForm.specializations.map((spec, index) => {
                   const colorInfo = SPECIALTY_PALETTE[index % SPECIALTY_PALETTE.length];
@@ -4762,6 +4708,7 @@ export default function TeacherDashboardScreen() {
                       </Text>
                       <TouchableOpacity
                         onPress={() => handleRemoveSpecialty(spec)}
+                        disabled={!editingProfile}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         style={styles.newChipRemove}
                       >
@@ -4772,7 +4719,7 @@ export default function TeacherDashboardScreen() {
                 })}
               </View>
 
-              <View style={styles.newAddSpecialtyRow}>
+              {editingProfile && <View style={styles.newAddSpecialtyRow}>
                 <TextInput
                   style={styles.newAddSpecialtyInput}
                   value={newSpecialtyInput}
@@ -4782,7 +4729,7 @@ export default function TeacherDashboardScreen() {
                   placeholderTextColor={colors.textMuted}
                   returnKeyType="done"
                 />
-              </View>
+              </View>}
             </View>
 
             {/* Save Credentials Button */}
@@ -4790,9 +4737,10 @@ export default function TeacherDashboardScreen() {
               <TouchableOpacity
                 style={styles.newSaveCredentialsBtn}
                 activeOpacity={0.8}
-                onPress={handleSaveProfile}
+                accessibilityRole="button"
+                onPress={editingProfile ? handleSaveProfile : startProfileEditing}
               >
-                <Text style={styles.newSaveCredentialsBtnText}>Save Credentials</Text>
+                <Text style={styles.newSaveCredentialsBtnText}>{editingProfile ? 'Save Credentials' : 'Edit profile'}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -6978,23 +6926,6 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       padding: 12,
       marginBottom: 14,
     },
-    dateInputWrapper: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      height: 42,
-      marginBottom: 8,
-    },
-    dateTextInput: {
-      flex: 1,
-      fontSize: 13,
-      color: colors.inputText,
-    },
     assignHeaderBlock: {
       marginBottom: 14,
     },
@@ -7062,6 +6993,9 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       color: colors.textSub,
       marginBottom: 14,
     },
+    reviewFilterControl: { alignSelf: 'flex-end', marginBottom: 12 },
+    reviewSortRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+    reviewSortButton: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderRadius: 8 },
     reviewsFilterTabsBar: {
       flexDirection: 'row',
       borderBottomWidth: 1,
@@ -7947,6 +7881,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       color: colors.text,
       marginTop: -2,
     },
+    profileHeading: { flex: 1, minWidth: 0, gap: 2 },
+    profileMode: { color: colors.textSub, fontSize: 13, fontWeight: '600' },
     newHeaderTitle: {
       fontSize: 20,
       fontWeight: '700',
@@ -8234,6 +8170,8 @@ function createStyles(colors: ReturnType<typeof getThemeColors>) {
       fontWeight: '700',
       color: colors.text,
     },
+    readOnlyCredential: { backgroundColor: colors.isDark ? '#263241' : '#F1F3F5' },
+    readOnlyCredentialValue: { color: colors.textSub },
     newProfileFieldRow: {
       paddingHorizontal: 14,
       paddingVertical: 10,

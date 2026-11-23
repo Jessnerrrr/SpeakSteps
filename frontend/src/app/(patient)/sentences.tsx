@@ -1,12 +1,13 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { ChildScreenFrame, childScreenColors as playColors } from '@/components/child-screen-frame';
 import { useFonts } from 'expo-font';
-import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   BackHandler,
-  FlatList,
+  ScrollView,
   Pressable,
   StyleSheet,
   Text,
@@ -14,118 +15,47 @@ import {
   View,
   TouchableWithoutFeedback,
 } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
+import { PatientPressable } from '@/components/patient-pressable';
 import { NotificationBellButton } from '@/components/notification-popover';
 import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
 import { SignOutConfirmModal } from '@/components/sign-out-confirm-modal';
-import { sentences } from '@/data/sentences';
-import type { Language, Position, Sentence } from '@/types/sentences';
-import { POSITIONS } from '@/types/sentences';
+import { sampleActivities } from '@/Therapist-modules/therapist-activities/data/activityData';
+import { useAssignedActivities } from '@/data/assigned-activities';
+import { practiceLevels } from '@/data/practice-levels';
+import { practiceLevelIcons } from '@/components/adventure-icon';
+import { BuddyStore } from '@/data/buddy-store';
+import { usePracticeSubmissions } from '@/data/practice-submissions';
+import type { Language } from '@/types/sentences';
 
+const playLanguages: Language[] = ['English', 'Tagalog'];
+const activitiesPerPage = 4;
 
-// ─── Language Toggle ──────────────────────────────────────────────────────────
-function LanguageToggle({
-  value,
-  onChange,
-}: {
-  value: Language;
-  onChange: (l: Language) => void;
+function ActivityPages<T>({ items, renderActivity }: {
+  items: readonly T[];
+  renderActivity: (item: T) => ReactNode;
 }) {
-  const langs: Language[] = ['English', 'Tagalog'];
+  const pagination = useListPagination(items.length, activitiesPerPage, '');
+
   return (
-    <View style={styles.toggleRow}>
-      {langs.map((l) => (
-        <TouchableOpacity
-          key={l}
-          style={[styles.toggleBtn, value === l && styles.toggleBtnActive]}
-          onPress={() => onChange(l)}
-        >
-          <Text style={[styles.toggleText, value === l && styles.toggleTextActive]}>
-            {l}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
+    <>
+      {items.slice(pagination.start, pagination.end).map(renderActivity)}
+      <ListPagination {...pagination} total={items.length} noun="activities" />
+    </>
   );
 }
 
-// ─── Position Tabs ────────────────────────────────────────────────────────────
-function PositionTabs({
-  value,
-  onChange,
-}: {
-  value: Position;
-  onChange: (p: Position) => void;
-}) {
-  return (
-    <View style={styles.tabRow}>
-      {POSITIONS.map((p) => (
-        <TouchableOpacity
-          key={p}
-          style={[styles.tab, value === p && styles.tabActive]}
-          onPress={() => onChange(p)}
-        >
-          <Text style={[styles.tabText, value === p && styles.tabTextActive]}>
-            {p}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
-// ─── Star Rating ──────────────────────────────────────────────────────────────
-function StarRating({ stars }: { stars: 0 | 1 | 2 | 3 }) {
-  return (
-    <View style={styles.starRow}>
-      {[1, 2, 3].map((i) => (
-        <Ionicons key={i} name={i <= stars ? 'star' : 'star-outline'} size={17} color={i <= stars ? '#C58216' : '#527A96'} />
-      ))}
-    </View>
-  );
-}
-
-// ─── Sentence Card ────────────────────────────────────────────────────────────
-function SentenceCard({
-  sentence,
-  onSelect,
-}: {
-  sentence: Sentence;
-  onSelect: (s: Sentence) => void;
-}) {
-  const scale = useSharedValue(1);
-  const motion = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-
-  return (
-    <Animated.View style={[styles.cardSlot, motion]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Practice ${sentence.sound}, ${sentence.syllable}, ${sentence.stars} out of 3 stars`}
-        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-        onPressIn={() => { scale.value = withTiming(0.96, { duration: 70 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 16, stiffness: 320 }); }}
-        onPress={() => onSelect(sentence)}
-      >
-        <View style={styles.cardInner}>
-          <Text style={styles.cardSound}>{sentence.sound}</Text>
-          <Text style={styles.cardSyllable}>{sentence.syllable}</Text>
-        </View>
-        <View style={styles.cardFooter}>
-          <StarRating stars={sentence.stars} />
-          <View style={styles.cardPlay}>
-            <Ionicons name="play" size={15} color={playColors.accent} />
-          </View>
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function SentencesScreen() {
+  const assignedActivities = useAssignedActivities().filter((item) => item.linked);
+  const buddy = useSyncExternalStore(BuddyStore.subscribe, BuddyStore.getActiveBuddy, BuddyStore.getActiveBuddy);
+  const submissions = usePracticeSubmissions();
   const [language, setLanguage] = useState<Language>('English');
-  const [position, setPosition] = useState<Position>('Initial');
+  const params = useLocalSearchParams<{ category?: string; level?: string }>();
+  const requestedLevel = params.level === 'Isolation' ? 'Sound' : params.level;
+  const level = practiceLevels.find((option) => option === requestedLevel)
+    ?? practiceLevels.find((option) => option.toLowerCase() === params.category)
+    ?? 'Sound';
+  const category = level === 'Sound' ? 'sounds' : level.toLowerCase();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
@@ -143,7 +73,7 @@ export default function SentencesScreen() {
   };
 
   // Intercept hardware back button on Android so it safely remains in Child Mode
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     const onBackPress = () => {
       handleBack();
       return true;
@@ -153,24 +83,9 @@ export default function SentencesScreen() {
       onBackPress
     );
     return () => subscription.remove();
-  }, []);
+  }, []));
 
   if (!fontsLoaded) return null;
-
-  const items = sentences[language][position];
-
-  const handleSelect = (sentence: Sentence) => {
-    router.push({
-      pathname: '/practice',
-      params: {
-        sentenceId: sentence.id,
-        sound: sentence.sound,
-        syllable: sentence.syllable,
-        stars: sentence.stars,
-        position,
-      },
-    } as any);
-  };
 
   return (
     <>
@@ -246,25 +161,66 @@ export default function SentencesScreen() {
           </>
         )}
         <View style={styles.centerWrapper}>
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={styles.grid}
-            columnWrapperStyle={styles.gridRow}
-            ListHeaderComponent={
+          <ScrollView contentContainerStyle={styles.grid}>
               <View style={styles.contentHeader}>
-                <Text accessibilityRole="header" style={styles.pageTitle}>Pick a sound to practice</Text>
+                <View style={styles.playIntro}>
+                  <View style={styles.introCopy}>
+                    <Text accessibilityRole="header" style={styles.pageTitle}>Let’s practice!</Text>
+                    <Text style={styles.introText}>Your buddy is ready!</Text>
+                  </View>
+                  <Image source={buddy.image} style={styles.introBuddy} contentFit="contain" />
+                </View>
                 <Text style={styles.controlLabel}>Language</Text>
-                <LanguageToggle value={language} onChange={setLanguage} />
-                <Text style={styles.controlLabel}>Sound position</Text>
-                <PositionTabs value={position} onChange={setPosition} />
+                <View style={styles.languageRow}>
+                  {playLanguages.map((option) => (
+                    <PatientPressable key={option} accessibilityState={{ selected: option === language }}
+                      onPress={() => setLanguage(option)} style={[styles.languageTab, option === language && styles.languageActive]}>
+                      <Text style={[styles.categoryText, option === language && styles.languageActiveText]}>{option}</Text>
+                    </PatientPressable>
+                  ))}
+                </View>
+                <Text style={styles.controlLabel}>Practice level</Text>
+                <View style={styles.categoryRow}>
+                  {practiceLevels.map((option) => {
+                    const selected = option === level;
+                    return (
+                      <PatientPressable key={option} accessibilityState={{ selected }} onPress={() => router.setParams({ level: option })} style={[styles.categoryTab, selected && styles.categoryTabActive]}>
+                        <Ionicons name={practiceLevelIcons[option]} size={18} color={selected ? '#0865AD' : '#567F9A'} />
+                        <Text style={[styles.categoryText, selected && styles.categoryTextActive]}>{option}</Text>
+                      </PatientPressable>
+                    );
+                  })}
+                </View>
+                {assignedActivities.some((item) => item.linked) && (
+                  <View style={styles.librarySection}>
+                    <Text style={styles.controlLabel}>Assigned to you</Text>
+                    <ActivityPages items={assignedActivities} renderActivity={(item) => (
+                      <PatientPressable key={item.id} accessibilityLabel={[item.title, item.level, item.submitted ? 'Submitted' : item.dueDate && 'Due ' + item.dueDate].filter(Boolean).join(', ')} style={styles.libraryCard}
+                        onPress={() => router.push({ pathname: '/practice', params: { activityId: item.id, linkedAssignment: 'true', category: item.category.toLowerCase(), level: item.level } })}>
+                        <View style={styles.soundBadge}><Ionicons name="clipboard" size={20} color="#0865AD" /></View>
+                        <Text numberOfLines={1} style={styles.libraryTitle}>{item.title}</Text>
+                        <Text numberOfLines={1} style={styles.libraryMeta}>{item.submitted ? 'Submitted' : item.dueDate ? 'Due ' + item.dueDate.slice(0, 5) : item.level}</Text>
+                        <Ionicons name="chevron-forward" size={18} color="#0D68AC" />
+                      </PatientPressable>
+                    )} />
+                  </View>
+                )}
+                <View style={styles.librarySection}>
+                  <Text accessibilityRole="header" style={styles.sectionTitle}>Pick an activity</Text>
+                  <ActivityPages key={language + ':' + level}
+                    items={sampleActivities.filter((item) => item.level === level && item.language === language)} renderActivity={(item) => {
+                    const earned = submissions.some((entry) => entry.id === 'library:' + item.id);
+                    return <PatientPressable key={item.id} accessibilityLabel={item.title + (earned ? ', star earned' : '')} style={styles.libraryCard}
+                      onPress={() => router.push({ pathname: '/practice', params: { catalogActivityId: item.id, category, level } })}>
+                      <View style={styles.soundBadge}><Text style={styles.soundText}>{item.sound}</Text></View>
+                      <Text numberOfLines={1} style={styles.libraryTitle}>{item.title}</Text>
+                      {earned && <Ionicons name="star" size={17} color="#AD6A09" />}
+                      <View style={styles.playBadge}><Ionicons name="play" size={14} color="#0865AD" /></View>
+                    </PatientPressable>;
+                  }} />
+                </View>
               </View>
-            }
-            renderItem={({ item }) => (
-              <SentenceCard sentence={item} onSelect={handleSelect} />
-            )}
-          />
+          </ScrollView>
         </View>
 
         {/* Global Child Bottom Navigation Bar */}
@@ -293,6 +249,14 @@ export default function SentencesScreen() {
 }
 
 const styles = StyleSheet.create({
+  librarySection: { gap: 8 },
+  libraryCard: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 9, borderRadius: 16, borderWidth: 1, borderBottomWidth: 2, borderColor: '#BBD9EC', backgroundColor: '#FFFFFF' },
+  soundBadge: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#DFEFF9', alignItems: 'center', justifyContent: 'center' },
+  soundText: { fontFamily: 'SourGummy-Bold', color: '#0865AD', fontSize: 18 },
+  playBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EAF4FA', alignItems: 'center', justifyContent: 'center' },
+  grid: { paddingHorizontal: 16, paddingBottom: 30 },
+  libraryTitle: { flex: 1, minWidth: 0, fontFamily: 'SourGummy-Bold', fontSize: 16, color: '#183B56' },
+  libraryMeta: { flexShrink: 1, maxWidth: '36%', color: '#436780', fontFamily: 'SourGummy-Medium', fontSize: 13 },
   // Tablet Responsive Constraint
 
   /* Top Header */
@@ -383,13 +347,17 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingTop: 12,
   },
+  playIntro: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, backgroundColor: '#D5EAF7', paddingHorizontal: 14, paddingVertical: 8, marginBottom: 14 },
+  introCopy: { flex: 1, minWidth: 0 },
+  introBuddy: { width: 60, height: 60 },
+  introText: { color: '#365F7C', fontFamily: 'SourGummy-Medium', fontSize: 15 },
   pageTitle: {
     color: '#0865AD',
     fontFamily: 'SourGummy-Bold',
     fontSize: 22,
     lineHeight: 28,
-    marginBottom: 16,
   },
+  sectionTitle: { color: '#0865AD', fontFamily: 'SourGummy-Bold', fontSize: 19 },
   controlLabel: {
     color: '#0865AD',
     fontSize: 15,
@@ -397,55 +365,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
 
-  toggleRow: {
-    flexDirection: 'row',
-    backgroundColor: playColors.surface,
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 16,
-  },
-  toggleBtn: { flex: 1, minHeight: 44, paddingVertical: 8, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  toggleBtnActive: { backgroundColor: playColors.accent },
-  toggleText: { fontFamily: 'SourGummy-Bold', color: playColors.accent, fontSize: 16 },
-  toggleTextActive: { color: playColors.surface },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
+  languageRow: { flexDirection: 'row', gap: 4, backgroundColor: '#D5EAF7', padding: 4, borderRadius: 13, marginBottom: 14 },
+  languageTab: { flex: 1, minHeight: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  categoryTab: { flexGrow: 1, minWidth: 84, minHeight: 44, flexDirection: 'row', gap: 4, borderWidth: 1, borderColor: '#D4E7F4', borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 5 },
+  categoryTabActive: { backgroundColor: '#D5EAF7', borderColor: '#81B9DF' },
+  languageActive: { backgroundColor: '#0865AD' },
+  languageActiveText: { color: '#FFFFFF', fontFamily: 'SourGummy-Bold' },
+  categoryText: { fontFamily: 'SourGummy-Medium', fontSize: 13, color: '#365F7C', textAlign: 'center' },
+  categoryTextActive: { fontFamily: 'SourGummy-Bold', color: '#0865AD' },
 
-  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
-  tab: {
-    flex: 1,
-    minHeight: 44,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: playColors.surface,
-  },
-  tabActive: { backgroundColor: playColors.accent },
-  tabText: { fontFamily: 'SourGummy-Bold', color: playColors.accent, fontSize: 15 },
-  tabTextActive: { color: playColors.surface },
-
-  grid: { paddingHorizontal: 16, paddingBottom: 30 },
-  gridRow: { gap: 12, marginBottom: 12 },
-
-  cardSlot: { flex: 1, maxWidth: '50%' },
-  card: {
-    flex: 1,
-    backgroundColor: playColors.surface,
-    borderRadius: 18,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#CBE6F6',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 5,
-  },
-  cardPressed: { backgroundColor: '#EDF7FE' },
-  cardInner: { marginBottom: 12 },
-  cardSound: { fontFamily: 'SourGummy-Bold', fontSize: 32, lineHeight: 38, color: playColors.accent },
-  cardSyllable: { fontFamily: 'SourGummy-Medium', fontSize: 18, lineHeight: 23, color: '#465D70' },
-
-  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 },
-  cardPlay: { width: 30, height: 30, borderRadius: 10, backgroundColor: playColors.canvas, alignItems: 'center', justifyContent: 'center' },
-  starRow: { flexDirection: 'row', gap: 2 },
 });

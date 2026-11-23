@@ -108,7 +108,7 @@ export const samplePatients: PatientRecord[] = [
     contactNumber: '+63 900 000 0001',
     guardianEmail: 'parent.sude@email.com',
     targetSound: '/r/ Sound',
-    hierarchyLevel: 'Isolation',
+    hierarchyLevel: 'Sound',
     phonemePositions: ['Initial'],
     secondaryTargets: '/l/, /w/',
     dominantErrorPattern: 'Substitution',
@@ -304,8 +304,8 @@ export function patientMeta(patient?: Partial<Pick<PatientRecord, 'age' | 'langu
   const language = languageMatch?.[1] || 'Multilingual';
   const sound = patient.targetSound ? patient.targetSound.replace(' Sound', '') : '';
   const stage =
-    patient.hierarchyLevel === 'Isolation'
-      ? 'Isolated Sounds'
+    patient.hierarchyLevel === 'Sound'
+      ? 'Sound'
       : patient.hierarchyLevel === 'Syllable'
         ? 'Syllables'
         : patient.hierarchyLevel === 'Sentence Level'

@@ -1,10 +1,12 @@
+import { ListPagination, useListPagination } from '@/components/list-pagination';
+import { TherapistChecklistFilter } from '@/components/therapist/TherapistChecklistFilter';
 // =============================================================================
 // THERAPIST STUDENTS — All students directory & clinical record in one file
 // Replaces: therapist-patients/pages, components, data
 // =============================================================================
 
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 
 import { TherapistShell } from '@/components/therapist/TherapistShell';
@@ -23,24 +25,14 @@ const toneColors: Record<AccuracyTone, { background: string; text: string }> = {
 // ─── 1. Student Directory List ───────────────────────────────────────────────
 
 export function PatientDirectory() {
-  const navigation = useNavigation();
   const { palette, patients } = useTherapist();
   const [query, setQuery] = useState('');
-  const [target, setTarget] = useState('All Targets');
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      router.replace('/therapist' as never);
-    }
-  };
+  const [targets, setTargets] = useState<(typeof targetSounds)[number][]>([]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return patients.filter((patient) => {
-      const targetMatch = target === 'All Targets' || patient.targetSound === target;
+      const targetMatch = targets.length === 0 || targets.some((target) => target === patient.targetSound);
       if (!targetMatch) return false;
       if (!needle) return true;
       const haystack = [patientName(patient), patient.diagnosis, patient.targetSound, patientMeta(patient), patient.initials]
@@ -48,22 +40,15 @@ export function PatientDirectory() {
         .toLowerCase();
       return haystack.includes(needle);
     });
-  }, [patients, query, target]);
+  }, [patients, query, targets]);
+
+  const pagination = useListPagination(visible.length, 10, JSON.stringify([query, targets]));
 
   return (
     <View style={studentStyles.fill}>
       <View style={studentStyles.header}>
-        <Pressable
-          accessibilityLabel="Back to home"
-          onPress={handleBack}
-          style={[studentStyles.back, { borderColor: palette.line }]}
-        >
-          <ChevronLeftIcon color={palette.text} size={18} />
-        </Pressable>
-        <View style={studentStyles.titleBlock}>
-          <Text style={[studentStyles.title, { color: '#0284C7' }]}>Students</Text>
-          <Text style={[studentStyles.subtitle, { color: palette.muted }]}>Track sound targets & case histories</Text>
-        </View>
+        <Text accessibilityRole="header" style={[studentStyles.title, { color: '#0284C7' }]}>Students</Text>
+        <Text style={[studentStyles.subtitle, { color: palette.muted }]}>Track sound targets & case histories</Text>
       </View>
 
       <View style={studentStyles.tools}>
@@ -77,86 +62,30 @@ export function PatientDirectory() {
             style={[studentStyles.searchInput, { color: palette.text }]}
           />
         </View>
-        <View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Filter by target sound"
-            onPress={() => setMenuOpen(true)}
-            style={[studentStyles.filter, { backgroundColor: palette.card, borderColor: palette.line }]}
-          >
-            <Text style={[studentStyles.filterText, { color: palette.muted }]} numberOfLines={1}>
-              {target}
-            </Text>
-            <Text style={{ color: palette.faint }}>▾</Text>
-          </Pressable>
-
-          <Modal
-            transparent
-            visible={menuOpen}
-            animationType="fade"
-            onRequestClose={() => setMenuOpen(false)}
-          >
-            <Pressable style={studentStyles.popupOverlay} onPress={() => setMenuOpen(false)}>
-              <Pressable style={[studentStyles.popupCard, { backgroundColor: palette.card, borderColor: palette.line }]} onPress={(e) => e.stopPropagation?.()}>
-                <View style={[studentStyles.popupHeader, { borderBottomColor: palette.line }]}>
-                  <Text style={[studentStyles.popupTitle, { color: palette.text }]}>Filter by Target Sound</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => setMenuOpen(false)}
-                    style={studentStyles.popupCloseBtn}
-                    hitSlop={8}
-                  >
-                    <Text style={[studentStyles.popupCloseText, { color: palette.faint }]}>✕</Text>
-                  </Pressable>
-                </View>
-
-                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-                  {['All Targets', ...targetSounds].map((option) => {
-                    const isSelected = option === target;
-                    return (
-                      <Pressable
-                        key={option}
-                        accessibilityRole="button"
-                        onPress={() => {
-                          setTarget(option);
-                          setMenuOpen(false);
-                        }}
-                        style={[
-                          studentStyles.popupOption,
-                          isSelected && { backgroundColor: '#E0F2FE' },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            studentStyles.popupOptionText,
-                            { color: palette.text },
-                            isSelected && { color: '#0284C7', fontWeight: '700' },
-                          ]}
-                        >
-                          {option}
-                        </Text>
-                        {isSelected && <Text style={{ color: '#0284C7', fontWeight: '700', fontSize: 16 }}>✓</Text>}
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </Pressable>
-            </Pressable>
-          </Modal>
-        </View>
+        <TherapistChecklistFilter
+          label="Target sound"
+          options={targetSounds}
+          selected={targets}
+          onChange={setTargets}
+          emptyLabel="All Targets"
+          allLabel="All Targets"
+          compact
+          resetOnAll
+        />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={studentStyles.list}>
         {visible.length === 0 ? (
           <Text style={[studentStyles.empty, { color: palette.muted }]}>No students match this search.</Text>
         ) : (
-          visible.map((patient) => (
+          visible.slice(pagination.start, pagination.end).map((patient) => (
             <PatientCard
               key={patient.id}
               patient={patient}
             />
           ))
         )}
+      <ListPagination {...pagination} total={visible.length} noun="students" accent={palette.primary} muted={palette.muted} border={palette.line} surface={palette.card} />
       </ScrollView>
     </View>
   );
@@ -330,7 +259,7 @@ export function PatientRecordScreen({ patientId }: { patientId: string }) {
           />
           <StatCard
             label="Current Stage"
-            value={patient.hierarchyLevel === 'Isolation' ? 'Isolated Sounds' : patient.hierarchyLevel}
+            value={patient.hierarchyLevel === 'Sound' ? 'Sound' : patient.hierarchyLevel}
             caption="Target Mode"
             background="#E7F6FD"
             color="#0EA5E9"
@@ -540,9 +469,7 @@ export function TherapistStudentDetail() {
 
 const studentStyles = StyleSheet.create({
   fill: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 12 },
-  back: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  titleBlock: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingBottom: 12 },
   title: { fontFamily: 'SourGummy-Bold', fontSize: 24, lineHeight: 30 },
   subtitle: { fontSize: 12, marginTop: 2 },
   plus: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -551,8 +478,6 @@ const studentStyles = StyleSheet.create({
   search: { flex: 1, height: 42, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, gap: 6 },
   searchIcon: { fontSize: 16 },
   searchInput: { flex: 1, fontSize: 13, paddingVertical: 0 },
-  filter: { height: 42, minWidth: 118, maxWidth: 150, borderRadius: 12, borderWidth: 1, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  filterText: { flex: 1, fontSize: 12, fontWeight: '600' },
   menu: { position: 'absolute', top: 46, right: 0, width: 160, borderWidth: 1, borderRadius: 12, overflow: 'hidden', zIndex: 5 },
   menuItem: { paddingHorizontal: 12, paddingVertical: 10 },
   menuText: { fontSize: 13 },
@@ -632,58 +557,4 @@ const studentStyles = StyleSheet.create({
   audioMeta: { fontSize: 11, marginTop: 2 },
 
   // Popup Dropdown Styles
-  popupOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 18,
-  },
-  popupCard: {
-    width: '100%',
-    maxWidth: 380,
-    maxHeight: '80%',
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  popupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 12,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-  },
-  popupTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  popupCloseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  popupCloseText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  popupOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginVertical: 2,
-  },
-  popupOptionText: {
-    fontSize: 15,
-  },
 });

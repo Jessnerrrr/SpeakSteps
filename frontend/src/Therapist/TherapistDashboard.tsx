@@ -44,7 +44,7 @@ const sampleStats: HomeStat[] = [
 ];
 
 const sampleSubmissions: Submission[] = [
-  { id: 'khyl', initials: 'KS', name: 'Khyl Shervin Sude', detail: '8 yrs old · Tagalog · /r/ Target', stage: 'Stage: Isolated Sounds', progress: 0.35, timestamp: 'Today at 11:12 AM' },
+  { id: 'khyl', initials: 'KS', name: 'Khyl Shervin Sude', detail: '8 yrs old · Tagalog · /r/ Target', stage: 'Stage: Sound', progress: 0.35, timestamp: 'Today at 11:12 AM' },
   { id: 'angelica', initials: 'A', name: 'Angelica Vega', detail: '7 yrs old · Tagalog & English · All Target · Sentences', stage: 'Stage: Sentences', progress: 0.8, timestamp: 'Today at 08:09 AM' },
   { id: 'jhonas', initials: 'J', name: 'Jhonas Elsisura', detail: '6 yrs old · English · /l/ Target · Syllables', stage: 'Stage: Syllables', progress: 0.45, timestamp: 'Yesterday at 09:09 AM' },
   { id: 'mcgravy', initials: 'M', name: 'Mcgravy Ameer Jr.', detail: '9 yrs old · Tagalog · /r/ Target · Phrases', stage: 'Stage: Phrases', progress: 0.75, timestamp: 'October 25, 2026 at 09:09 AM' },

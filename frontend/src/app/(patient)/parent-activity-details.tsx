@@ -1,3 +1,4 @@
+import { useAssignedActivities } from '@/data/assigned-activities';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
@@ -20,7 +21,7 @@ import { ParentBottomNav } from '../../components/parent-bottom-nav';
 import { ParentHeader } from '../../components/parent-header';
 import { ChildModeConfirmModal } from '../../components/child-mode-confirm-modal';
 import { ChildProfile, ChildProfileStore } from '../../data/child-profile-store';
-import { AssignedActivity, getActivityById, TaskStore } from '../../data/parent-tasks-mock';
+import { PARTICIPATION_STARS, usePracticeSubmissions } from '../../data/practice-submissions';
 
 export default function ParentActivityDetailsScreen() {
   // Responsive Hooks
@@ -38,7 +39,9 @@ export default function ParentActivityDetailsScreen() {
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
   const [isChildModeModalVisible, setIsChildModeModalVisible] = useState(false);
 
-  const activity: AssignedActivity = getActivityById(params.id || TaskStore.getActiveTaskId());
+  const activity = useAssignedActivities().find(({ id }) => id === params.id);
+  const submissions = usePracticeSubmissions();
+  const practice = submissions.find(({ id }) => id === 'assigned:' + activity?.id);
 
   useEffect(() => {
     const unsubscribe = ChildProfileStore.subscribe((updated: ChildProfile) => {
@@ -57,7 +60,15 @@ export default function ParentActivityDetailsScreen() {
     }
   };
 
-  const handleListenOrWatch = () => {};
+  if (!activity) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ParentHeader title="Assigned Activity" showBack onBack={handleBack} />
+        <Text style={styles.assigneeText}>This activity is no longer available.</Text>
+      </SafeAreaView>
+    );
+  }
 
   const handleHelpChildToPractice = () => {
     setIsChildModeModalVisible(true);
@@ -66,11 +77,13 @@ export default function ParentActivityDetailsScreen() {
   const handleConfirmChildPractice = () => {
     setIsChildModeModalVisible(false);
     router.push({
-      pathname: '/sentences',
+      pathname: '/practice',
       params: {
-        activityId: activity?.id,
-        sound: activity?.title,
-        level: activity?.level,
+        activityId: activity.id,
+        linkedAssignment: activity.linked ? 'true' : 'false',
+        sound: activity.title,
+        syllable: '',
+        category: activity.category.toLowerCase(),
       },
     } as any);
   };
@@ -123,7 +136,7 @@ export default function ParentActivityDetailsScreen() {
                           : styles.statusTextPending,
                       ]}
                     >
-                      {activity.status === 'completed' ? 'Completed' : 'Pending'}
+                      {activity.status === 'completed' ? 'Reviewed' : activity.submitted ? 'Awaiting review' : 'Pending'}
                     </Text>
                   </View>
                 </View>
@@ -137,25 +150,16 @@ export default function ParentActivityDetailsScreen() {
                 </View>
 
                 <Text style={styles.assigneeText}>
-                  Assigned: {activity.assignedBy}
+                  Assigned: {activity.assignedBy}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}
                 </Text>
 
-                <TouchableOpacity
-                  style={styles.listenWatchButton}
-                  activeOpacity={0.85}
-                  onPress={handleListenOrWatch}
-                >
-                  <View style={styles.playIconCircle}>
-                    <Ionicons name="play" size={13} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.listenWatchButtonText}>Listen or Watch</Text>
-                </TouchableOpacity>
+                <Text style={styles.assigneeText}>No media attached to this activity.</Text>
               </View>
 
               {/* 2. THREE METRIC / STAT CARDS ROW */}
               <View style={styles.metricsRow}>
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activity.attempts ?? 0}</Text>
+                  <Text style={styles.metricValue}>{activity.attempts + (practice?.attempts ?? 0)}</Text>
                   <Text style={styles.metricLabel}>Attempts</Text>
                 </View>
 
@@ -165,7 +169,7 @@ export default function ParentActivityDetailsScreen() {
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activity.stars ?? '—'}</Text>
+                  <Text style={styles.metricValue}>{practice ? PARTICIPATION_STARS : 0}</Text>
                   <Text style={styles.metricLabel}>Stars</Text>
                 </View>
               </View>
@@ -173,6 +177,13 @@ export default function ParentActivityDetailsScreen() {
               {/* 3. "HOW TO PRACTICE" SECTION */}
               <View style={styles.practiceSection}>
                 <Text style={styles.practiceSectionTitle}>How to Practice</Text>
+                {activity.description ? <Text style={styles.assigneeText}>{activity.description}</Text> : null}
+                {activity.guidance?.trim() ? (
+                  <>
+                    <Text style={styles.practiceSectionTitle}>{activity.source === 'Therapist' ? 'Therapist guidance' : 'Practice guidance'}</Text>
+                    <Text style={styles.assigneeText}>{activity.guidance}</Text>
+                  </>
+                ) : null}
 
                 <View style={styles.practiceStepsRow}>
                   {/* Step 1: Listen */}
@@ -231,6 +242,7 @@ export default function ParentActivityDetailsScreen() {
               <TouchableOpacity
                 style={styles.helpButton}
                 activeOpacity={0.85}
+                accessibilityRole="button"
                 onPress={handleHelpChildToPractice}
               >
                 <View style={styles.parentAvatarBadge}>
@@ -455,9 +467,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   statusBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 5,
-    borderRadius: 12,
+    width: 96,
+    minWidth: 96,
+    maxWidth: 96,
+    height: 32,
+    minHeight: 32,
+    maxHeight: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   statusBadgePending: {
     backgroundColor: '#FFD9D9',
@@ -466,8 +485,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#D7F5E8',
   },
   statusBadgeText: {
+    width: '100%',
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 16,
   },
   statusTextPending: {
     color: '#FF4D4D',
@@ -495,34 +519,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 12,
-  },
-  listenWatchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5A623',
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 22,
-    gap: 8,
-    shadowColor: '#C47700',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  playIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#0D68AC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingLeft: 2,
-  },
-  listenWatchButtonText: {
-    fontFamily: 'SourGummy-Bold',
-    fontSize: 15,
-    color: '#FFFFFF',
   },
 
   /* 2. Metrics Row */

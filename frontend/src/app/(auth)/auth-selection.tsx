@@ -105,7 +105,7 @@ export default function AuthSelectionScreen() {
       } else if (currentRole === 'teacher') {
         router.replace('/teacher/teacher-dashboard' as any);
       } else if (currentRole === 'patient') {
-        router.replace('/patient-dashboard' as any);
+        router.replace('/user-mode-select' as any);
       } else {
         router.replace('/' as any);
       }
@@ -200,7 +200,7 @@ export default function AuthSelectionScreen() {
         </KeyboardAvoidingView>
 
         {/* REDESIGNED MODAL */}
-        <Modal visible={showPinModal} transparent={true} animationType="fade">
+        <Modal visible={showPinModal} transparent={true} animationType="fade" onRequestClose={handleCloseModal}>
           <View style={styles.modalOverlay}>
             <View style={styles.newModalBox}>
               
