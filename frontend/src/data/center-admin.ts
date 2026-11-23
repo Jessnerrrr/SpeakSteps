@@ -30,6 +30,8 @@ export type RequestStatus = 'Pending' | 'More information requested' | 'Approved
 
 export type Professional = {
   id: string;
+  userId?: string;
+  backendStatus?: 'pending' | 'verified' | 'rejected';
   name: string;
   firstName?: string;
   middleName?: string;
@@ -86,6 +88,7 @@ export type TeacherSchoolRecord = {
 
 export type Patient = {
   id: string;
+  backendStatus?: 'pending' | 'verified' | 'rejected';
   name: string;
   studentNumber: string;
   therapistId: string | null;
@@ -173,7 +176,7 @@ export type ActivityEntry = {
   detail: string;
   actor: string;
   date: string;
-  category: 'Account' | 'Student' | 'Request' | 'Settings';
+  category: 'Account' | 'Student' | 'Request' | 'Settings' | 'Activity' | 'Practice' | 'Clinical' | 'Media';
   subject?: { name: string; identifier: string; type: ProfessionalRole | 'Student' };
   result?: string;
   read: boolean;

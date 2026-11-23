@@ -2,6 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
+import { AccountSetupRequiredError, loginAccount, TotpRequiredError } from '@/services/user-api';
 import {
   ImageBackground,
   StyleSheet,
@@ -28,6 +29,7 @@ export default function TherapistLoginScreen() {
   // Form States
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // TOTP Setup Alert Modal State
   const [showSetupModal, setShowSetupModal] = useState(false);
@@ -40,7 +42,7 @@ export default function TherapistLoginScreen() {
 
   if (!fontsLoaded) return null;
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setHasSubmitted(true);
     setLoginError(''); // Reset error on new attempt
 
@@ -61,20 +63,20 @@ export default function TherapistLoginScreen() {
       return;
     }
 
-    const emailLower = email.trim().toLowerCase();
-
-    // Account 1: NEW Therapist (Temp Pass) -> Show TOTP Setup Alert first
-    if (emailLower === 'new.therapist@speaksteps.com' && password === 'Therapist@123') {
-      setShowSetupModal(true);
-    }
-    // Account 2: RETURNING Therapist -> Auth Selection -> Therapist Dashboard
-    else if (emailLower === 'therapist@speaksteps.com' && password === 'Therapist@123') {
-      router.push({
-        pathname: '/auth-selection',
-        params: { role: 'therapist', status: 'old', email: emailLower },
-      } as any);
-    } else {
-      setLoginError('Invalid email or password');
+    setIsLoggingIn(true);
+    try {
+      await loginAccount(email.trim(), password, 'therapist');
+      router.replace('/therapist' as any);
+    } catch (error) {
+      if (error instanceof TotpRequiredError) {
+        router.replace({ pathname: '/otp-verification', params: { role: 'therapist' } } as any);
+      } else if (error instanceof AccountSetupRequiredError) {
+        router.replace({ pathname: '/totp-setup', params: { role: 'therapist' } } as any);
+      } else {
+        setLoginError(error instanceof Error ? error.message : 'Could not sign in.');
+      }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -213,8 +215,8 @@ export default function TherapistLoginScreen() {
                   </View>
                 )}
 
-                <TouchableOpacity style={styles.signInBtn} onPress={handleLogin}>
-                  <Text style={styles.signInText}>Sign in</Text>
+                <TouchableOpacity style={styles.signInBtn} onPress={() => void handleLogin()} disabled={isLoggingIn}>
+                  <Text style={styles.signInText}>{isLoggingIn ? 'Signing in…' : 'Sign in'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => router.push('/forgot-password' as any)}>

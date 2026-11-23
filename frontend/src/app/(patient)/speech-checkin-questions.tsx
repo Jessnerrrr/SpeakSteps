@@ -66,8 +66,8 @@ export default function SpeechCheckInQuestionsScreen() {
   const isTablet = width > 600;
 
   const [currentStep, setCurrentStep] = useState(1);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [answers, setAnswers] = useState<Record<string, { question: string; answer: string }>>({});
   const [isNavigating, setIsNavigating] = useState(false);
 
   const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,13 +94,16 @@ export default function SpeechCheckInQuestionsScreen() {
   // Larger responsive card
   const cardHeight = Math.min(580, height * 0.75);
 
-  const goToSoundCheck = () => {
+  const goToSoundCheck = (responses: Record<string, { question: string; answer: string }>) => {
     if (stepTimerRef.current) {
       clearTimeout(stepTimerRef.current);
       stepTimerRef.current = null;
     }
     setIsNavigating(true);
-    router.push('/sound-check' as any);
+    router.push({
+      pathname: '/sound-check',
+      params: { responses: JSON.stringify(responses) },
+    } as any);
   };
 
   const handleBack = () => {
@@ -113,7 +116,9 @@ export default function SpeechCheckInQuestionsScreen() {
     if (currentStep > 1) {
       const prevStep = currentStep - 1;
       setCurrentStep(prevStep);
-      setSelectedOption(answers[prevStep] ?? null);
+      setSelectedOption(
+        questionsData[prevStep - 1].options.indexOf(answers[String(prevStep)]?.answer ?? ''),
+      );
     } else if (router.canGoBack()) {
       router.back();
     } else {
@@ -125,7 +130,14 @@ export default function SpeechCheckInQuestionsScreen() {
     if (isNavigating) return;
 
     setSelectedOption(index);
-    setAnswers((prev) => ({ ...prev, [currentStep]: index }));
+    const nextAnswers = {
+      ...answers,
+      [String(currentStep)]: {
+        question: activeData.question,
+        answer: activeData.options[index],
+      },
+    };
+    setAnswers(nextAnswers);
 
     if (stepTimerRef.current) {
       clearTimeout(stepTimerRef.current);
@@ -135,12 +147,13 @@ export default function SpeechCheckInQuestionsScreen() {
       stepTimerRef.current = setTimeout(() => {
         const nextStep = currentStep + 1;
         setCurrentStep(nextStep);
-        setSelectedOption(answers[nextStep] ?? null);
-      }, 220);
+        setSelectedOption(null);
+        stepTimerRef.current = null;
+      }, 250);
     } else {
       stepTimerRef.current = setTimeout(() => {
-        goToSoundCheck();
-      }, 150);
+        goToSoundCheck(nextAnswers);
+      }, 250);
     }
   };
 

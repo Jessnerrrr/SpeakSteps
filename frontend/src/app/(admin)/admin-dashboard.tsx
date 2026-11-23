@@ -3,7 +3,6 @@ import { ProfileEditWarning } from '@/components/profile-edit-warning';
 import { reviewStudentNameChange, useStudentNameRequests, type StudentNameRequest } from '@/data/student-name-requests';
 import { parseCalendarDate, todayCalendarDate } from '@/data/calendar-date';
 import { ListPagination, useListPagination } from '@/components/list-pagination';
-import { useLearningActivity } from '@/data/learning-workflow';
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFonts } from 'expo-font';
@@ -12,6 +11,7 @@ import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore }
 import {
   Animated,
   ActivityIndicator,
+  Alert,
   Easing,
   LayoutChangeEvent,
   Modal,
@@ -60,14 +60,25 @@ import AccountDetailsHeader from '../../components/admin/AccountDetailsHeader';
 import ProfessionalDetails from '../../components/admin/ProfessionalDetails';
 import SupportingAttachments from '../../components/admin/SupportingAttachments';
 import SupportingDocumentDropzone from '../../components/admin/SupportingDocumentDropzone';
+import {
+  fetchAuditLogs,
+  archiveAdminUser,
+  createAdminUser,
+  getAdminUsers,
+  getPatients,
+  resendAdminInvitation,
+  updateAdminUserStatus,
+  type AdminUser,
+  type AuditLogEntry,
+} from '@/services/user-api';
 
 type Page = 'Dashboard' | 'Accounts' | 'Activity Logs' | 'Settings';
 type AccountView = 'Directory' | 'Student Requests' | 'Archive Center';
 type AccountRow = { kind: 'professional'; person: Professional } | { kind: 'student'; patient: Patient } | { kind: 'archiveEpisode'; episode: Extract<CareEpisode, { status: 'Closed' }>; patient: Patient };
 type AccountSort = { key: 'Account' | 'ID' | 'Access' | 'Setup' | 'Assignments' | 'Date'; direction: 'ascending' | 'descending' };
 const ACCOUNT_SORT_OPTIONS: { label: string; key: AccountSort['key']; direction: AccountSort['direction'] }[] = [
-  { label: 'Alphabetical (A–Z)', key: 'Account', direction: 'ascending' },
-  { label: 'Alphabetical (Z–A)', key: 'Account', direction: 'descending' },
+  { label: 'Alphabetical (Aâ€“Z)', key: 'Account', direction: 'ascending' },
+  { label: 'Alphabetical (Zâ€“A)', key: 'Account', direction: 'descending' },
   { label: 'Latest added', key: 'Date', direction: 'descending' },
   { label: 'Oldest added', key: 'Date', direction: 'ascending' },
 ];
@@ -109,9 +120,9 @@ const updateAdminRecords = <K extends keyof AdminSharedRecords>(key: K, update: 
   const current = sharedAdminRecords[key];
   const next = typeof update === 'function' ? (update as (value: AdminSharedRecords[K]) => AdminSharedRecords[K])(current) : update;
   const records = { ...sharedAdminRecords, [key]: next };
-  if (key === 'professionals') records.professionals.filter((person) => professionalAccess(person) === 'Suspended' || professionalMembership(person) === 'Deactivated').forEach((person) => requireArchive(person.archive));
+  if (key === 'professionals') records.professionals.filter((person) => (professionalAccess(person) === 'Suspended' || professionalMembership(person) === 'Deactivated') && person.backendStatus !== 'rejected').forEach((person) => requireArchive(person.archive));
   if (key === 'patients') {
-    records.patients.filter((patient) => studentAccess(patient) === 'Suspended' || studentMembership(patient) === 'Deactivated').forEach((patient) => requireArchive(patient.archive));
+    records.patients.filter((patient) => (studentAccess(patient) === 'Suspended' || studentMembership(patient) === 'Deactivated') && patient.backendStatus !== 'rejected').forEach((patient) => requireArchive(patient.archive));
     if (records.patients.some((patient) => patient.enrollment === 'Archived' && !records.careEpisodes.some((episode) => episode.patientId === patient.id && episode.status === 'Closed' && !episode.restoredAt))) {
       throw new Error('Archived enrollments require a dated closure record.');
     }
@@ -172,6 +183,19 @@ const studentAssignmentStatus = (student: Patient) => student.teacherId || stude
 const isFinalRequestStatus = (status: string) => status === 'Declined' || status === 'Approved' || status.startsWith('Approved &');
 const primaryRequestStatus = (status: string): 'Pending' | 'Approved' | 'Declined' => status === 'Declined' ? 'Declined' : status === 'Approved' || status.startsWith('Approved &') ? 'Approved' : 'Pending';
 const releaseRequestTypeLabel = (request: ReleaseRequest) => request.requestType === 'Transfer' ? 'School transfer' : request.requestType === 'Withdrawal' ? 'Withdrawal' : request.requestType === 'Therapist assignment release' ? 'Therapist assignment release' : 'Enrollment release';
+const auditActivityFromApi = (entry: AuditLogEntry): ActivityEntry => ({
+  id: entry.id,
+  title: entry.action,
+  detail: entry.details,
+  actor: entry.actorName || entry.actorRole,
+  date: entry.createdAt,
+  category: entry.category === 'Account' || entry.category === 'Student' || entry.category === 'Settings'
+    || entry.category === 'Activity' || entry.category === 'Practice' || entry.category === 'Clinical' || entry.category === 'Media'
+    ? entry.category
+    : 'Request',
+  result: entry.action,
+  read: false,
+});
 const requestResolutionTime = (request: SuspensionRequest | ReleaseRequest) => {
   if (request.resolvedAt) return new Date(request.resolvedAt).getTime();
   const event = [...(request.events ?? [])].reverse().find((item) => /suspension approved|request declined|enrollment closed|therapist assignment updated/i.test(item.title));
@@ -351,8 +375,10 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const [menuOpen, setMenuOpen] = useState(false);
   const setSidebarExpanded = (next: boolean) => updateAdminNavigation({ sidebarExpanded: next });
   const { professionals, patients, requests, releaseRequests, careEpisodes, assignmentHistory, activity: adminActivity, notifications, profile } = useSyncExternalStore(subscribeAdminRecords, getAdminRecords, getAdminRecords);
-  const learningActivity = useLearningActivity();
-  const activity = [...learningActivity, ...adminActivity];
+  const activity = adminActivity;
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [accountsError, setAccountsError] = useState('');
+  const [auditLogsError, setAuditLogsError] = useState('');
   const setProfessionals: React.Dispatch<React.SetStateAction<Professional[]>> = (update) => updateAdminRecords('professionals', update);
   const setPatients: React.Dispatch<React.SetStateAction<Patient[]>> = (update) => updateAdminRecords('patients', update);
   const setRequests: React.Dispatch<React.SetStateAction<SuspensionRequest[]>> = (update) => updateAdminRecords('requests', update);
@@ -445,6 +471,93 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [centerSettings, setCenterSettings] = useState(centerProfile);
 
+  useEffect(() => {
+    let active = true;
+    updateAdminRecords('professionals', []);
+    updateAdminRecords('patients', []);
+    updateAdminRecords('activity', []);
+    const loadAccounts = async () => {
+      try {
+        const [users, apiPatients] = await Promise.all([getAdminUsers(), getPatients()]);
+        if (!active) return;
+        setAdminUsers(users);
+        const professionals: Professional[] = users
+          .filter((user) => user.role === 'therapist' || user.role === 'teacher')
+          .map((user) => {
+            const nameParts = user.name.split(/\s+/);
+            return {
+              id: user.profileId || user.id,
+              userId: user.id,
+              backendStatus: user.status,
+              name: user.name,
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' '),
+              email: user.email,
+              role: user.role === 'therapist' ? 'Therapist' : 'Teacher',
+              professionalTitle: user.role === 'therapist' ? 'Speech-Language Pathologist' : undefined,
+              contactNumber: user.contact,
+              status: user.archivedAt ? 'Deactivated' : user.status === 'rejected' ? 'Suspended' : 'Active',
+              access: user.status === 'rejected' ? 'Suspended' : 'Active',
+              invitation: user.status === 'verified' ? 'Completed' : user.status === 'rejected' ? 'Expired' : 'Pending',
+              joined: user.createdAt.slice(0, 10),
+              invitationUpdated: user.createdAt.slice(0, 10),
+              membership: user.archivedAt ? 'Deactivated' : 'Active',
+              archive: user.archivedAt ? {
+                archivedAt: user.archivedAt,
+                reason: user.archiveReason || 'No archive reason was recorded.',
+              } : undefined,
+            };
+          });
+        const parentUsers = users.filter((user) => user.role === 'parent');
+        const apiStudentRecords: Patient[] = apiPatients.map((patient) => {
+          const parent = parentUsers.find((user) => user.email === patient.guardianEmail);
+          const setupStatus = parent?.status ?? 'pending';
+          return {
+            id: patient.id,
+            backendStatus: setupStatus,
+            name: [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' '),
+            studentNumber: patient.patientCode,
+            therapistId: patient.primaryTherapistId || null,
+            teacherId: patient.assignedTeacherId || undefined,
+            access: setupStatus === 'verified' ? 'Active' : setupStatus === 'rejected' ? 'Suspended' : 'Setup pending',
+            membership: parent?.archivedAt ? 'Deactivated' : 'Active',
+            setup: setupStatus === 'verified' ? 'Completed' : 'Pending',
+            enrollment: 'Enrolled',
+            therapyStatus: patient.primaryTherapistId ? 'In progress' : 'On hold',
+            registered: patient.createdAt.slice(0, 10),
+            guardian: patient.guardianName || parent?.name || 'Not recorded',
+            guardianContact: patient.guardianEmail || parent?.email || '',
+            school: 'Not recorded',
+            archive: parent?.archivedAt ? {
+              archivedAt: parent.archivedAt,
+              reason: parent.archiveReason || 'No archive reason was recorded.',
+            } : undefined,
+          };
+        });
+        setProfessionals(professionals);
+        setPatients(apiStudentRecords);
+        setAccountsError('');
+      } catch (error) {
+        if (active) setAccountsError(error instanceof Error ? error.message : 'Could not load admin accounts.');
+      }
+    };
+    void loadAccounts();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchAuditLogs(logSearch, logCategoriesSelected.length === 1 ? logCategoriesSelected[0] : '').then((entries) => {
+      if (active) {
+        setActivity(entries.map(auditActivityFromApi));
+        setAuditLogsError('');
+      }
+    }).catch((error) => {
+      if (active) setAuditLogsError(error instanceof Error ? error.message : 'Could not load audit logs.');
+    });
+    return () => { active = false; };
+  }, [logCategoriesSelected, logSearch]);
+
   const profileName = `${profile.firstName} ${profile.lastName}`.trim();
   const profileHasChanges = adminProfileDraft.firstName !== profile.firstName || adminProfileDraft.lastName !== profile.lastName || adminProfileDraft.contactNumber !== profile.contactNumber;
   const requestProfileClose = useCallback(() => {
@@ -487,7 +600,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 
     profileSaveInProgress.current = true;
     setAdminProfile(next);
-    addLog('Administrator profile updated', 'Name and contact number · local demo session', 'Settings');
+    addLog('Administrator profile updated', 'Name and contact number Â· local demo session', 'Settings');
     setAdminProfileDraft(next);
     setEditingAdminProfile(false);
     setProfileClosePrompt(false);
@@ -525,6 +638,33 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const flash = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(''), 3200);
+  };
+
+  const showInvitationCredentials = (name: string, email: string, temporaryPassword: string, invitationToken: string) => {
+    const message = `Email: ${email}\nTemporary password: ${temporaryPassword}\nInvitation token: ${invitationToken}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(`${name} account invitation\n\n${message}`);
+    else Alert.alert(`${name} account invitation`, message);
+  };
+
+  const refreshAuditLogs = async () => {
+    try {
+      const entries = await fetchAuditLogs(logSearch, logCategoriesSelected.length === 1 ? logCategoriesSelected[0] : '');
+      setActivity(entries.map(auditActivityFromApi));
+      setAuditLogsError('');
+    } catch (error) {
+      setAuditLogsError(error instanceof Error ? error.message : 'Could not refresh audit logs.');
+    }
+  };
+
+  const persistAccountStatus = async (userId: string, status: 'verified' | 'rejected') => {
+    await updateAdminUserStatus(userId, status);
+    setAdminUsers((current) => current.map((user) => user.id === userId ? {
+      ...user,
+      status,
+      ...(status === 'verified' ? { archivedAt: null, archiveReason: '' } : {}),
+    } : user));
+    setAccountsError('');
+    void refreshAuditLogs();
   };
 
   const closeConfirmation = () => {
@@ -625,7 +765,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       const patient = patients.find((item) => item.id === request.patientId);
       const therapist = professionals.find((item) => item.id === request.therapistId);
       const followup = releaseFollowup(request, prototypeNow);
-      return { key: request.id, title: followup.overdue ? 'Student request overdue' : 'Student request', detail: followup.overdue ? `Awaiting ${request.followupRecipient ?? request.origin ?? 'authorized user'} · ${request.reminderCount ?? 0} reminders recorded · last reminder ${request.lastReminderAt ? formatDate(request.lastReminderAt) : 'none'}.` : `${therapist?.name ?? request.origin ?? 'An authorized user'} submitted a request for ${patient?.name ?? 'a Student'}.`, date: `Submitted ${formatDate(request.submitted)}`, icon: 'document-text-outline' as const, tone: 'yellow' as const, action: 'Review', run: () => { setRequestView('Pending'); setRequestSearch(''); setRequestTypeFilters([]); setRequestStatusFilters([]); setRequestStageFilters([]); setRequestFollowupFilters([]); setReleaseReplacement(''); setReleaseNote(''); goToAccountsView('Student Requests', { kind: 'release', id: request.id }); } };
+      return { key: request.id, title: followup.overdue ? 'Student request overdue' : 'Student request', detail: followup.overdue ? `Awaiting ${request.followupRecipient ?? request.origin ?? 'authorized user'} Â· ${request.reminderCount ?? 0} reminders recorded Â· last reminder ${request.lastReminderAt ? formatDate(request.lastReminderAt) : 'none'}.` : `${therapist?.name ?? request.origin ?? 'An authorized user'} submitted a request for ${patient?.name ?? 'a Student'}.`, date: `Submitted ${formatDate(request.submitted)}`, icon: 'document-text-outline' as const, tone: 'yellow' as const, action: 'Review', run: () => { setRequestView('Pending'); setRequestSearch(''); setRequestTypeFilters([]); setRequestStatusFilters([]); setRequestStageFilters([]); setRequestFollowupFilters([]); setReleaseReplacement(''); setReleaseNote(''); goToAccountsView('Student Requests', { kind: 'release', id: request.id }); } };
     }),
     ...pendingRequests.map((request) => {
       const patient = patients.find((item) => item.id === request.patientId);
@@ -633,8 +773,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       return { key: request.id, title: 'Student access request', detail: `${therapist?.name ?? 'A Therapist'} submitted an access suspension request for ${patient?.name ?? 'a Student'}.`, date: `Submitted ${formatDate(request.submitted)}`, icon: 'chatbubble-ellipses-outline' as const, tone: 'yellow' as const, action: 'Review', run: () => { setRequestView('Pending'); setRequestSearch(''); setRequestTypeFilters([]); setRequestStatusFilters([]); setRequestStageFilters([]); setRequestFollowupFilters([]); goToAccountsView('Student Requests', { kind: 'request', id: request.id }); } };
     }),
     ...reassignmentPatients.map((patient) => ({ key: patient.id, title: 'Reassignment needed', detail: `${patient.name} is assigned to suspended Therapist ${activeTherapistFor(patient.therapistId)}.`, date: '', icon: 'git-branch-outline' as const, tone: 'orange' as const, action: 'Review', run: () => { setAccountRoles(['Student']); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setPatientTeacher('All teachers'); setPatientTherapist('All therapists'); setAccountSearch(patient.name); goToAccountsView('Directory', { kind: 'patient', id: patient.id }, { role: 'Student', search: patient.name, enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships', teacher: 'All teachers', therapist: 'All therapists' }); } })),
-    ...pendingPatientSetups.map((patient) => ({ key: patient.id, title: 'Student account setup pending', detail: `${patient.name} · Guardian invitation setup is pending.`, date: '', icon: 'mail-unread-outline' as const, tone: 'blue' as const, action: 'Review', run: () => { setAccountRoles(['Student']); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setAccountSearch(patient.name); goToAccountsView('Directory', { kind: 'patient', id: patient.id }, { role: 'Student', search: patient.name, enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships' }); } })),
-    ...pendingInvitations.map((person) => ({ key: person.id, title: person.invitation === 'Expired' ? 'Invitation expired' : 'Account setup pending', detail: `${person.name} · ${person.role} · ${person.email}`, date: '', icon: 'mail-unread-outline' as const, tone: person.invitation === 'Expired' ? 'yellow' as const : 'blue' as const, action: 'Review', run: () => goToAccountsView('Directory', { kind: 'professional', id: person.id }, { role: person.role, setup: person.invitation === 'Expired' ? 'Expired' : 'Pending', search: person.name, access: 'All access', membership: 'All memberships', enrollment: 'All enrollment' }) })),
+    ...pendingPatientSetups.map((patient) => ({ key: patient.id, title: 'Student account setup pending', detail: `${patient.name} Â· Guardian invitation setup is pending.`, date: '', icon: 'mail-unread-outline' as const, tone: 'blue' as const, action: 'Review', run: () => { setAccountRoles(['Student']); setAccountEnrollment('All enrollment'); setAccountAccess('All access'); setAccountSearch(patient.name); goToAccountsView('Directory', { kind: 'patient', id: patient.id }, { role: 'Student', search: patient.name, enrollment: 'All enrollment', access: 'All access', setup: 'All setup', membership: 'All memberships' }); } })),
+    ...pendingInvitations.map((person) => ({ key: person.id, title: person.invitation === 'Expired' ? 'Invitation expired' : 'Account setup pending', detail: `${person.name} Â· ${person.role} Â· ${person.email}`, date: '', icon: 'mail-unread-outline' as const, tone: person.invitation === 'Expired' ? 'yellow' as const : 'blue' as const, action: 'Review', run: () => goToAccountsView('Directory', { kind: 'professional', id: person.id }, { role: person.role, setup: person.invitation === 'Expired' ? 'Expired' : 'Pending', search: person.name, access: 'All access', membership: 'All memberships', enrollment: 'All enrollment' }) })),
   ];
 
   const visibleProfessionals = professionals.filter((person) => {
@@ -722,6 +862,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     if (entry.category === 'Account') return 'Accounts';
     if (entry.category === 'Request') return 'Requests';
     if (entry.category === 'Settings') return 'Settings';
+    if (entry.category === 'Activity') return 'Assignments';
+    if (entry.category === 'Practice' || entry.category === 'Clinical' || entry.category === 'Media') return 'Students';
     if (/assign/i.test(entry.title)) return 'Assignments';
     if (/enroll|withdraw|transfer/i.test(entry.title)) return 'Enrollment';
     return 'Students';
@@ -742,7 +884,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const professional = professionals.find((item) => item.name.toLocaleLowerCase() === actor.toLocaleLowerCase());
     if (professional) {
       const identifier = professional.role === 'Therapist' ? professional.staffId : professional.professionalIdentifier;
-      return [professional.role, identifier].filter(Boolean).join(' · ');
+      return [professional.role, identifier].filter(Boolean).join(' Â· ');
     }
     if (patients.some((item) => item.guardian?.toLocaleLowerCase() === actor.toLocaleLowerCase())) return 'Guardian';
     return '';
@@ -784,74 +926,178 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   const activityLogTimestamp = (entry: ActivityEntry) => new Intl.DateTimeFormat('en', {
     month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
   }).format(new Date(entry.date));
+  const activityResult = (entry: ActivityEntry) => entry.result ?? (entry.title.match(/declined|suspended|deactivated|approved|restored|reactivated|closed/i)?.[0].toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) ?? 'Recorded');
   const visibleLogs = orderedActivity.filter((entry) => (!logCategoriesSelected.length || logCategoriesSelected.includes(activityLogCategory(entry)))
-    && (!logSearch.trim() || [entry.title, entry.detail, entry.actor, entry.category, activityLogCategory(entry), activityStatus(entry), activityLogTimestamp(entry), activitySubject(entry)?.name ?? '', activitySubject(entry)?.identifier ?? '', activitySubject(entry)?.type ?? ''].some((value) => value.toLocaleLowerCase().includes(logSearch.trim().toLocaleLowerCase()))));
-  const makeProfessional = (draft: ProfessionalDraft) => {
-    const profile = draft.role === 'Teacher' ? (({ lookupStaffId: _lookupStaffId, ...teacherRecord }) => teacherRecord)(draft) : draft;
-    const recordIdentifier = draft.role === 'Therapist' ? draft.staffId : draft.professionalIdentifier;
-    const person: Professional = { id: `pro-${draft.role.toLowerCase()}-${recordIdentifier}`, ...profile, access: 'Active', membership: 'Active', status: 'Active', invitation: 'Pending', joined: new Date().toISOString().slice(0, 10), invitationUpdated: new Date().toISOString().slice(0, 10) };
-    setProfessionals((current) => [person, ...current]);
-    addLog(`${draft.role} account created`, `${person.name} · ${draft.role === 'Therapist' ? `Staff ID ${person.staffId}` : `Professional ID ${person.professionalIdentifier}`} · setup pending`, 'Account');
-    addNotification('Invitation awaiting setup', `${person.name} can complete account setup after receiving an invitation.`);
-    setNewAccountOpen(false); setCreatePatientOpen(false); setAccountRoles([draft.role]); setAccountAccess('All access'); setAccountSetup([]); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment'); setAccountSearch('');
-    setAccountPage(0);
-    setSelection({ kind: 'professional', id: person.id });
-    flash(`${person.name} added. Account setup is pending.`);
+    && (!logSearch.trim() || [entry.title, entry.detail, entry.actor, entry.category, activityLogCategory(entry), activityStatus(entry), activityResult(entry), activityLogTimestamp(entry), activitySubject(entry)?.name ?? '', activitySubject(entry)?.identifier ?? '', activitySubject(entry)?.type ?? ''].some((value) => value.toLocaleLowerCase().includes(logSearch.trim().toLocaleLowerCase()))));
+  const makeProfessional = async (draft: ProfessionalDraft) => {
+    try {
+      const invitation = await createAdminUser({
+        role: draft.role.toLowerCase() as 'therapist' | 'teacher',
+        fullName: draft.name,
+        email: draft.email,
+        contact: 'contactNumber' in draft ? draft.contactNumber : undefined,
+        staffId: 'staffId' in draft ? draft.staffId : undefined,
+        professionalIdentifier: 'professionalIdentifier' in draft ? draft.professionalIdentifier : undefined,
+        professionalTitle: 'professionalTitle' in draft ? draft.professionalTitle : undefined,
+        specialization: 'specialization' in draft ? draft.specialization : undefined,
+        licenseNumber: 'licenseNumber' in draft ? draft.licenseNumber : undefined,
+        school: 'school' in draft ? draft.school : undefined,
+        gradeSections: 'gradeSections' in draft ? draft.gradeSections : undefined,
+      });
+      setAdminUsers((current) => [invitation.user, ...current]);
+      const now = new Date().toISOString();
+      const professional: Professional = {
+        id: invitation.user.profileId || invitation.user.id,
+        userId: invitation.user.id,
+        backendStatus: 'pending',
+        name: draft.name,
+        firstName: draft.firstName,
+        middleName: draft.middleName,
+        lastName: draft.lastName,
+        email: draft.email,
+        role: draft.role,
+        staffId: 'staffId' in draft ? draft.staffId : undefined,
+        professionalIdentifier: 'professionalIdentifier' in draft ? draft.professionalIdentifier : undefined,
+        school: 'school' in draft ? draft.school : undefined,
+        gradeSections: 'gradeSections' in draft ? draft.gradeSections : undefined,
+        professionalTitle: 'professionalTitle' in draft ? draft.professionalTitle : undefined,
+        specialization: 'specialization' in draft ? draft.specialization : undefined,
+        licenseNumber: 'licenseNumber' in draft ? draft.licenseNumber : undefined,
+        contactNumber: 'contactNumber' in draft ? draft.contactNumber : undefined,
+        status: 'Active',
+        access: 'Active',
+        membership: 'Active',
+        invitation: 'Pending',
+        joined: now.slice(0, 10),
+        invitationUpdated: now.slice(0, 10),
+      };
+      setProfessionals((current) => [professional, ...current]);
+      setNewAccountOpen(false);
+      setCreatePatientOpen(false);
+      setAccountRoles([draft.role]);
+      setAccountAccess('All access');
+      setAccountSetup([]);
+      setAccountMembership('All memberships');
+      setAccountEnrollment('All enrollment');
+      setAccountSearch('');
+      setAccountPage(0);
+      setSelection({ kind: 'professional', id: professional.id });
+      setAccountsError('');
+      void refreshAuditLogs();
+      showInvitationCredentials(draft.name, draft.email, invitation.temporaryPassword, invitation.invitationToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not create the professional account.';
+      setAccountsError(message);
+      flash(message);
+    }
   };
 
-  const makePatient = (record: { studentNumber: string; name: string; grade: string; section: string; guardian: string; guardianEmail: string; guardianPhone: string; school: string }, teacherId: string, therapistId: string) => {
-    const patient: Patient = {
-      id: `pt-${record.studentNumber}`, name: record.name, studentNumber: record.studentNumber, therapistId,
-      access: 'Active', setup: 'Pending', enrollment: 'Enrolled', therapyStatus: 'In progress', registered: new Date().toISOString().slice(0, 10),
-      guardian: record.guardian, guardianContact: record.guardianEmail, school: record.school, grade: record.grade, section: record.section, teacherId,
-    };
-    setPatients((current) => [patient, ...current]);
-    addLog('Student account created', `${patient.name} · ${patient.studentNumber}; invitation pending`, 'Student');
-    addNotification('Student account created', `${patient.name} is assigned to ${activeTherapistFor(therapistId)}. Guardian setup invitation is pending.`);
-    addNotification('New student assignment', `${patient.name} · ${patient.studentNumber} was assigned to ${activeTherapistFor(therapistId)}.`);
-    setAccountSearch(''); setAccountRoles(['Student']); setAccountAccess('All access'); setAccountSetup([]); setAccountMembership('All memberships'); setAccountEnrollment('All enrollment');
-    setAccountPage(0);
-    flash(`${patient.name} added. The setup invitation is simulated.`);
+  const makePatient = async (record: { studentNumber: string; name: string; grade: string; section: string; guardian: string; guardianEmail: string; guardianPhone: string; school: string }, teacherId: string, therapistId: string) => {
+    try {
+      const invitation = await createAdminUser({
+        role: 'parent',
+        fullName: record.guardian,
+        email: record.guardianEmail,
+        contact: record.guardianPhone,
+        childName: record.name,
+        studentId: record.studentNumber,
+        grade: record.grade,
+        section: record.section,
+        school: record.school,
+        assignedTeacherId: teacherId,
+        primaryTherapistId: therapistId,
+      });
+      setAdminUsers((current) => [invitation.user, ...current]);
+      if (invitation.patient) {
+        const patient: Patient = {
+          id: invitation.patient.id,
+          backendStatus: 'pending',
+          name: record.name,
+          studentNumber: invitation.patient.patientCode,
+          therapistId,
+          teacherId,
+          access: 'Setup pending',
+          membership: 'Active',
+          setup: 'Pending',
+          enrollment: 'Enrolled',
+          therapyStatus: 'In progress',
+          registered: new Date().toISOString().slice(0, 10),
+          guardian: record.guardian,
+          guardianContact: record.guardianEmail,
+          school: record.school,
+          grade: record.grade,
+          section: record.section,
+        };
+        setPatients((current) => [patient, ...current]);
+      }
+      setNewAccountOpen(false);
+      setCreatePatientOpen(false);
+      setAccountsError('');
+      void refreshAuditLogs();
+      showInvitationCredentials(record.guardian, record.guardianEmail, invitation.temporaryPassword, invitation.invitationToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not create the student and guardian account.';
+      setAccountsError(message);
+      flash(message);
+    }
   };
 
-  const resendInvitation = (person: Professional) => {
+  const resendInvitation = async (person: Professional) => {
     if (person.invitation === 'Completed') { flash(`${person.name} has already completed account setup.`); return false; }
-    setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, invitation: 'Pending', invitationUpdated: new Date().toISOString().slice(0, 10) } : item));
-    addLog('Invitation simulated', `${person.name} · ${person.email}`, 'Account');
-    flash(`Follow-up recorded for ${person.name}.`);
-    return true;
+    if (!person.userId) { flash('This account is not linked to a backend user.'); return false; }
+    try {
+      const invitation = await resendAdminInvitation(person.userId);
+      setProfessionals((current) => current.map((item) => item.id === person.id
+        ? { ...item, invitation: 'Pending', invitationUpdated: new Date().toISOString().slice(0, 10) }
+        : item));
+      void refreshAuditLogs();
+      showInvitationCredentials(person.name, person.email, invitation.temporaryPassword, invitation.invitationToken);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not resend this invitation.';
+      setAccountsError(message);
+      flash(message);
+      return false;
+    }
   };
 
   const confirmProfessionalFollowup = (person: Professional) => {
-    setConfirmation({
-      title: 'Follow up on setup?',
-      message: `Record a setup follow-up for ${person.name} by marking the invitation as pending. No email will be sent.`,
-      actionLabel: 'Send follow-up',
-      icon: 'mail-outline',
-      run: () => {
-        resendInvitation(person);
-        setConfirmation(null);
-      },
-    });
+    void resendInvitation(person);
   };
 
-  const recordStudentSetupFollowup = (patient: Patient) => {
+  const recordStudentSetupFollowup = async (patient: Patient) => {
     if (studentSetup(patient) === 'Completed') { flash(`${patient.name} has already completed account setup.`); return; }
-    addLog('Student setup follow-up recorded', `${patient.name} · ${patient.studentNumber}; no email was sent`, 'Account');
-    flash(`Setup follow-up recorded for ${patient.name}. No email was sent.`);
+    const guardian = adminUsers.find((user) => user.role === 'parent' && user.email.toLowerCase() === patient.guardianContact.toLowerCase());
+    if (!guardian) { flash('No backend Guardian account is linked to this Student.'); return; }
+    try {
+      const invitation = await resendAdminInvitation(guardian.id);
+      showInvitationCredentials(patient.guardian, guardian.email, invitation.temporaryPassword, invitation.invitationToken);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not resend this Guardian invitation.';
+      setAccountsError(message);
+      flash(message);
+    }
   };
 
-  const setProfessionalStatus = (person: Professional, next: ProfessionalStatus, suspensionReason = '') => {
+  const setProfessionalStatus = async (person: Professional, next: ProfessionalStatus, suspensionReason = '') => {
     const assignedStudents = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled');
     const hasPatients = assignedStudents.length > 0;
     if (next === 'Suspended') {
       if (!suspensionReason.trim()) { flash('Enter a reason to suspend access.'); return; }
+      if (!person.userId) { flash('This account is not linked to a backend user and cannot be updated.'); return; }
+      try {
+        await persistAccountStatus(person.userId, 'rejected');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not suspend this account.';
+        setAccountsError(message);
+        flash(message);
+        return;
+      }
       const changedAt = new Date().toISOString();
-      setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: 'Suspended', access: 'Suspended', membership: professionalMembership(item), archive: { archivedAt: changedAt, archivedBy: profileName, reason: suspensionReason.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-      addLog('Professional access suspended', `${person.name} · ${person.role} · ${suspensionReason}`, 'Account');
+      setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, backendStatus: 'rejected', status: 'Suspended', access: 'Suspended', membership: professionalMembership(item), lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
       if (person.role === 'Therapist' && hasPatients) addNotification('Students need reassignment', `${person.name} was suspended; assigned students remain linked until reassigned.`);
       setSelection(null);
-      flash(`${person.name}’s access is suspended.`);
+      flash(`${person.name}â€™s access is suspended.`);
       return;
     }
     if (person.role === 'Therapist' && next === 'Deactivated' && hasPatients) {
@@ -872,15 +1118,32 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       setConfirmation({
         title: `${restoringMembership ? 'Reinstate' : 'Reactivate access for'} ${person.name}?`,
         message: restoringMembership
-          ? `Restore ${person.name}’s center membership. ${accessStillSuspended ? 'Suspended sign-in access remains suspended and needs a separate review. ' : ''}Existing setup and Student relationships remain attached to this record.`
+          ? `Restore ${person.name}â€™s center membership. ${accessStillSuspended ? 'Suspended sign-in access remains suspended and needs a separate review. ' : ''}Existing setup and Student relationships remain attached to this record.`
           : `Restore sign-in access for ${person.name}. Existing Student relationships remain unchanged.`,
         actionLabel: restoringMembership ? 'Reinstate account' : 'Reactivate access',
-        run: () => {
+        run: async () => {
+          if (!person.userId) { flash('This account is not linked to a backend user and cannot be updated.'); return; }
+          try {
+            await persistAccountStatus(person.userId, 'verified');
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Could not reactivate this account.';
+            setAccountsError(message);
+            flash(message);
+            return;
+          }
           const changedAt = new Date().toISOString();
-          setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: restoringMembership && accessStillSuspended ? 'Suspended' : 'Active', access: restoringMembership ? professionalAccess(item) : 'Active', membership: restoringMembership ? 'Active' : professionalMembership(item), lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-          addLog(restoringMembership ? 'Professional account reinstated' : 'Professional access reactivated', `${person.name} · ${person.role}`, 'Account');
+          setProfessionals((current) => current.map((item) => item.id === person.id ? {
+            ...item,
+            backendStatus: 'verified',
+            status: 'Active',
+            access: 'Active',
+            membership: 'Active',
+            ...(restoringMembership ? { archive: undefined } : {}),
+            lifecycleUpdatedAt: changedAt,
+            lifecycleEffectiveDate: localIsoDate(new Date(changedAt)),
+          } : item));
           setConfirmation(null); setSelection(null);
-          flash(`${person.name}’s ${restoringMembership ? 'account is reinstated' : 'access is active again'}.`);
+          flash(`${person.name}â€™s ${restoringMembership ? 'account is reinstated' : 'access is active again'}.`);
         },
       });
       return;
@@ -889,17 +1152,40 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     setConfirmationReason(''); confirmationReasonRef.current = '';
     setConfirmation({
       title: `${verb}: ${person.name}?`,
-      message: `This deactivates ${person.name}’s center membership and moves the account to Archive Center while preserving account history.`,
+      message: `This deactivates ${person.name}â€™s center membership and moves the account to Archive Center while preserving account history.`,
       actionLabel: verb,
       danger: true,
       requiresReason: true,
-      run: () => {
+      run: async () => {
         if (!confirmationReasonRef.current.trim()) { flash('Enter a reason to deactivate this account.'); return; }
-        const changedAt = new Date().toISOString();
-        setProfessionals((current) => current.map((item) => item.id === person.id ? { ...item, status: next, access: professionalAccess(item), membership: 'Deactivated', archive: { archivedAt: changedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-        addLog('Professional account deactivated', `${person.name} · ${person.role} · ${confirmationReasonRef.current.trim()}`, 'Account');
-        setConfirmation(null); setSelection(null);
-        flash(`${person.name}’s account is deactivated.`);
+        if (!person.userId) { flash('This account is not linked to a backend user and cannot be archived.'); return; }
+        try {
+          await archiveAdminUser(person.userId, true, confirmationReasonRef.current.trim());
+          const archivedAt = new Date().toISOString();
+          setAdminUsers((current) => current.map((user) => user.id === person.userId
+            ? { ...user, status: 'rejected', archivedAt, archiveReason: confirmationReasonRef.current.trim() }
+            : user));
+          setProfessionals((current) => current.map((item) => item.id === person.id ? {
+            ...item,
+            backendStatus: 'rejected',
+            status: 'Deactivated',
+            membership: 'Deactivated',
+            access: 'Suspended',
+            archive: { archivedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() },
+            lifecycleUpdatedAt: archivedAt,
+            lifecycleEffectiveDate: localIsoDate(new Date(archivedAt)),
+          } : item));
+          setSelection(null);
+          setConfirmation(null);
+          setConfirmationReason('');
+          confirmationReasonRef.current = '';
+          void refreshAuditLogs();
+          flash(`${person.name}â€™s account was archived.`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Could not archive this account.';
+          setAccountsError(message);
+          flash(message);
+        }
       },
     });
   };
@@ -913,14 +1199,14 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       actionLabel: 'Suspend access',
       danger: true,
       requiresReason: true,
-      run: () => {
-        setProfessionalStatus(person, 'Suspended', confirmationReasonRef.current.trim());
+      run: async () => {
+        await setProfessionalStatus(person, 'Suspended', confirmationReasonRef.current.trim());
         setConfirmation(null); setConfirmationReason(''); confirmationReasonRef.current = '';
       },
     });
   };
 
-  const finalizeOffboarding = () => {
+  const finalizeOffboarding = async () => {
     if (!offboardingId) return;
     if (!offboardingReason.trim()) { flash('Enter a reason to deactivate this account.'); return; }
     const person = professionals.find((item) => item.id === offboardingId);
@@ -928,11 +1214,24 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const missing = assigned.find((patient) => !offboardingChoices[patient.id]);
     if (missing) { setAssignmentChoicesOpen(missing.id); return; }
     const changedAt = new Date().toISOString();
+    if (!person?.userId) { flash('This account is not linked to a backend user and cannot be archived.'); return; }
+    try {
+      await archiveAdminUser(person.userId, true, offboardingReason.trim());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not archive this account.';
+      setAccountsError(message);
+      flash(message);
+      return;
+    }
+    setAdminUsers((current) => current.map((user) => user.id === person.userId
+      ? { ...user, status: 'rejected', archivedAt: changedAt, archiveReason: offboardingReason.trim() }
+      : user));
+    void refreshAuditLogs();
     assigned.forEach((patient) => recordAssignmentEnd(patient, patient.therapistId, 'Therapist', `Therapist reassigned during ${person?.name ?? 'professional'} offboarding: ${offboardingReason.trim()}`, changedAt));
     setPatients((current) => current.map((patient) => offboardingChoices[patient.id] ? { ...patient, therapistId: offboardingChoices[patient.id] } : patient));
-    setProfessionals((current) => current.map((item) => item.id === offboardingId ? { ...item, status: 'Deactivated', membership: 'Deactivated', archive: { archivedAt: changedAt, archivedBy: profileName, reason: offboardingReason.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-    assigned.forEach((patient) => addLog('Student reassigned', `${patient.name} · ${person?.name} → ${activeTherapistFor(offboardingChoices[patient.id])}`, 'Student'));
-    addLog('Professional account deactivated', `${person?.name} · ${offboardingReason.trim()}`, 'Account');
+    setProfessionals((current) => current.map((item) => item.id === offboardingId ? { ...item, backendStatus: 'rejected', status: 'Deactivated', access: 'Suspended', membership: 'Deactivated', archive: { archivedAt: changedAt, archivedBy: profileName, reason: offboardingReason.trim() }, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
+    assigned.forEach((patient) => addLog('Student reassigned', `${patient.name} Â· ${person?.name} â†’ ${activeTherapistFor(offboardingChoices[patient.id])}`, 'Student'));
+    addLog('Professional account deactivated', `${person?.name} Â· ${offboardingReason.trim()}`, 'Account');
     setOffboardingId(null); setOffboardingReason(''); setSelection(null); setAssignmentChoicesOpen(null);
     flash(`${person?.name} deactivated after student reassignment.`);
   };
@@ -945,7 +1244,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     setConfirmation({ title: `Reassign ${patient.name}?`, message: `Move this student from ${previous} to ${replacement.name}? Their account and history stay unchanged.`, actionLabel: 'Reassign student', run: () => {
       recordAssignmentEnd(patient, patient.therapistId, 'Therapist', `Reassigned to ${replacement.name}`);
       setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, therapistId } : item));
-      addLog('Student reassigned', `${patient.name} · ${previous} → ${replacement.name}`, 'Student');
+      addLog('Student reassigned', `${patient.name} Â· ${previous} â†’ ${replacement.name}`, 'Student');
       addNotification('Student assignment updated', `${patient.name} is now assigned to ${replacement.name}.`);
       setConfirmation(null); setAssignmentChoicesOpen(null); setSelection({ kind: 'patient', id: patient.id });
       flash(`${patient.name} reassigned to ${replacement.name}.`);
@@ -960,7 +1259,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     setConfirmation({ title: `Change Assigned Teacher for ${patient.name}?`, message: `Update the SpeakSteps assignment from ${previous} to ${teacher.name}. School identity records will not change.`, actionLabel: 'Change Teacher', run: () => {
       recordAssignmentEnd(patient, patient.teacherId, 'Teacher', `Teacher changed to ${teacher.name}`);
       setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, teacherId } : item));
-      addLog('Assigned Teacher changed', `${patient.name} · ${previous} → ${teacher.name}`, 'Student');
+      addLog('Assigned Teacher changed', `${patient.name} Â· ${previous} â†’ ${teacher.name}`, 'Student');
       addNotification('Assigned Teacher updated', `${patient.name} is now assigned to ${teacher.name}.`);
       setConfirmation(null); setTeacherChoicesOpen(null); setSelection({ kind: 'patient', id: patient.id }); flash(`${patient.name} is now assigned to ${teacher.name}.`);
     } });
@@ -973,17 +1272,32 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     setConfirmation({
       title: `${actionLabel}: ${patient.name}?`,
       message: next === 'Suspended'
-        ? `This prevents ${patient.name} and their Guardian from signing in. Enrollment, identity details, assignments, and therapy status remain unchanged.`
-        : `This restores sign-in access for ${patient.name}. It does not start or restore therapy enrollment.`,
+        ? `This prevents ${patient.guardian} from signing in. It affects all Students linked to this Guardian account; enrollment and assignments remain unchanged.`
+        : `This restores sign-in access for ${patient.guardian}. It does not start or restore therapy enrollment.`,
       actionLabel,
       danger: next === 'Suspended',
       requiresReason: next === 'Suspended',
-      run: () => {
+      run: async () => {
+        const guardian = adminUsers.find((user) => user.role === 'parent' && user.email.toLowerCase() === patient.guardianContact.toLowerCase());
+        if (!guardian) { flash('No backend Guardian account is linked to this Student.'); return; }
+        try {
+          await persistAccountStatus(guardian.id, next === 'Active' ? 'verified' : 'rejected');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Could not update Guardian sign-in access.';
+          setAccountsError(message);
+          flash(message);
+          return;
+        }
         const changedAt = new Date().toISOString();
-        setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, access: next, archive: next === 'Suspended' ? { archivedAt: changedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() } : item.archive, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-        const reason = confirmationReasonRef.current.trim();
-        addLog(next === 'Suspended' ? 'Student access suspended' : 'Student access reactivated', `${patient.name} · ${patient.studentNumber}${next === 'Suspended' ? ` · ${reason}` : ''}`, 'Student');
-        addNotification(next === 'Suspended' ? 'Student access suspended' : 'Student access reactivated', `${patient.name} · ${next === 'Suspended' ? reason : 'Access restored by Center Admin'}`);
+        const linkedPatientIds = new Set(patients.filter((item) => item.guardianContact.toLowerCase() === guardian.email.toLowerCase()).map((item) => item.id));
+        const backendStatus = next === 'Active' ? 'verified' : 'rejected';
+        setPatients((current) => current.map((item) => linkedPatientIds.has(item.id) ? {
+          ...item,
+          backendStatus,
+          access: next,
+          lifecycleUpdatedAt: changedAt,
+          lifecycleEffectiveDate: localIsoDate(new Date(changedAt)),
+        } : item));
         setConfirmation(null); setConfirmationReason('');  setSelection({ kind: 'patient', id: patient.id });
         flash(`Access ${next === 'Suspended' ? 'suspended' : 'reactivated'} for ${patient.name}.`);
       },
@@ -991,24 +1305,54 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   };
 
   const changePatientMembership = (patient: Patient, next: 'Active' | 'Deactivated') => {
-    const deactivating = next === 'Deactivated';
-    setConfirmationReason(''); confirmationReasonRef.current = '';
+    setConfirmationReason('');
+    confirmationReasonRef.current = '';
     setConfirmation({
-      title: `${deactivating ? 'Deactivate' : 'Reactivate'} ${patient.name}'s account?`,
-      message: deactivating
-        ? `This deactivates ${patient.name}'s account membership and moves the account to Archive Center. Enrollment, assignments, and account access are preserved.`
-        : `This restores ${patient.name}'s account membership and moves it out of Archive Center if access is active.`,
-      actionLabel: deactivating ? 'Deactivate account' : 'Reactivate account',
-      danger: deactivating,
-      requiresReason: deactivating,
-      run: () => {
-        if (deactivating && !confirmationReasonRef.current.trim()) { flash('Enter a reason to deactivate this account.'); return; }
-        const changedAt = new Date().toISOString();
-        setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, membership: next, archive: deactivating ? { archivedAt: changedAt, archivedBy: profileName, reason: confirmationReasonRef.current.trim() } : item.archive, lifecycleUpdatedAt: changedAt, lifecycleEffectiveDate: localIsoDate(new Date(changedAt)) } : item));
-        addLog(deactivating ? 'Student account deactivated' : 'Student account reactivated', `${patient.name} · ${patient.studentNumber}${deactivating ? ` · ${confirmationReasonRef.current.trim()}` : ''}`, 'Account');
-        addNotification(deactivating ? 'Student account deactivated' : 'Student account reactivated', `${patient.name} · ${deactivating ? 'Moved to Archive Center' : 'Membership restored'}`);
-        setConfirmation(null); setConfirmationReason(''); setSelection(null);
-        flash(`${patient.name}'s account ${deactivating ? 'deactivated' : 'reactivated'}.`);
+      title: `${next === 'Deactivated' ? 'Deactivate' : 'Restore'} ${patient.guardian}â€™s account?`,
+      message: next === 'Deactivated'
+        ? `Archive the Guardian account for ${patient.name}. This does not close the Studentâ€™s enrollment.`
+        : `Restore the Guardian account for ${patient.name}.`,
+      actionLabel: next === 'Deactivated' ? 'Archive account' : 'Restore account',
+      danger: next === 'Deactivated',
+      requiresReason: next === 'Deactivated',
+      run: async () => {
+        const guardian = adminUsers.find((user) => user.role === 'parent' && user.email.toLowerCase() === patient.guardianContact.toLowerCase());
+        if (!guardian) { flash('No backend Guardian account is linked to this Student.'); return; }
+        const reason = confirmationReasonRef.current.trim();
+        if (next === 'Deactivated' && !reason) { flash('Enter a reason to deactivate this account.'); return; }
+        try {
+          const updated = await archiveAdminUser(guardian.id, next === 'Deactivated', reason);
+          const changedAt = updated.archivedAt || new Date().toISOString();
+          setAdminUsers((current) => current.map((user) => user.id === guardian.id ? {
+            ...user,
+            status: updated.status as AdminUser['status'],
+            archivedAt: updated.archivedAt,
+            archiveReason: updated.archiveReason,
+          } : user));
+          const linkedPatientIds = new Set(patients.filter((item) => item.guardianContact.toLowerCase() === guardian.email.toLowerCase()).map((item) => item.id));
+          setPatients((current) => current.map((item) => linkedPatientIds.has(item.id) ? {
+            ...item,
+            backendStatus: updated.status as AdminUser['status'],
+            membership: next,
+            access: next === 'Deactivated' ? 'Suspended' : 'Active',
+            archive: next === 'Deactivated' ? {
+              archivedAt: changedAt,
+              archivedBy: profileName,
+              reason,
+            } : undefined,
+            lifecycleUpdatedAt: changedAt,
+            lifecycleEffectiveDate: localIsoDate(new Date(changedAt)),
+          } : item));
+          setConfirmation(null);
+          setConfirmationReason('');
+          confirmationReasonRef.current = '';
+          void refreshAuditLogs();
+          flash(`${guardian.name}â€™s account membership was ${next === 'Deactivated' ? 'archived' : 'restored'}.`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Could not update Guardian account membership.';
+          setAccountsError(message);
+          flash(message);
+        }
       },
     });
   };
@@ -1031,8 +1375,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       ? current.map((episode) => episode.id === existingEpisode.id ? closedEpisode : episode)
       : [closedEpisode, ...current]);
     setPatients((current) => current.map((item) => item.id === patient.id ? { ...item, enrollment: 'Archived', therapistId: null, teacherId: undefined, lifecycleUpdatedAt: now, lifecycleEffectiveDate: details.effectiveDate } : item));
-    addLog('Student enrollment closed', `${patient.name} · ${patient.studentNumber} · ${details.category} · Effective ${details.effectiveDate} · ${details.reason} · Authorization ${details.authorizationReference}`, 'Student');
-    addNotification('Student enrollment closed', `${patient.name} · ${details.category}`);
+    addLog('Student enrollment closed', `${patient.name} Â· ${patient.studentNumber} Â· ${details.category} Â· Effective ${details.effectiveDate} Â· ${details.reason} Â· Authorization ${details.authorizationReference}`, 'Student');
+    addNotification('Student enrollment closed', `${patient.name} Â· ${details.category}`);
   };
 
   const recordAssignmentEnd = (patient: Patient, professionalId: string | undefined | null, role: ProfessionalRole, endReason: string, endedAt = new Date().toISOString()) => {
@@ -1067,13 +1411,13 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const patient = closurePatient;
     setClosurePatient(null);
     setConfirmation({
-      title: `Close enrollment — ${details.category.replace('Authorized ', '')}?`,
-      message: `This ends ${patient.name}’s current therapy enrollment for an authorized administrative reason. Account access stays unchanged. Their professional assignments will end and remain in Assignment History. Effective ${details.effectiveDate}. Authorization: ${details.authorizationReference}.`,
+      title: `Close enrollment â€” ${details.category.replace('Authorized ', '')}?`,
+      message: `This ends ${patient.name}â€™s current therapy enrollment for an authorized administrative reason. Account access stays unchanged. Their professional assignments will end and remain in Assignment History. Effective ${details.effectiveDate}. Authorization: ${details.authorizationReference}.`,
       actionLabel: 'Close enrollment', danger: true,
       run: () => {
         closeEnrollmentRecord(patient, details);
         setConfirmation(null); setSelection({ kind: 'patient', id: patient.id });
-        flash(`${patient.name}’s enrollment closed in this demo session.`);
+        flash(`${patient.name}â€™s enrollment closed in this demo session.`);
       },
     });
   };
@@ -1103,8 +1447,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
       ...current.map((episode) => episode.patientId === patient.id && episode.status === 'Closed' && !episode.restoredAt ? { ...episode, restoredAt: now } : episode),
     ]);
     if (legacyAssignments.length) setAssignmentHistory((current) => [...legacyAssignments, ...current]);
-    addLog('Student enrollment restored', `${patient.name} · ${patient.studentNumber} · new therapy enrollment · Therapist ${therapist.name} · Teacher ${teacher.name}`, 'Student', profileName, { subject: { name: patient.name, identifier: patient.studentNumber, type: 'Student' }, result: 'Restored' });
-    addNotification('Student re-enrollment initiated', `${patient.name} · a new therapy enrollment was started.`);
+    addLog('Student enrollment restored', `${patient.name} Â· ${patient.studentNumber} Â· new therapy enrollment Â· Therapist ${therapist.name} Â· Teacher ${teacher.name}`, 'Student', profileName, { subject: { name: patient.name, identifier: patient.studentNumber, type: 'Student' }, result: 'Restored' });
+    addNotification('Student re-enrollment initiated', `${patient.name} Â· a new therapy enrollment was started.`);
     setReenrollmentPatient(null); setReenrollmentTherapistId(''); setReenrollmentTeacherId(''); setSelection(null);
     flash(`New therapy enrollment started for ${patient.name} in this demo session.`);
   };
@@ -1387,25 +1731,25 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const identifier = person.role === 'Therapist' ? person.staffId ?? 'Staff ID unavailable' : person.professionalIdentifier ?? 'School ID unavailable';
     const assigned = patients.filter((patient) => (person.role === 'Therapist' ? patient.therapistId === person.id : patient.teacherId === person.id) && patient.enrollment === 'Enrolled').length;
     return <Pressable key={person.id} onPress={() => setSelection({ kind: 'professional', id: person.id })} style={(state) => [styles.mobileRow, styles.clickableRow, ('hovered' in state && state.hovered) && styles.rowHover]} accessibilityRole="button" accessibilityLabel={`View ${person.name}, ${person.role}`}>
-      <View style={styles.personCell}>{avatar(person.name)}<View style={styles.personText}><Text style={styles.personName}>{person.name}</Text><Text style={styles.secondaryText}>{person.role} · {person.email}</Text><Text style={styles.secondaryText}>{identifier}</Text></View></View>
+      <View style={styles.personCell}>{avatar(person.name)}<View style={styles.personText}><Text style={styles.personName}>{person.name}</Text><Text style={styles.secondaryText}>{person.role} Â· {person.email}</Text><Text style={styles.secondaryText}>{identifier}</Text></View></View>
       <View style={styles.mobileRowBottom}><Status label={professionalMembership(person) === 'Deactivated' ? 'Deactivated' : professionalAccess(person)} tone={professionalAccess(person) === 'Active' && professionalMembership(person) !== 'Deactivated' ? 'green' : 'red'} /><><SetupStatus label={professionalSetup(person)} compact /><AssignmentBadge label={assigned > 0 ? String(assigned) : 'Unassigned'} /></></View>
     </Pressable>;
   })() : <Pressable key={row.patient.id} onPress={() => setSelection({ kind: 'patient', id: row.patient.id })} style={(state) => [styles.mobileRow, styles.clickableRow, ('hovered' in state && state.hovered) && styles.rowHover]} accessibilityRole="button" accessibilityLabel={`View Student ${row.patient.name}, ${row.patient.studentNumber}`}>
-    <View style={styles.personCell}>{avatar(row.patient.name)}<View style={styles.personText}><Text style={styles.personName}>{row.patient.name}</Text><Text style={styles.secondaryText}>Student · {row.patient.studentNumber}</Text><Text style={styles.secondaryText}>{row.patient.guardianContact}</Text></View></View>
+    <View style={styles.personCell}>{avatar(row.patient.name)}<View style={styles.personText}><Text style={styles.personName}>{row.patient.name}</Text><Text style={styles.secondaryText}>Student Â· {row.patient.studentNumber}</Text><Text style={styles.secondaryText}>{row.patient.guardianContact}</Text></View></View>
     <View style={styles.mobileRowBottom}><Status label={studentMembership(row.patient) === 'Deactivated' ? 'Deactivated' : studentAccess(row.patient)} tone={studentMembership(row.patient) === 'Deactivated' || studentAccess(row.patient) === 'Suspended' ? 'red' : 'green'} /><SetupStatus label={studentSetup(row.patient)} compact /></View>
-    {showStudentDetailsColumns ? <View style={styles.studentMobileDetails}><Text style={styles.secondaryText}>Teacher · {professionals.find((person) => person.id === row.patient.teacherId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Therapist · {professionals.find((person) => person.id === row.patient.therapistId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Enrollment · {row.patient.enrollment}</Text></View> : null}
+    {showStudentDetailsColumns ? <View style={styles.studentMobileDetails}><Text style={styles.secondaryText}>Teacher Â· {professionals.find((person) => person.id === row.patient.teacherId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Therapist Â· {professionals.find((person) => person.id === row.patient.therapistId)?.name ?? 'Unassigned'}</Text><Text style={styles.secondaryText}>Enrollment Â· {row.patient.enrollment}</Text></View> : null}
   </Pressable>;
 
   const activityLine = (entry: ActivityEntry, compactMode = false) => <Pressable key={entry.id} onPress={() => { setLogSearch(entry.title); setLogCategoriesSelected([]); goTo('Activity Logs'); }} accessibilityRole="button" accessibilityLabel={`View activity log for ${entry.title}`} onLayout={({ nativeEvent }) => { recentActivityRows.current.set(entry.id, { top: nativeEvent.layout.y, height: nativeEvent.layout.height }); markVisibleActivityRead(); }} style={[styles.activityItem, styles.clickableRow, compactMode && styles.activityItemCompact]}>
     {!entry.read ? <View style={[styles.activityMark, { backgroundColor: C.blue }]} /> : null}
-    <View style={styles.activityCopy}><Text style={styles.activityTitle}>{entry.title}</Text><Text style={styles.secondaryText}>{entry.detail} · {entry.actor}</Text></View>
+    <View style={styles.activityCopy}><Text style={styles.activityTitle}>{entry.title}</Text><Text style={styles.secondaryText}>{entry.detail} Â· {entry.actor}</Text></View>
     <Text style={styles.activityDate}>{formatTimestamp(entry.date)}</Text>
   </Pressable>;
 
   const dashboard = () => {
     const metrics = [
-      { label: 'Active Therapists', icon: 'heart-outline' as const, value: professionals.filter((person) => person.role === 'Therapist' && professionalAccess(person) === 'Active' && professionalMembership(person) === 'Active').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Therapist', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
-      { label: 'Active Teachers', icon: 'school-outline' as const, value: professionals.filter((person) => person.role === 'Teacher' && professionalAccess(person) === 'Active' && professionalMembership(person) === 'Active').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Teacher', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
+      { label: 'Active Therapists', icon: 'heart-outline' as const, value: adminUsers.filter((user) => user.role === 'therapist' && user.status === 'verified').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Therapist', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
+      { label: 'Active Teachers', icon: 'school-outline' as const, value: adminUsers.filter((user) => user.role === 'teacher' && user.status === 'verified').length, foot: 'Professional accounts', click: () => { goToAccountsView('Directory', null, { role: 'Teacher', access: 'Active', setup: 'All setup', membership: 'Active', enrollment: 'All enrollment' }); } },
       { label: 'Registered Students', icon: 'people-outline' as const, value: patients.filter((patient) => patient.enrollment === 'Enrolled').length, foot: 'Currently enrolled', click: () => openDashboardMetric('students') },
       { label: 'Account Setups', icon: 'mail-unread-outline' as const, value: pendingAccountSetups, foot: 'Invitations awaiting setup', click: () => openDashboardMetric('accounts'), attention: pendingInvitations.some((person) => !viewedAlertIds.has(person.id)) || pendingPatientSetups.some((student) => !viewedAlertIds.has(student.id)) },
       { label: 'Administrative Requests', icon: 'document-text-outline' as const, value: pendingRequests.length + pendingReleaseRequests.length, foot: 'Student requests to review', click: () => openDashboardMetric('requests'), attention: pendingRequests.some((request) => !viewedAlertIds.has(request.id)) || pendingReleaseRequests.some((request) => !viewedAlertIds.has(request.id)) },
@@ -1416,6 +1760,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const maxCaseload = Math.max(1, ...therapistCounts.map((person) => person.assigned));
     return <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false} onLayout={onRecentActivityViewportLayout} onScroll={onRecentActivityScroll} scrollEventThrottle={100}>
       <Header title="Dashboard" subtitle="Manage your center's accounts, student access, and recent activity." />
+      {accountsError ? <Text style={styles.secondaryText}>{accountsError}</Text> : null}
       <View style={[styles.metricStrip, compact && styles.metricStripCompact]}>{metrics.map((metric) => <TouchableOpacity key={metric.label} onPress={metric.click} style={[styles.metric, compact && styles.metricCompact]} accessibilityRole="button" accessibilityLabel={metric.label + ': ' + metric.value + '. ' + metric.foot}><View style={styles.metricTop}><Ionicons name={metric.icon} size={17} color={C.blue} /><Text style={styles.metricLabel}>{metric.label}</Text></View><View style={styles.metricValueLine}><Text style={styles.metricValue}>{metric.value}</Text>{metric.attention ? <View style={styles.attentionDot} /> : null}</View><Text style={styles.metricFoot}>{metric.foot}</Text></TouchableOpacity>)}</View>
 
       <View style={styles.attentionPanel}>
@@ -1434,7 +1779,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     </ScrollView>;
   };
   const accountPagination = accountPageCount > 1 ? <View style={[styles.accountPagination, compact && styles.accountPaginationCompact]}>
-    <Text style={styles.accountPaginationSummary}>Showing {accountPageIndex * 10 + 1}–{Math.min((accountPageIndex + 1) * 10, accountRows.length)} of {accountRows.length} {accountView === 'Archive Center' ? 'records' : 'accounts'}</Text>
+    <Text style={styles.accountPaginationSummary}>Showing {accountPageIndex * 10 + 1}â€“{Math.min((accountPageIndex + 1) * 10, accountRows.length)} of {accountRows.length} {accountView === 'Archive Center' ? 'records' : 'accounts'}</Text>
     <View style={[styles.accountPaginationControls, compact && styles.accountPaginationControlsCompact]}>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="First page" disabled={accountPageIndex === 0} onPress={() => setAccountPage(0)} style={[styles.pageArrow, accountPageIndex === 0 && styles.pageArrowDisabled]}><Ionicons name="chevron-back" size={13} color={accountPageIndex === 0 ? C.subtle : C.muted} /><Ionicons name="chevron-back" size={13} color={accountPageIndex === 0 ? C.subtle : C.muted} style={styles.doubleChevronSecond} /></TouchableOpacity>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous page" disabled={accountPageIndex === 0} onPress={() => setAccountPage(accountPageIndex - 1)} style={[styles.pageArrow, accountPageIndex === 0 && styles.pageArrowDisabled]}><Ionicons name="chevron-back" size={15} color={accountPageIndex === 0 ? C.subtle : C.muted} /></TouchableOpacity>
@@ -1475,7 +1820,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
           addLog('Archived account restored', `Original archive reason: ${archiveForRow(row).reason}`, 'Account', profileName, { subject: { name: record.name, identifier, type: role }, result: 'Restored' });
           setConfirmation(null);
           setSelection(null);
-          flash(`${record.name}’s account was restored.`);
+          flash(`${record.name}â€™s account was restored.`);
         },
       });
     };
@@ -1506,6 +1851,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
   </>;
   const accounts = () => accountView === 'Student Requests' ? studentRequestsPage() : <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
     <Header title={accountView} subtitle={accountView === 'Directory' ? 'Manage student and professional accounts across your center.' : 'Review therapy history and accounts with restricted access.'} action={accountView === 'Directory' ? <Button label="Add Account" kind="primary" icon="add" onPress={() => { setCreatePatientOpen(true); setNewAccountOpen(true); }} /> : undefined} />
+    {accountsError ? <Text style={styles.secondaryText}>{accountsError}</Text> : null}
     {accountView === 'Archive Center' ? archiveDirectoryPage() : <>
     <View style={styles.accountSearchArea}>
       <View style={styles.accountSearchRow}>
@@ -1617,7 +1963,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const approve = decision === 'Approved';
     setConfirmation({
       title: approve ? 'Approve this name change?' : 'Decline this name change?',
-      message: `${request.currentName} → ${request.proposedName}. ${approve ? 'The guardian can apply this approved name.' : 'The student will keep their current name.'}`,
+      message: `${request.currentName} â†’ ${request.proposedName}. ${approve ? 'The guardian can apply this approved name.' : 'The student will keep their current name.'}`,
       actionLabel: approve ? 'Approve name change' : 'Decline name change',
       danger: !approve,
       run: () => {
@@ -1642,8 +1988,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
         {visibleNameRequests.map((request) => (
           <View key={request.id} style={styles.nameRequestRow}>
             <View style={styles.nameRequestCopy}>
-              <Text style={styles.personName}>{request.currentName} → {request.proposedName}</Text>
-              <Text style={styles.secondaryText}>Guardian · {formatDate(request.submittedAt)} · {request.id}</Text>
+              <Text style={styles.personName}>{request.currentName} â†’ {request.proposedName}</Text>
+              <Text style={styles.secondaryText}>Guardian Â· {formatDate(request.submittedAt)} Â· {request.id}</Text>
             </View>
             <Status label={request.status} tone={request.status === 'Pending' ? 'yellow' : request.status === 'Declined' ? 'red' : 'green'} />
             {request.status === 'Pending' && (
@@ -1692,6 +2038,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     const hasFilters = logSearch.trim().length > 0 || logCategoriesSelected.length > 0;
     return <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
       <Header title="Activity Logs" subtitle="A chronological record of account, student, and request decisions." />
+      {auditLogsError ? <Text style={styles.secondaryText}>{auditLogsError}</Text> : null}
       <View style={styles.accountSearchRow}><SearchBox value={logSearch} onChange={setLogSearch} placeholder="Search activity, record, or administrator" fullWidth /></View>
       {hasFilters || stacked ? <View style={styles.logFilterRow}>
         <View style={styles.logActiveFilters}>{logCategoriesSelected.map((value) => <TouchableOpacity key={value} accessibilityRole="button" accessibilityLabel={`Remove ${value} category filter`} onPress={() => toggleFilterValue(logCategoriesSelected, value, setLogCategoriesSelected)} style={styles.accountFilterTag}><Text style={styles.accountFilterTagText}>Category: {value}</Text><Ionicons name="close" size={12} color={C.blue} /></TouchableOpacity>)}{hasFilters ? <TouchableOpacity accessibilityRole="button" onPress={() => { setLogSearch(''); setLogCategoriesSelected([]); }} style={styles.accountFilterReset}><Text style={styles.accountFilterResetText}>Reset</Text></TouchableOpacity> : null}</View>
@@ -1725,8 +2072,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 
   const settingsPage = () => <ScrollView contentContainerStyle={styles.pageScroll} showsVerticalScrollIndicator={false}>
     <Header title="Center Profile" subtitle="Center information used to identify this administrative workspace." action={<TouchableOpacity accessibilityRole="button" accessibilityLabel="Close Settings and return to Dashboard" onPress={() => goTo('Dashboard')} style={styles.closeButton}><Ionicons name="close" size={19} color={C.ink} /></TouchableOpacity>} />
-    <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Center information</Text><Text style={styles.sectionSub}>These changes are local to this demo session.</Text>{([['name', 'Center name'], ['phone', 'Phone'], ['address', 'Address']] as const).map(([key, label]) => <View key={key} style={[styles.settingRow, compact && styles.settingRowCompact]}><Text style={styles.settingLabel}>{label}</Text><TextInput value={centerSettings[key]} onChangeText={(value) => { setCenterSettings((current) => ({ ...current, [key]: value })); setSettingsSaved(false); }} style={[styles.settingInput, compact && styles.settingInputCompact]} accessibilityLabel={label} /></View>)}<View style={[styles.settingRow, compact && styles.settingRowCompact]}><Text style={styles.settingLabel}>Administrator email</Text><Text style={[styles.settingValue, compact && styles.settingValueCompact]}>{centerSettings.email}</Text></View><Text style={styles.sectionSub}>This development placeholder is not connected to authentication.</Text><View style={styles.settingsAction}><Button label={settingsSaved ? 'Saved' : 'Save settings'} kind="primary" onPress={() => { setSettingsSaved(true); addLog('Center profile updated', `${centerSettings.name} · local demo settings`, 'Settings'); flash('Center profile settings saved in this demo.'); }} /></View></View>
-    <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Administrator profile</Text><View style={styles.profileSummary}>{avatar(profileName)}<View><Text style={styles.personName}>{profileName}</Text><Text style={styles.secondaryText}>Center Administrator · {centerSettings.name}</Text></View></View><Button label="View profile" onPress={() => { setAdminProfileDraft(profile); setShowProfileDetails(true); }} /></View>
+    <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Center information</Text><Text style={styles.sectionSub}>These changes are local to this demo session.</Text>{([['name', 'Center name'], ['phone', 'Phone'], ['address', 'Address']] as const).map(([key, label]) => <View key={key} style={[styles.settingRow, compact && styles.settingRowCompact]}><Text style={styles.settingLabel}>{label}</Text><TextInput value={centerSettings[key]} onChangeText={(value) => { setCenterSettings((current) => ({ ...current, [key]: value })); setSettingsSaved(false); }} style={[styles.settingInput, compact && styles.settingInputCompact]} accessibilityLabel={label} /></View>)}<View style={[styles.settingRow, compact && styles.settingRowCompact]}><Text style={styles.settingLabel}>Administrator email</Text><Text style={[styles.settingValue, compact && styles.settingValueCompact]}>{centerSettings.email}</Text></View><Text style={styles.sectionSub}>This development placeholder is not connected to authentication.</Text><View style={styles.settingsAction}><Button label={settingsSaved ? 'Saved' : 'Save settings'} kind="primary" onPress={() => { setSettingsSaved(true); addLog('Center profile updated', `${centerSettings.name} Â· local demo settings`, 'Settings'); flash('Center profile settings saved in this demo.'); }} /></View></View>
+    <View style={styles.settingsPanel}><Text style={styles.sectionTitle}>Administrator profile</Text><View style={styles.profileSummary}>{avatar(profileName)}<View><Text style={styles.personName}>{profileName}</Text><Text style={styles.secondaryText}>Center Administrator Â· {centerSettings.name}</Text></View></View><Button label="View profile" onPress={() => { setAdminProfileDraft(profile); setShowProfileDetails(true); }} /></View>
   </ScrollView>;
 
   const selectNav = (target: Page) => goTo(target);
@@ -1794,8 +2141,8 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
           <View style={styles.activityCopy}>
             <Text style={styles.activityTitle}>{selectedArchiveRow.kind === 'professional'
               ? patients.find((item) => item.id === entry.patientId)?.name ?? 'Student record unavailable'
-              : professionals.find((person) => person.id === entry.professionalId)?.name ?? 'Professional record unavailable'} · {entry.role}</Text>
-            <Text style={styles.secondaryText}>{entry.endReason ?? 'Reason not recorded'}{entry.endedAt ? ` · ${formatDate(entry.endedAt)}` : ''}</Text>
+              : professionals.find((person) => person.id === entry.professionalId)?.name ?? 'Professional record unavailable'} Â· {entry.role}</Text>
+            <Text style={styles.secondaryText}>{entry.endReason ?? 'Reason not recorded'}{entry.endedAt ? ` Â· ${formatDate(entry.endedAt)}` : ''}</Text>
           </View>
         </View>)}
       </View> : null}
@@ -1825,7 +2172,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 </> : null}{selectedRelease && selectedReleasePatient ? <>
   <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Request overview</Text><View style={styles.detailGrid}><Detail label="Request ID" value={selectedRelease.id} /><Detail label="Request type" value={releaseRequestTypeLabel(selectedRelease)} /><Detail label="Submitted by" value={selectedReleaseSubmitter + ' \u00B7 ' + (selectedRelease.origin ?? 'Therapist')} /><Detail label="Submitted" value={formatDate(selectedRelease.submitted)} /><Detail label="Reason" value={selectedRelease.reason} /></View></View>
   <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Original explanation</Text><Text style={styles.requestReason}>{selectedRelease.explanation}</Text><Text style={styles.sourceNote}>Submitted by {selectedReleaseSubmitter} \u00B7 {selectedRelease.origin ?? 'Therapist'}</Text></View>
-  <SupportingAttachments attachments={selectedRelease.attachments} events={selectedRelease.events} originalSubmitter={`${selectedReleaseSubmitter} · ${selectedRelease.origin ?? 'Therapist'}`} originalSubmittedAt={selectedRelease.submitted} />
+  <SupportingAttachments attachments={selectedRelease.attachments} events={selectedRelease.events} originalSubmitter={`${selectedReleaseSubmitter} Â· ${selectedRelease.origin ?? 'Therapist'}`} originalSubmittedAt={selectedRelease.submitted} />
   {selectedRelease.requestType === 'Therapist assignment release' || selectedRelease.reason === 'No longer receiving services' ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Assignment</Text><Detail label="Currently assigned Therapist" value={activeTherapistFor(selectedReleasePatient.therapistId)} /><Text style={styles.sourceNote}>This request changes the Therapist assignment only. Enrollment and account access stay unchanged.</Text></View> : <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Verification and evidence</Text><View style={styles.detailGrid}><Detail label="Guardian confirmation" value={selectedRelease.guardianConfirmation ?? 'Not recorded'} /><Detail label="Teacher verification" value={selectedRelease.teacherVerification ?? 'Not recorded'} /><Detail label="School evidence" value={selectedRelease.attachment ?? 'Not provided'} /></View>{!selectedRelease.attachment || selectedRelease.teacherVerification !== 'Verified' || (selectedRelease.origin !== 'Therapist' && selectedRelease.guardianConfirmation !== 'Confirmed' && selectedRelease.guardianConfirmation !== 'Not required') ? <View style={styles.requestWarning}><Text style={styles.requestWarningTitle}>Archive prerequisites incomplete</Text><Text style={styles.secondaryText}>Required school evidence, Teacher verification, or Guardian confirmation is still missing.</Text></View> : null}</View>}
   {(selectedRelease.status === 'Pending' || selectedRelease.status === 'More information requested') && selectedRelease.origin !== 'Therapist' ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Follow-up</Text><View style={styles.detailGrid}><Detail label="Responsible party" value={selectedRelease.followupRecipient ?? selectedRelease.origin ?? 'Guardian'} /><Detail label="Request sent" value={formatDate(selectedRelease.submitted)} /><Detail label="Reminders recorded" value={String(selectedRelease.reminderCount ?? 0) + (selectedRelease.lastReminderAt ? ' \u00B7 last ' + formatDate(selectedRelease.lastReminderAt) : '')} /></View>{releaseFollowup(selectedRelease, prototypeNow).overdue ? <Text style={styles.requestOverdue}>Overdue \u00B7 Day 14 escalation {releaseFollowup(selectedRelease, prototypeNow).day14Recorded ? 'recorded' : 'due'}</Text> : null}{releaseFollowup(selectedRelease, prototypeNow).due ? <Button label={releaseFollowup(selectedRelease, prototypeNow).nextDay === 14 ? 'Record Day 14 escalation' : 'Record Day ' + releaseFollowup(selectedRelease, prototypeNow).nextDay + ' reminder'} kind="secondary" onPress={() => recordReleaseReminder(selectedRelease)} /> : <Text style={styles.sourceNote}>{releaseFollowup(selectedRelease, prototypeNow).day14Recorded ? 'Day 14 escalation already recorded. No message was sent.' : 'No message was sent.'}</Text>}</View> : null}
   <View style={[styles.detailSection, detailPanelStyles.detailSection]}><View style={styles.sectionHeading}><Text style={styles.requestSectionTitle}>Request history</Text>{(selectedRelease.events ?? []).length > 2 ? <TouchableOpacity onPress={() => setRequestHistoryExpanded((value) => !value)}><Text style={styles.linkText}>{requestHistoryExpanded ? 'Show less' : 'Show older'}</Text></TouchableOpacity> : null}</View>{[...(selectedRelease.events ?? [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, requestHistoryExpanded ? undefined : 2).map((event) => <View key={event.id} style={styles.requestEvent}><View style={styles.requestEventMark} /><View style={styles.activityCopy}><Text style={styles.activityTitle}>{event.title}</Text><Text style={styles.secondaryText}>{event.detail}</Text><Text style={styles.attentionTime}>{event.actor} \u00B7 {formatTimestamp(event.date)}</Text></View></View>)}</View>
@@ -1844,7 +2191,7 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 {selectedRequest && selectedRequestPatient ? <>
   <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Request overview</Text><View style={styles.detailGrid}><Detail label="Request ID" value={selectedRequest.id} /><Detail label="Request type" value="Account access suspension" /><Detail label="Submitted by" value={selectedAccessSubmitter + ' \u00B7 Therapist'} /><Detail label="Submitted" value={formatDate(selectedRequest.submitted)} /><Detail label="Current access" value={studentAccess(selectedRequestPatient)} /><Detail label="Assigned Therapist" value={activeTherapistFor(selectedRequestPatient.therapistId)} /></View></View>
   <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Original explanation</Text><Text style={styles.requestReason}>{selectedRequest.reason}</Text><Text style={styles.sourceNote}>Submitted by {selectedAccessSubmitter} \u00B7 Therapist</Text></View>
-  <SupportingAttachments attachments={selectedRequest.attachments} events={selectedRequest.events} originalSubmitter={`${selectedAccessSubmitter} · Therapist`} originalSubmittedAt={selectedRequest.submitted} />
+  <SupportingAttachments attachments={selectedRequest.attachments} events={selectedRequest.events} originalSubmitter={`${selectedAccessSubmitter} Â· Therapist`} originalSubmittedAt={selectedRequest.submitted} />
   <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Access conditions</Text><Text style={styles.secondaryText}>Approval suspends Student and Guardian sign-in only. Enrollment, assignments, and therapy status remain unchanged.</Text></View>
   <View style={[styles.detailSection, detailPanelStyles.detailSection]}><View style={styles.sectionHeading}><Text style={styles.requestSectionTitle}>Request history</Text>{(selectedRequest.events ?? []).length > 2 ? <TouchableOpacity onPress={() => setRequestHistoryExpanded((value) => !value)}><Text style={styles.linkText}>{requestHistoryExpanded ? 'Show less' : 'Show older'}</Text></TouchableOpacity> : null}</View>{[...(selectedRequest.events ?? [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, requestHistoryExpanded ? undefined : 2).map((event) => <View key={event.id} style={styles.requestEvent}><View style={styles.requestEventMark} /><View style={styles.activityCopy}><Text style={styles.activityTitle}>{event.title}</Text><Text style={styles.secondaryText}>{event.detail}</Text><Text style={styles.attentionTime}>{event.actor} \u00B7 {formatTimestamp(event.date)}</Text></View></View>)}</View>
   {selectedRequest.status === 'Pending' || selectedRequest.status === 'More information requested' ? <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Choose administrative action</Text><View style={styles.requestActionOptions}>{[{ id: 'info', label: 'Request More Information', detail: 'Ask the Therapist for clarification' }, { id: 'suspend', label: 'Approve Suspension', detail: 'Suspend Student and Guardian sign-in only' }, { id: 'decline', label: 'Decline Request', detail: 'Leave current account access unchanged' }].map((option) => <TouchableOpacity key={option.id} accessibilityRole="radio" accessibilityState={{ selected: requestAction === option.id }} onPress={() => { setRequestAction(requestAction === option.id ? '' : option.id); setReleaseNote(''); }} style={[styles.requestActionOption, requestAction === option.id && styles.requestActionOptionSelected]}><View style={[styles.radioOuter, requestAction === option.id && styles.radioOuterSelected]}>{requestAction === option.id ? <View style={styles.radioInner} /> : null}</View><View style={{ flex: 1 }}><Text style={styles.requestCellPrimary}>{option.label}</Text><Text style={styles.secondaryText}>{option.detail}</Text></View></TouchableOpacity>)}</View>{requestAction ? <View style={styles.actionPanel}><Text style={styles.fieldLabel}>{requestAction === 'info' ? 'Information needed' : requestAction === 'decline' ? 'Reason for declining' : 'Reason for suspension'}</Text><TextInput value={releaseNote} onChangeText={setReleaseNote} placeholder="Enter an administrative note" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View> : null}</View> : <View style={[styles.detailSection, detailPanelStyles.detailSection]}><Text style={styles.requestSectionTitle}>Administrative resolution</Text><Text style={styles.detailValue}>{primaryRequestStatus(selectedRequest.status)}</Text><Detail label="Resolved by" value={selectedRequest.resolvedBy ?? selectedAccessResolutionEvent?.actor ?? 'Not recorded'} /><Detail label="Decision date" value={selectedRequest.resolvedAt ? formatTimestamp(selectedRequest.resolvedAt) : selectedAccessResolutionEvent ? formatTimestamp(selectedAccessResolutionEvent.date) : 'Not recorded'} /><Detail label="Reason" value={selectedRequest.resolutionReason ?? selectedAccessResolutionEvent?.detail ?? 'Not recorded on the original request'} /></View>}
@@ -1852,12 +2199,12 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 
     </>;
 
-  const selectedRequestFooter = selectedRelease && requestAction && (selectedRelease.status === 'Pending' || selectedRelease.status === 'More information requested') ? <View style={styles.requestDrawerFooter}><TouchableOpacity accessibilityRole="button" onPress={() => { setRequestAction(''); setReleaseNote(''); setReleaseReplacement(''); }} style={styles.requestCancel}><Text style={styles.requestCancelText}>Cancel</Text></TouchableOpacity><Button label={requestAction === 'info' ? 'Record Information Request' : requestAction === 'reassign' ? 'Confirm Reassignment' : requestAction === 'archive' ? 'Approve & Archive' : 'Decline Request'} kind={requestAction === 'archive' || requestAction === 'decline' ? 'danger' : 'primary'} disabled={requestAction === 'info' || requestAction === 'decline' || requestAction === 'archive' ? !releaseNote.trim() || requestAction === 'archive' && (!validClosureDate(releaseEffectiveDate, selectedRelease.patientId) || !releaseAuthorizationReference.trim() || releaseStage(selectedRelease) !== 'Ready for Admin Review' || !selectedRelease.attachment || selectedRelease.teacherVerification !== 'Verified' || (selectedRelease.origin !== 'Therapist' && selectedRelease.guardianConfirmation !== 'Confirmed' && selectedRelease.guardianConfirmation !== 'Not required')) : requestAction === 'reassign' ? !releaseReplacement || releaseStage(selectedRelease) !== 'Ready for Admin Review' : false} onPress={() => requestAction === 'decline' && selectedReleasePatient ? confirmRequestDecline(selectedReleasePatient.name, selectedRelease.id, 'The Student’s enrollment, assignments, and account access will remain unchanged.', releaseNote, () => { resolveReleaseRequest(selectedRelease, 'Declined'); setConfirmation(null); setRequestAction(''); }) : resolveReleaseRequest(selectedRelease, requestAction === 'info' ? 'More information requested' : requestAction === 'reassign' ? 'Approved & reassigned' : requestAction === 'archive' ? 'Approved & archived' : 'Declined')} /></View> : selectedRequest && requestAction && (selectedRequest.status === 'Pending' || selectedRequest.status === 'More information requested') ? <View style={styles.requestDrawerFooter}><TouchableOpacity accessibilityRole="button" onPress={() => { setRequestAction(''); setReleaseNote(''); }} style={styles.requestCancel}><Text style={styles.requestCancelText}>Cancel</Text></TouchableOpacity><Button label={requestAction === 'info' ? 'Record Information Request' : requestAction === 'suspend' ? 'Approve Suspension' : 'Decline Request'} kind={requestAction === 'suspend' || requestAction === 'decline' ? 'danger' : 'primary'} disabled={!releaseNote.trim()} onPress={() => requestAction === 'suspend' ? setConfirmation({ title: `Suspend access for ${selectedRequestPatient?.name ?? 'this Student'}?`, message: 'Student and Guardian sign-in will be suspended. Enrollment, assignments, and therapy status stay unchanged.', actionLabel: 'Suspend Access', danger: true, run: () => { resolveRequest(selectedRequest, 'Approved'); setConfirmation(null); } }) : requestAction === 'decline' && selectedRequestPatient ? confirmRequestDecline(selectedRequestPatient.name, selectedRequest.id, 'The Student and Guardian’s account access will remain unchanged.', releaseNote, () => { resolveRequest(selectedRequest, 'Declined'); setConfirmation(null); setRequestAction(''); }) : resolveRequest(selectedRequest, 'More information requested')} /></View> : null;
+  const selectedRequestFooter = selectedRelease && requestAction && (selectedRelease.status === 'Pending' || selectedRelease.status === 'More information requested') ? <View style={styles.requestDrawerFooter}><TouchableOpacity accessibilityRole="button" onPress={() => { setRequestAction(''); setReleaseNote(''); setReleaseReplacement(''); }} style={styles.requestCancel}><Text style={styles.requestCancelText}>Cancel</Text></TouchableOpacity><Button label={requestAction === 'info' ? 'Record Information Request' : requestAction === 'reassign' ? 'Confirm Reassignment' : requestAction === 'archive' ? 'Approve & Archive' : 'Decline Request'} kind={requestAction === 'archive' || requestAction === 'decline' ? 'danger' : 'primary'} disabled={requestAction === 'info' || requestAction === 'decline' || requestAction === 'archive' ? !releaseNote.trim() || requestAction === 'archive' && (!validClosureDate(releaseEffectiveDate, selectedRelease.patientId) || !releaseAuthorizationReference.trim() || releaseStage(selectedRelease) !== 'Ready for Admin Review' || !selectedRelease.attachment || selectedRelease.teacherVerification !== 'Verified' || (selectedRelease.origin !== 'Therapist' && selectedRelease.guardianConfirmation !== 'Confirmed' && selectedRelease.guardianConfirmation !== 'Not required')) : requestAction === 'reassign' ? !releaseReplacement || releaseStage(selectedRelease) !== 'Ready for Admin Review' : false} onPress={() => requestAction === 'decline' && selectedReleasePatient ? confirmRequestDecline(selectedReleasePatient.name, selectedRelease.id, 'The Studentâ€™s enrollment, assignments, and account access will remain unchanged.', releaseNote, () => { resolveReleaseRequest(selectedRelease, 'Declined'); setConfirmation(null); setRequestAction(''); }) : resolveReleaseRequest(selectedRelease, requestAction === 'info' ? 'More information requested' : requestAction === 'reassign' ? 'Approved & reassigned' : requestAction === 'archive' ? 'Approved & archived' : 'Declined')} /></View> : selectedRequest && requestAction && (selectedRequest.status === 'Pending' || selectedRequest.status === 'More information requested') ? <View style={styles.requestDrawerFooter}><TouchableOpacity accessibilityRole="button" onPress={() => { setRequestAction(''); setReleaseNote(''); }} style={styles.requestCancel}><Text style={styles.requestCancelText}>Cancel</Text></TouchableOpacity><Button label={requestAction === 'info' ? 'Record Information Request' : requestAction === 'suspend' ? 'Approve Suspension' : 'Decline Request'} kind={requestAction === 'suspend' || requestAction === 'decline' ? 'danger' : 'primary'} disabled={!releaseNote.trim()} onPress={() => requestAction === 'suspend' ? setConfirmation({ title: `Suspend access for ${selectedRequestPatient?.name ?? 'this Student'}?`, message: 'Student and Guardian sign-in will be suspended. Enrollment, assignments, and therapy status stay unchanged.', actionLabel: 'Suspend Access', danger: true, run: () => { resolveRequest(selectedRequest, 'Approved'); setConfirmation(null); } }) : requestAction === 'decline' && selectedRequestPatient ? confirmRequestDecline(selectedRequestPatient.name, selectedRequest.id, 'The Student and Guardianâ€™s account access will remain unchanged.', releaseNote, () => { resolveRequest(selectedRequest, 'Declined'); setConfirmation(null); setRequestAction(''); }) : resolveRequest(selectedRequest, 'More information requested')} /></View> : null;
 
   if (!fontsLoaded) return null;
 
   return <View nativeID="admin-portal-root" style={[styles.appRoot, desktop ? styles.appRootDesktop : styles.appRootCompact]}>
-    <Stack.Screen options={{ headerShown: false, title: `SpeakSteps · ${page}` }} />
+    <Stack.Screen options={{ headerShown: false, title: `SpeakSteps Â· ${page}` }} />
     <StatusBar barStyle="dark-content" />
     {desktop ? sidebar() : null}
     <View style={styles.workspace}>
@@ -1969,9 +2316,9 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
 
     <Modal visible={newAccountOpen} transparent animationType="fade" onRequestClose={() => { setNewAccountOpen(false); setCreatePatientOpen(false); }}><Pressable style={styles.overlay} onPress={() => { setNewAccountOpen(false); setCreatePatientOpen(false); }}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}>{createPatientOpen ? <CreatePatientDialog teachers={activeTeachers.map(({ id, name }) => ({ id, name }))} therapists={therapistCounts} existingNumbers={patients.map((patient) => patient.studentNumber)} onClose={() => { setCreatePatientOpen(false); setNewAccountOpen(false); }} onCreate={makePatient} onSwitchRole={(role) => { setCreatePatientOpen(false); setAccountNewRole(role); }} /> : <CreateProfessionalDialog key={accountNewRole} role={accountNewRole} existingProfessionals={professionals} onClose={() => setNewAccountOpen(false)} onCreate={makeProfessional} onSwitchRole={(role) => { if (role === 'Student') setCreatePatientOpen(true); else setAccountNewRole(role); }} />}</Pressable></Pressable></Modal>
 
-    <Modal visible={Boolean(closurePatient)} transparent animationType="fade" onRequestClose={() => setClosurePatient(null)}><Pressable style={styles.overlay} onPress={() => setClosurePatient(null)}><Pressable style={[styles.dialog, styles.formDialog, styles.closureDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title={`Close enrollment — ${closureCategory.replace('Authorized ', '')}`} subtitle="Record an authorized administrative closure" onClose={() => setClosurePatient(null)} /><ScrollView style={styles.closureDialogBody} keyboardShouldPersistTaps="handled"><View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Clinical discharge is recorded by the Therapist. This form is for an authorized withdrawal, external transfer, or other administrative closure.</Text></View>{closurePatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{closurePatient.name}</Text><Text style={styles.secondaryText}>{closurePatient.studentNumber} · {closurePatient.school}</Text></View> : null}<View style={styles.field}><Text style={styles.fieldLabel}>Closure category</Text><SelectControl label="Closure category" value={closureCategory} options={['Authorized withdrawal', 'External transfer', 'Other authorized administrative closure']} getLabel={(value) => value} onChange={(value) => setClosureCategory(value as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>)} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Documented reason</Text><TextInput value={closureReason} onChangeText={setClosureReason} placeholder="Enter the authorized reason" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View><View style={styles.field}><View style={styles.closureEvidenceLabelRow}><Text style={styles.fieldLabel}>Supporting document <Text style={styles.requiredMark}>*</Text></Text><Text style={styles.sourceNote}>Required</Text></View><SupportingDocumentDropzone value={closureEvidence} onChange={setClosureEvidence} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Effective date</Text><EffectiveDateInput value={closureEffectiveDate} onChange={setClosureEffectiveDate} minDate={closurePatient ? closureMinDate(closurePatient.id) : undefined} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Authorization reference</Text><TextInput value={closureAuthorizationReference} onChangeText={setClosureAuthorizationReference} placeholder="Authorization or record reference" placeholderTextColor={C.subtle} style={styles.input} /></View></ScrollView><View style={[styles.dialogActions, styles.closureDialogFooter]}><Button label="Cancel" onPress={() => setClosurePatient(null)} /><Button label="Review closure" kind="primary" disabled={!closureReason.trim() || !closureAuthorizationReference.trim() || !closureEvidence || (!closurePatient || !validClosureDate(closureEffectiveDate, closurePatient.id))} onPress={submitClosureForm} /></View></Pressable></Pressable></Modal>
+    <Modal visible={Boolean(closurePatient)} transparent animationType="fade" onRequestClose={() => setClosurePatient(null)}><Pressable style={styles.overlay} onPress={() => setClosurePatient(null)}><Pressable style={[styles.dialog, styles.formDialog, styles.closureDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title={`Close enrollment â€” ${closureCategory.replace('Authorized ', '')}`} subtitle="Record an authorized administrative closure" onClose={() => setClosurePatient(null)} /><ScrollView style={styles.closureDialogBody} keyboardShouldPersistTaps="handled"><View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Clinical discharge is recorded by the Therapist. This form is for an authorized withdrawal, external transfer, or other administrative closure.</Text></View>{closurePatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{closurePatient.name}</Text><Text style={styles.secondaryText}>{closurePatient.studentNumber} Â· {closurePatient.school}</Text></View> : null}<View style={styles.field}><Text style={styles.fieldLabel}>Closure category</Text><SelectControl label="Closure category" value={closureCategory} options={['Authorized withdrawal', 'External transfer', 'Other authorized administrative closure']} getLabel={(value) => value} onChange={(value) => setClosureCategory(value as Exclude<CareEpisodeClosureCategory, 'Clinical discharge'>)} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Documented reason</Text><TextInput value={closureReason} onChangeText={setClosureReason} placeholder="Enter the authorized reason" placeholderTextColor={C.subtle} multiline style={[styles.input, styles.multilineInput]} /></View><View style={styles.field}><View style={styles.closureEvidenceLabelRow}><Text style={styles.fieldLabel}>Supporting document <Text style={styles.requiredMark}>*</Text></Text><Text style={styles.sourceNote}>Required</Text></View><SupportingDocumentDropzone value={closureEvidence} onChange={setClosureEvidence} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Effective date</Text><EffectiveDateInput value={closureEffectiveDate} onChange={setClosureEffectiveDate} minDate={closurePatient ? closureMinDate(closurePatient.id) : undefined} /></View><View style={styles.field}><Text style={styles.fieldLabel}>Authorization reference</Text><TextInput value={closureAuthorizationReference} onChangeText={setClosureAuthorizationReference} placeholder="Authorization or record reference" placeholderTextColor={C.subtle} style={styles.input} /></View></ScrollView><View style={[styles.dialogActions, styles.closureDialogFooter]}><Button label="Cancel" onPress={() => setClosurePatient(null)} /><Button label="Review closure" kind="primary" disabled={!closureReason.trim() || !closureAuthorizationReference.trim() || !closureEvidence || (!closurePatient || !validClosureDate(closureEffectiveDate, closurePatient.id))} onPress={submitClosureForm} /></View></Pressable></Pressable></Modal>
 
-    <Modal visible={Boolean(reenrollmentPatient)} transparent animationType="fade" onRequestClose={() => setReenrollmentPatient(null)}><Pressable style={styles.overlay} onPress={() => setReenrollmentPatient(null)}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title="Restore student enrollment?" subtitle="Confirm a new therapy enrollment" onClose={() => setReenrollmentPatient(null)} /><Text style={styles.confirmMessage}>This will begin a new enrollment for {reenrollmentPatient?.name ?? 'this Student'}. Previous therapy records and professional assignments will remain archived.</Text>{reenrollmentPatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{reenrollmentPatient.name}</Text><Text style={styles.secondaryText}>{reenrollmentPatient.studentNumber} · {reenrollmentPatient.school}</Text></View> : null}<View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Next step: verify eligibility and choose the new assigned Therapist and Teacher. The Therapist makes clinical treatment decisions.</Text></View><View style={styles.field}><Text style={styles.fieldLabel}>New Therapist</Text><SelectControl label="New Therapist" value={reenrollmentTherapistId} options={['', ...professionals.filter((person) => person.role === 'Therapist' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Therapist'} onChange={setReenrollmentTherapistId} /></View><View style={styles.field}><Text style={styles.fieldLabel}>New Teacher</Text><SelectControl label="New Teacher" value={reenrollmentTeacherId} options={['', ...professionals.filter((person) => person.role === 'Teacher' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Teacher'} onChange={setReenrollmentTeacherId} /></View><View style={styles.dialogActions}><Button label="Cancel" onPress={() => setReenrollmentPatient(null)} /><Button label="Restore" kind="primary" disabled={!reenrollmentTherapistId || !reenrollmentTeacherId} onPress={completeReenrollment} /></View></Pressable></Pressable></Modal>
+    <Modal visible={Boolean(reenrollmentPatient)} transparent animationType="fade" onRequestClose={() => setReenrollmentPatient(null)}><Pressable style={styles.overlay} onPress={() => setReenrollmentPatient(null)}><Pressable style={[styles.dialog, styles.formDialog]} onPress={(event) => event.stopPropagation()}><ModalHeader title="Restore student enrollment?" subtitle="Confirm a new therapy enrollment" onClose={() => setReenrollmentPatient(null)} /><Text style={styles.confirmMessage}>This will begin a new enrollment for {reenrollmentPatient?.name ?? 'this Student'}. Previous therapy records and professional assignments will remain archived.</Text>{reenrollmentPatient ? <View style={styles.archiveIdentity}><Text style={styles.personName}>{reenrollmentPatient.name}</Text><Text style={styles.secondaryText}>{reenrollmentPatient.studentNumber} Â· {reenrollmentPatient.school}</Text></View> : null}<View style={styles.requestReviewNotice}><Ionicons name="information-circle-outline" size={19} color={C.blue} /><Text style={styles.noticeText}>Next step: verify eligibility and choose the new assigned Therapist and Teacher. The Therapist makes clinical treatment decisions.</Text></View><View style={styles.field}><Text style={styles.fieldLabel}>New Therapist</Text><SelectControl label="New Therapist" value={reenrollmentTherapistId} options={['', ...professionals.filter((person) => person.role === 'Therapist' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Therapist'} onChange={setReenrollmentTherapistId} /></View><View style={styles.field}><Text style={styles.fieldLabel}>New Teacher</Text><SelectControl label="New Teacher" value={reenrollmentTeacherId} options={['', ...professionals.filter((person) => person.role === 'Teacher' && eligibleProfessional(person)).map((person) => person.id)]} getLabel={(value) => value ? professionals.find((person) => person.id === value)?.name ?? value : 'Choose an eligible Teacher'} onChange={setReenrollmentTeacherId} /></View><View style={styles.dialogActions}><Button label="Cancel" onPress={() => setReenrollmentPatient(null)} /><Button label="Restore" kind="primary" disabled={!reenrollmentTherapistId || !reenrollmentTeacherId} onPress={completeReenrollment} /></View></Pressable></Pressable></Modal>
 
 
     <Modal visible={Boolean(selection) && !inlineAccountDetails} transparent animationType="fade" onRequestClose={() => setSelection(null)}><Pressable style={[styles.overlay, (selectedProfessional || selectedPatient || selectedRelease || selectedRequest) && styles.professionalDrawerOverlay]} onPress={() => setSelection(null)}><Pressable style={[styles.dialog, selectedProfessional ? styles.professionalDrawer : (selectedPatient || selectedRelease || selectedRequest) ? [styles.studentDrawer, compact && styles.studentDrawerCompact] : styles.detailDialog, selectedAccountHeader && detailPanelStyles.accountDetailDialog]} onPress={(event) => event.stopPropagation()}>

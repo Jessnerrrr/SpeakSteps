@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { router, Stack, useLocalSearchParams } from 'expo-router'; 
-import React, { useState } from 'react';
+import QRCode from 'react-native-qrcode-svg';
+import * as Clipboard from 'expo-clipboard';
+import React, { useEffect, useRef, useState } from 'react';
+import { getPendingAccountSetup, setupTotp, verifyTotpSetup } from '@/services/user-api';
 import {
   ImageBackground,
   KeyboardAvoidingView,
@@ -19,11 +22,18 @@ import {
 
 export default function TotpSetupScreen() {
   const { role } = useLocalSearchParams(); 
+  const pendingSetup = getPendingAccountSetup();
   const [step, setStep] = useState(1);
-  const [emailAccount, setEmailAccount] = useState('');
-  const [password, setPassword] = useState('');
+  const [emailAccount, setEmailAccount] = useState(pendingSetup?.email || '');
+  const [password, setPassword] = useState(pendingSetup?.password || '');
   const [showPassword, setShowPassword] = useState(false);
   const [otpPin, setOtpPin] = useState('');
+  const [secret, setSecret] = useState('');
+  const [otpauthUrl, setOtpauthUrl] = useState('');
+  const [qrSize, setQrSize] = useState(0);
+  const [secretCopied, setSecretCopied] = useState(false);
+  const [setupError, setSetupError] = useState('');
+  const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showValidation, setShowValidation] = useState(false);
   const emailWarning = !emailAccount.trim() ? 'Enter your email address.'
     : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAccount.trim()) ? 'Enter a valid email address.' : '';
@@ -39,20 +49,44 @@ export default function TotpSetupScreen() {
     'Inter-Bold': require('../../../assets/Inter-Bold.ttf'),
   });
 
+  useEffect(() => () => {
+    if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+  }, []);
+
   if (!fontsLoaded) return null;
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if ((step === 1 && (emailWarning || passwordWarning)) || (step === 3 && pinWarning)) {
       setShowValidation(true);
       return;
     }
     setShowValidation(false);
-    if (step < 4) {
-      setStep(step + 1);
-    } else {
-      // Show Change Password alert modal before navigating
-      setShowPasswordModal(true);
+    setSetupError('');
+    if (step === 1) {
+      try {
+        const setup = await setupTotp(emailAccount.trim(), password);
+        setSecret(setup.secret);
+        setOtpauthUrl(setup.otpauthUrl);
+        setStep(2);
+      } catch (error) {
+        setSetupError(error instanceof Error ? error.message : 'Could not start authenticator setup.');
+      }
+      return;
     }
+    if (step === 2) {
+      setStep(3);
+      return;
+    }
+    if (step === 3) {
+      try {
+        await verifyTotpSetup(emailAccount.trim(), password, otpPin);
+        setStep(4);
+      } catch (error) {
+        setSetupError(error instanceof Error ? error.message : 'Could not verify the authenticator code.');
+      }
+      return;
+    }
+    setShowPasswordModal(true);
   };
 
   const handleProceedToPassword = () => {
@@ -62,7 +96,7 @@ export default function TotpSetupScreen() {
     // Continue Account Setup -> Change Temporary Password
     router.replace({
       pathname: '/new-password',
-      params: { role: currentRole || 'patient', flow: 'setup' },
+      params: { role: currentRole || 'patient', flow: 'setup', email: emailAccount.trim() },
     } as any);
   };
 
@@ -70,6 +104,20 @@ export default function TotpSetupScreen() {
     setShowValidation(false);
     if (step > 1) setStep(step - 1);
     else router.back();
+  };
+
+  const handleCopySecret = async () => {
+    try {
+      await Clipboard.setStringAsync(secret);
+      setSecretCopied(true);
+      if (copyFeedbackTimer.current) clearTimeout(copyFeedbackTimer.current);
+      copyFeedbackTimer.current = setTimeout(() => {
+        setSecretCopied(false);
+        copyFeedbackTimer.current = null;
+      }, 1800);
+    } catch {
+      setSetupError('Could not copy the setup key. Please select and copy it manually.');
+    }
   };
 
   const renderStepHeader = (number: string, title: string, subtitle: string) => (
@@ -169,16 +217,39 @@ export default function TotpSetupScreen() {
       <View style={styles.optionsContainer}>
         <View style={styles.optionCol}>
           <Text style={styles.optionTitle}>Option 1 - QR Code</Text>
-          <View style={styles.qrCodeBox}>
-            <Ionicons name="qr-code" size={60} color="#1E293B" />
+          <View
+            style={styles.qrCodeBox}
+            onLayout={(event) => setQrSize(Math.max(0, Math.floor(event.nativeEvent.layout.width - 24)))}
+          >
+            {secret && otpauthUrl && qrSize > 0 ? (
+              <QRCode
+                value={otpauthUrl}
+                size={qrSize}
+                color="#0F172A"
+                backgroundColor="#FFFFFF"
+                quietZone={8}
+              />
+            ) : null}
           </View>
         </View>
-        
-        <View style={styles.optionCol}>
-          <Text style={styles.optionTitle}>Option 2 - Secret Key</Text>
+
+      </View>
+
+      <View style={styles.manualSecretSection}>
+        <Text style={styles.optionTitle}>Option 2 - Secret Key</Text>
+        <View style={styles.secretKeyCopyRow}>
           <View style={styles.secretKeyBox}>
-            <Text style={styles.secretKeyText}>VLX8L5CD78D6CM9D</Text>
+            <Text selectable style={styles.secretKeyText}>{secret}</Text>
           </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={secretCopied ? 'Setup key copied' : 'Copy setup key'}
+            style={styles.copyButton}
+            onPress={() => void handleCopySecret()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.copyButtonText}>{secretCopied ? 'Copied!' : 'Copy'}</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -228,7 +299,7 @@ export default function TotpSetupScreen() {
 
   return (
     <ImageBackground
-      source={require('../../../assets/images/admin-bg.png')} 
+      source={require('../../../assets/images/admin-bg.png')}
       style={styles.background}
       resizeMode="cover"
     >
@@ -253,6 +324,7 @@ export default function TotpSetupScreen() {
               {step === 2 && renderStep2()}
               {step === 3 && renderStep3()}
               {step === 4 && renderStep4()}
+              {setupError ? <Text accessibilityRole="alert" style={styles.fieldWarning}>{setupError}</Text> : null}
 
               <View style={styles.footerAction}>
                 <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.8}>
@@ -347,10 +419,14 @@ const styles = StyleSheet.create({
   instructionSubBullet: { fontFamily: 'Inter-Medium', fontSize: 11, color: '#475569', marginLeft: 24, marginBottom: 2 },
   optionsContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   optionCol: { flex: 1, alignItems: 'center' },
+  manualSecretSection: { marginTop: 16 },
+  secretKeyCopyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   optionTitle: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#0F172A', marginBottom: 8, textAlign: 'center' },
   qrCodeBox: { width: '100%', aspectRatio: 1, backgroundColor: '#0066A4', borderRadius: 12, justifyContent: 'center', alignItems: 'center', padding: 12 },
-  secretKeyBox: { width: '100%', backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center' },
+  secretKeyBox: { flex: 1, minHeight: 44, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' },
   secretKeyText: { fontFamily: 'Inter-Bold', fontSize: 10, color: '#0F172A', textAlign: 'center' },
+  copyButton: { minHeight: 44, backgroundColor: '#0066A4', paddingHorizontal: 16, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  copyButtonText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#FFFFFF' },
   successContainer: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#A7F3D0', borderRadius: 12, padding: 16, marginTop: 10 },
   successIconCircle: { marginRight: 12 },
   successText: { flex: 1, fontFamily: 'Inter-Medium', fontSize: 14, color: '#064E3B', lineHeight: 20, marginTop: 4 },

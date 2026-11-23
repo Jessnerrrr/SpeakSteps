@@ -62,14 +62,14 @@ export default function ForgotPasswordScreen() {
               <TouchableOpacity 
                 style={[styles.roleCard, { backgroundColor: '#FDE4AB' }]}
                 activeOpacity={0.7}
-                onPress={() => router.push('/multi-factor' as any)} 
+                onPress={() => router.push('/multi-factor' as any)}
               >
                 <View style={styles.iconBoxWhite}>
                   <Image source={require('../../../assets/images/shieldplus.png')} style={styles.placeholderIcon} />
                 </View>
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Multi-Factor Authenticator</Text>
-                  <Text style={styles.roleSubtitle}>Get an OTP by email or phone number</Text>
+                  <Text style={styles.roleSubtitle}>Request a secure password reset code</Text>
                 </View>
                 <Text style={styles.arrowIconBlue}>›</Text>
               </TouchableOpacity>
@@ -78,14 +78,14 @@ export default function ForgotPasswordScreen() {
               <TouchableOpacity 
                 style={[styles.roleCard, { backgroundColor: '#CBE6F6' }]}
                 activeOpacity={0.7}
-                onPress={() => router.push('/security-questions' as any)} 
+                onPress={() => router.push('/multi-factor' as any)}
               >
                 <View style={styles.iconBoxWhite}>
                   <Image source={require('../../../assets/images/shieldquestion.png')} style={styles.placeholderIcon} />
                 </View>
                 <View style={styles.roleTextContainer}>
                   <Text style={styles.roleTitle}>Security Questions</Text>
-                  <Text style={styles.roleSubtitle}>Answer your secret questions</Text>
+                  <Text style={styles.roleSubtitle}>Request a secure password reset code</Text>
                 </View>
                 <Text style={styles.arrowIconBlue}>›</Text>
               </TouchableOpacity>

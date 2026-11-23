@@ -15,6 +15,8 @@ export type ReviewTarget = {
 
 export type ReviewRecord = {
   id: string;
+  submissionId?: string;
+  audioRecordingUrl?: string;
   student: string;
   assignmentId?: string;
   initial: string;

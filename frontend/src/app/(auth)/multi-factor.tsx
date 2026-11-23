@@ -2,6 +2,7 @@ import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Alert, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { requestPasswordReset } from '@/services/user-api';
 
 export default function MultiFactorScreen() {
   // Responsive Hooks
@@ -10,6 +11,7 @@ export default function MultiFactorScreen() {
 
   const [email, setEmail] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
@@ -19,19 +21,35 @@ export default function MultiFactorScreen() {
 
   if (!fontsLoaded) return null; 
 
-  const handleSendOTP = () => {
+  const handleSendOTP = async () => {
     setHasSubmitted(true);
-    
-    if (!email) {
-      Alert.alert("Email Required", "Please enter your email to receive an OTP.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('Email required', 'Enter a valid email address.');
       return; 
     }
-    
-    // Added 'as any' here to resolve the TypeScript path error
-    router.push({ 
-      pathname: '/otp-verification', 
-      params: { email: email } 
-    } as any);
+    setIsSubmitting(true);
+    try {
+      const { resetCode } = await requestPasswordReset(email.trim());
+      if (!resetCode) {
+        Alert.alert('Check your email', 'If an account exists for this address, a reset code has been issued.');
+        return;
+      }
+      const continueToReset = () => router.push({ pathname: '/new-password', params: { flow: 'reset', email: email.trim() } } as any);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(`Password reset code\n\nUse this code to choose a new password:\n\n${resetCode}`);
+        continueToReset();
+      } else {
+        Alert.alert(
+          'Password reset code',
+          `Use this code to choose a new password:\n\n${resetCode}`,
+          [{ text: 'Continue', onPress: continueToReset }],
+        );
+      }
+    } catch (error) {
+      Alert.alert('Could not request reset code', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -62,7 +80,7 @@ export default function MultiFactorScreen() {
             <View style={[styles.bottomCard, isTablet && styles.bottomCardTablet]}>
               
               <Text style={styles.welcomeText}>Multi-factor Authentication</Text>
-              <Text style={styles.subText}>Enter your email to start recovery.</Text>
+              <Text style={styles.subText}>Request a secure password reset code for your account.</Text>
 
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Email</Text>
@@ -84,8 +102,8 @@ export default function MultiFactorScreen() {
                 </Text>
               </View>
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSendOTP}>
-                <Text style={styles.submitBtnText}>Send OTP</Text>
+              <TouchableOpacity style={styles.submitBtn} onPress={() => void handleSendOTP()} disabled={isSubmitting}>
+                <Text style={styles.submitBtnText}>{isSubmitting ? 'Requesting…' : 'Request reset code'}</Text>
               </TouchableOpacity>
 
             </View>

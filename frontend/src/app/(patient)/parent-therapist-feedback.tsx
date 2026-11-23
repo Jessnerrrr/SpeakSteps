@@ -1,6 +1,5 @@
 import { ListPagination, useListPagination } from '@/components/list-pagination';
-import { ChildProfileStore } from '@/data/child-profile-store';
-import { learningCategory, useLearningAssignments } from '@/data/learning-workflow';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 import { PatientPressable } from '@/components/patient-pressable';
 import React, { useState, useMemo } from 'react';
 import {
@@ -33,6 +32,15 @@ interface TherapistAvatarProps {
   imageUri?: any;
   size?: number;
   style?: any;
+}
+
+function feedbackCategory(category: string): TherapistFeedbackItem['category'] {
+  if (/syllable/i.test(category)) return 'Syllables';
+  if (/phrase/i.test(category)) return 'Phrases';
+  if (/sentence|conversation/i.test(category)) return 'Sentences';
+  if (/word/i.test(category)) return 'Words';
+  if (/sound/i.test(category)) return 'Sound';
+  return 'General';
 }
 
 export function TherapistAvatarPlaceholder({
@@ -95,22 +103,23 @@ export default function ParentTherapistFeedbackScreen() {
 
   const [selectedFeedback, setSelectedFeedback] = useState<TherapistFeedbackItem | null>(null);
 
-  const assignments = useLearningAssignments();
-  const studentId = ChildProfileStore.getProfile().id;
+  const { feedback, error } = usePatientLearning();
   const filteredFeedback = useMemo(() => {
-    const delivered = assignments.flatMap((item): TherapistFeedbackItem[] => {
-      if (item.studentId !== studentId || !item.feedback) return [];
-      return [{
-        id: item.id, therapistName: item.feedback.reviewedBy,
-        date: new Date(item.feedback.date).toLocaleDateString(),
-        title: item.title, comments: item.feedback.message,
-        category: learningCategory(item.level), recommendations: item.feedback.homePractice,
-      }];
-    });
+    const delivered: TherapistFeedbackItem[] = feedback.map((item) => ({
+      id: item.id,
+      therapistName: item.therapistName,
+      specialty: item.specialty,
+      date: item.reviewedAt,
+      displayDate: new Date(item.reviewedAt).toLocaleDateString(),
+      title: item.title,
+      comments: item.parentFeedback,
+      category: feedbackCategory(item.category),
+      recommendations: item.homePractice,
+    }));
     if (activeFilters.length === 0) return delivered;
     return delivered.filter((item) => item.category !== 'General' && activeFilters.includes(item.category));
-  }, [activeFilters, assignments, studentId]);
-  const pagination = useListPagination(filteredFeedback.length, 8, JSON.stringify([studentId, activeFilters]));
+  }, [activeFilters, feedback]);
+  const pagination = useListPagination(filteredFeedback.length, 8, JSON.stringify(activeFilters));
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -206,7 +215,7 @@ export default function ParentTherapistFeedbackScreen() {
                   <Ionicons name="chatbubbles-outline" size={48} color="#98BDDA" />
                   <Text style={styles.emptyStateTitle}>No Feedback Yet</Text>
                   <Text style={styles.emptyStateSubtitle}>
-                    Feedback for this category will appear here after sessions.
+                    {error || 'Feedback for this category will appear here after sessions.'}
                   </Text>
                 </View>
               ) : (

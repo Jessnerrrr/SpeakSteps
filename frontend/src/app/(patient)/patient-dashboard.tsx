@@ -23,10 +23,10 @@ import {
 
 // MOCK DATA IMPORT:
 import { MOCK_PATIENT_DASHBOARD } from '@/data/patient-dashboard-mock';
-import { PARTICIPATION_STARS, usePracticeSubmissions } from '@/data/practice-submissions';
 import { BuddyStore, Buddy } from '@/data/buddy-store';
 import { ChildActivityEmpty } from '@/components/child-activity-empty';
 import { ChildProfileStore, ChildProfile } from '@/data/child-profile-store';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 import { adventurePracticeLevels, practiceLevelIcons } from '@/components/adventure-icon';
 import { ChildBottomNav } from '@/components/child-bottom-nav';
 import { GrownUpCheckModal } from '@/components/grown-up-check-modal';
@@ -46,8 +46,9 @@ export default function PatientDashboardScreen() {
   });
 
   const data = MOCK_PATIENT_DASHBOARD;
-  const submissions = usePracticeSubmissions();
-  const assignedPractice = useAssignedActivities().filter((activity) => activity.linked && !activity.submitted);
+  const { patient, progress, error } = usePatientLearning();
+  const submissions = progress?.recentSubmissions ?? [];
+  const assignedPractice = useAssignedActivities().filter((activity) => activity.assignmentStatus === 'Assigned');
   const [isActivitiesOpen, setIsActivitiesOpen] = useState(false);
   const [activeBuddy, setActiveBuddy] = useState<Buddy>(BuddyStore.getActiveBuddy());
   const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
@@ -78,8 +79,13 @@ export default function PatientDashboardScreen() {
 
   if (!fontsLoaded) return null;
 
-  const progressPercentage =
-    Math.min(100, (submissions.length / data.stepsProgress.totalActivities) * 100);
+  const displayName = patient
+    ? [patient.firstName, patient.lastName].filter(Boolean).join(' ')
+    : childProfile.displayName;
+  const totalAssigned = progress?.assignedCount ?? 0;
+  const progressPercentage = totalAssigned
+    ? Math.min(100, ((progress?.completedCount ?? 0) / totalAssigned) * 100)
+    : 0;
 
   return (
     <>
@@ -97,7 +103,7 @@ export default function PatientDashboardScreen() {
             {/* TOP HEADER */}
             <View style={styles.topHeader}>
               <View style={styles.greetingRow}>
-                <Text style={styles.greetingText}>Hi, {childProfile.displayName}!</Text>
+                <Text style={styles.greetingText}>Hi, {displayName}!</Text>
               </View>
 
               <View style={styles.headerRightActions}>
@@ -220,7 +226,7 @@ export default function PatientDashboardScreen() {
                 <Text style={styles.myStepsTitle}>My Steps</Text>
 
                 <View style={styles.starNumberRow}>
-                  <Text style={styles.starNumberText}>{submissions.length * PARTICIPATION_STARS}</Text>
+                  <Text style={styles.starNumberText}>{progress?.stars ?? 0}</Text>
                   {/* FIXED IMAGE PATH (3 levels up) */}
                   <Image
                     source={require('../../../assets/images/speaksteps_star_3d.gif')}
@@ -239,7 +245,7 @@ export default function PatientDashboardScreen() {
                 </View>
 
                 <Text style={styles.myStepsSubtext}>
-                  {submissions.length} {submissions.length === 1 ? 'activity' : 'activities'} done
+                  {progress?.completedCount ?? 0} {(progress?.completedCount ?? 0) === 1 ? 'activity' : 'activities'} done
                 </Text>
               </LinearGradient>
 
@@ -319,7 +325,7 @@ export default function PatientDashboardScreen() {
                   </View>
                   <Text style={styles.cardHeading}>My Progress</Text>
                   <Text style={styles.cardSubtext}>
-                    {submissions.length * PARTICIPATION_STARS} earned
+                    {progress?.stars ?? 0} earned
                   </Text>
                 </Pressable>
               </View>
@@ -367,13 +373,14 @@ export default function PatientDashboardScreen() {
                     <Text style={styles.cardSubtext}>{activity.level}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}</Text>
                   </Pressable>
                 ))}
-                {submissions.length === 0 && assignedPractice.length === 0 ? (
+                {error ? <Text style={styles.cardSubtext}>{error}</Text> : null}
+                {!error && submissions.length === 0 && assignedPractice.length === 0 ? (
                   <ChildActivityEmpty buddy={activeBuddy} hint="Pick something fun to try in Play!" />
                 ) : null}
                 {submissions.map((activity) => (
                   <View key={activity.id} style={styles.activityEntry}>
-                    <Text style={styles.cardHeading}>{activity.title}</Text>
-                    <Text style={styles.cardSubtext}>{activity.position} · Submitted · {PARTICIPATION_STARS} star</Text>
+                    <Text style={styles.cardHeading}>{activity.activityTitle}</Text>
+                    <Text style={styles.cardSubtext}>{activity.level} · Submitted</Text>
                   </View>
                 ))}
               </ScrollView>

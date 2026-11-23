@@ -16,6 +16,9 @@ export type ActivityStatus = 'pending' | 'completed';
 
 export interface AssignedActivity {
   id: string;
+  activityId?: string;
+  patientId?: string;
+  patientCode?: string;
   title: string;
   level: string;
   category: ActivityCategory;
@@ -29,6 +32,11 @@ export interface AssignedActivity {
   description?: string;
   guidance?: string;
   source?: 'Therapist' | 'Teacher';
+  language?: string;
+  sound?: string;
+  prompts?: { text: string; position?: string }[];
+  modelAudioUrls?: string[];
+  assignmentStatus?: string;
   attempts: number;
   bestScore: string;
   stars: string;

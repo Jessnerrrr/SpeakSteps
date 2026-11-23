@@ -1,0 +1,7 @@
+﻿node_modules/
+.env
+.env.*
+!.env.example
+mongoaccount.md
+backend/DUMMY_CREDENTIALS.md
+.expo/

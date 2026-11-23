@@ -11,7 +11,7 @@ const filters = ['All', 'Pending', 'Reviewed'] as const;
 
 export function ReviewList() {
   const { palette } = useTherapist();
-  const { reviews } = useReviews();
+  const { reviews, loading, error, refresh } = useReviews();
   const [filter, setFilter] = useState<(typeof filters)[number]>('All');
 
   const visible = useMemo(
@@ -24,6 +24,12 @@ export function ReviewList() {
       <Text style={[styles.kicker, { color: palette.faint }]}>LISTEN. REFLECT. GUIDE.</Text>
       <Text style={[styles.title, { color: palette.primary }]}>Every attempt matters.</Text>
       <Text style={[styles.subtitle, { color: palette.muted }]}>Your clinical judgment stays at the center.</Text>
+      {loading ? <Text style={[styles.empty, { color: palette.muted }]}>Loading saved submissions…</Text> : null}
+      {error ? (
+        <Pressable accessibilityRole="button" onPress={() => void refresh()}>
+          <Text style={[styles.empty, { color: palette.alert }]}>{error}  Tap to retry.</Text>
+        </Pressable>
+      ) : null}
 
       <View style={[styles.tabs, { borderBottomColor: palette.line }]}>
         {filters.map((item) => {

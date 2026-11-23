@@ -1,14 +1,16 @@
-import { assignmentAttribution, submitLearningAssignment, useLearningAssignments } from '@/data/learning-workflow';
+import { assignmentAttribution } from '@/data/learning-workflow';
 import { usePracticeRecorder } from '@/components/use-practice-recorder';
 import { PracticeStarCelebration } from '@/components/practice-star-celebration';
-import { ChildProfileStore } from '@/data/child-profile-store';
-import { sampleActivities, therapistPracticePrompts } from '@/Therapist-modules/therapist-activities/data/activityData';
+import { useAssignedActivities } from '@/data/assigned-activities';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
+import { AudioPlaybackButton } from '@/components/audio/AudioPlaybackButton';
+import { createSubmission, getPracticeItems, uploadAudioFile } from '@/services/user-api';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useRef, useState, useSyncExternalStore, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentRef } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -19,12 +21,12 @@ import {
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 // FIXED IMPORTS: 2 levels up to reach src/types and src/components
-import type { AdventureCategory } from '../../data/patient-dashboard-mock';
-import type { Position } from '../../types/sentences';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
 import { ChildScreenFrame, childScreenColors } from '../../components/child-screen-frame';
-import { submitPractice } from '../../data/practice-submissions';
 import { BuddyStore } from '../../data/buddy-store';
+import type { AdventureCategory } from '../../data/patient-dashboard-mock';
+
+type PracticeItem = Awaited<ReturnType<typeof getPracticeItems>>[number];
 
 export default function PracticeScreen() {
   const params = useLocalSearchParams<{
@@ -34,41 +36,59 @@ export default function PracticeScreen() {
     category: AdventureCategory['iconType'] | 'sound';
     activityId: string;
     linkedAssignment: string;
-    catalogActivityId: string;
+    practiceItemId: string;
     position: string;
     language: string;
     level: string;
   }>();
 
   const [submissionError, setSubmissionError] = useState('');
+  const [practiceItem, setPracticeItem] = useState<PracticeItem | null>(null);
   const [promptIndex, setPromptIndex] = useState(0);
   const audio = usePracticeRecorder(promptIndex);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
-  const studentId = ChildProfileStore.getProfile().id;
-  const assignments = useLearningAssignments();
+  const { patient, refresh } = usePatientLearning();
+  const assignments = useAssignedActivities();
   const assignment = params.linkedAssignment === 'true'
-    ? assignments.find((item) => item.id === params.activityId && item.studentId === studentId)
+    ? assignments.find((item) => item.id === params.activityId)
     : undefined;
-  const catalogActivity = sampleActivities.find((item) => item.id === params.catalogActivityId);
-  const prompts = assignment?.prompts ?? (catalogActivity ? therapistPracticePrompts(catalogActivity) : []);
+  const prompts = assignment?.prompts ?? (practiceItem ? [{
+    text: params.level === 'Sentences'
+      ? practiceItem.sentenceText || practiceItem.syllable || practiceItem.sound
+      : params.level === 'Syllables'
+        ? practiceItem.syllable || practiceItem.sound
+        : practiceItem.sound,
+    position: practiceItem.position,
+  }] : []);
   const currentPrompt = prompts[promptIndex];
   const hasNextPrompt = promptIndex < prompts.length - 1;
-  const instructions = assignment?.instructions ?? catalogActivity?.instructions;
-  const guidance = (assignment?.guidance ?? catalogActivity?.guide)?.trim();
+  const instructions = assignment?.description;
+  const guidance = assignment?.guidance?.trim();
   const [submission, setSubmission] = useState<'earned' | 'repeat' | 'missing' | null>(null);
   const completed = submission === 'earned' || submission === 'repeat';
   const promptTotal = Math.max(1, prompts.length);
-  const position = (params.position ?? 'Initial') as Position;
   const sound = params.sound ?? '/s/';
   const syllable = params.syllable ?? (params.level === 'Sound' ? '' : 'sa');
-  const category = (assignment?.level ?? catalogActivity?.level ?? params.level) === 'Syllables'
+  const category = (assignment?.level ?? params.level) === 'Syllables'
     ? 'syllables' : params.category === 'sound' ? 'sounds' : params.category ?? 'sounds';
-  const practiceContext = assignment ? 'Due ' + assignment.dueDate : params.activityId ? 'Assigned practice' : catalogActivity ? catalogActivity.language : params.level === 'Sound' ? 'Individual sound' : category === 'sounds' ? position : params.language ?? 'Play';
-  const practiceId = params.activityId ? 'assigned:' + params.activityId : catalogActivity ? 'library:' + catalogActivity.id : params.sentenceId;
-  const title = assignment?.title ?? catalogActivity?.title ?? [sound, syllable].filter(Boolean).join(' ');
-
+  const practiceContext = assignment
+    ? assignment.dueDate ? 'Due ' + assignment.dueDate : 'Assigned practice'
+    : practiceItem?.language ?? (params.level === 'Sound' ? 'Individual sound' : params.language ?? 'Play');
+  const practiceId = assignment ? 'assigned:' + assignment.id : practiceItem ? 'library:' + practiceItem.id : params.sentenceId;
+  const title = assignment?.title ?? practiceItem?.sentenceText ?? practiceItem?.syllable ?? [sound, syllable].filter(Boolean).join(' ');
 
   const buddy = useSyncExternalStore(BuddyStore.subscribe, BuddyStore.getActiveBuddy, BuddyStore.getActiveBuddy);
+
+  useEffect(() => {
+    if (!params.practiceItemId || assignment) return;
+    let active = true;
+    void getPracticeItems({ language: params.language }).then((items) => {
+      if (active) setPracticeItem(items.find((item) => item.id === params.practiceItemId) ?? null);
+    }).catch((loadError) => {
+      if (active) setSubmissionError(loadError instanceof Error ? loadError.message : 'Could not load this practice item.');
+    });
+    return () => { active = false; };
+  }, [assignment, params.language, params.practiceItemId]);
 
   // FIXED FONT PATHS: 3 levels up to reach root assets folder
   const [fontsLoaded] = useFonts({
@@ -90,6 +110,40 @@ export default function PracticeScreen() {
     audio.stopPlayback();
     setPromptIndex(index);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
+  };
+
+  const submitRecording = async () => {
+    if (!audio.take) {
+      setSubmissionError('Record your voice before submitting.');
+      return;
+    }
+    if (!patient) {
+      setSubmissionError('The patient profile could not be loaded. Please try again.');
+      return;
+    }
+    if (params.linkedAssignment === 'true' && !assignment) {
+      setSubmissionError('This assignment is no longer available for this student.');
+      return;
+    }
+    if (!practiceItem && !assignment) {
+      setSubmissionError('This practice activity is no longer available.');
+      return;
+    }
+    setSubmissionError('');
+    try {
+      const audioRecordingUrl = await uploadAudioFile(audio.take);
+      const saved = await createSubmission({
+        patientId: patient.id,
+        assignmentId: assignment?.id,
+        practiceItemId: practiceItem?.id,
+        audioRecordingUrl,
+      });
+      await refresh();
+      setSubmission(saved.starsAwarded > 0 ? 'earned' : 'repeat');
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    } catch (submitError) {
+      setSubmissionError(submitError instanceof Error ? submitError.message : 'Could not submit this practice recording.');
+    }
   };
 
   return (
@@ -160,6 +214,11 @@ export default function PracticeScreen() {
                   <View style={styles.promptHeading}>
                     <Text accessibilityLiveRegion="polite" style={styles.promptCount}>Prompt {promptIndex + 1} of {promptTotal}</Text>
                     {currentPrompt?.position && <Text style={styles.positionChip}>{currentPrompt.position}</Text>}
+                    <AudioPlaybackButton
+                      audioUrl={assignment?.modelAudioUrls?.[promptIndex] ?? practiceItem?.sampleAudioUrl}
+                      label="Listen to the example"
+                      variant="inline"
+                    />
                   </View>
                   <View accessibilityRole="progressbar" accessibilityLabel="Practice progress"
                     accessibilityValue={{ min: 0, max: promptTotal, now: promptIndex + 1 }} style={styles.progressTrack}>
@@ -222,21 +281,14 @@ export default function PracticeScreen() {
                 return;
               }
               if (!practiceId) {
-                setSubmission('missing');
+                setSubmissionError('This practice activity is still loading. Please wait and try again.');
                 return;
               }
               if (hasNextPrompt) {
                 goToPrompt(promptIndex + 1);
                 return;
               }
-              if (params.linkedAssignment === 'true' && !submitLearningAssignment(params.activityId, studentId)) {
-                setSubmissionError('This assignment is no longer available for this student.');
-                return;
-              }
-              setSubmissionError('');
-              const earned = submitPractice({ id: practiceId, title, position: practiceContext, category });
-              setSubmission(earned ? 'earned' : 'repeat');
-              scrollRef.current?.scrollTo({ y: 0, animated: false });
+              void submitRecording();
             }}>
               <Text style={styles.submitText}>{submission === 'missing' ? 'Go to Play' : hasNextPrompt ? 'Next prompt' : 'Submit'}</Text>
               <Ionicons name={hasNextPrompt ? 'chevron-forward' : 'checkmark'} size={19} color="#FFFFFF" />

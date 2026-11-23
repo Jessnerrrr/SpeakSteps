@@ -26,6 +26,7 @@ export type Accomplishment = {
 
 export type PatientRecord = {
   id: string;
+  patientCode?: string;
   initials: string;
   avatar: string;
   firstName: string;
@@ -314,10 +315,11 @@ export function patientMeta(patient?: Partial<Pick<PatientRecord, 'age' | 'langu
   return `${patient.age ?? ''} yrs old · ${language} · ${sound} Target · ${stage}`;
 }
 
-export function createPatient(input: NewPatientInput): PatientRecord {
+export function createPatient(input: NewPatientInput, patientCode?: string): PatientRecord {
   const initials = `${input.firstName.trim()[0] || ''}${input.lastName.trim()[0] || ''}`.toUpperCase() || 'P';
   return {
     id: `patient-${Date.now()}`,
+    patientCode,
     initials,
     avatar: '#0EA5E9',
     firstName: input.firstName.trim(),

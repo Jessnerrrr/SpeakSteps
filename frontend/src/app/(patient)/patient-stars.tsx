@@ -18,13 +18,13 @@ import {
 } from 'react-native';
 
 // FIXED IMPORTS: 2 levels up to reach src/components and src/data
-import { PARTICIPATION_STARS, usePracticeSubmissions } from '../../data/practice-submissions';
 import { MOCK_STARS_DATA } from '../../data/stars-mock';
 import { AdventureIcon } from '@/components/adventure-icon';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
 import { GrownUpCheckModal } from '../../components/grown-up-check-modal';
 import { NotificationBellButton } from '../../components/notification-popover';
 import { SignOutConfirmModal } from '../../components/sign-out-confirm-modal';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 export default function PatientStarsScreen() {
   const { width } = useWindowDimensions();
@@ -38,15 +38,16 @@ export default function PatientStarsScreen() {
   });
 
   const data = MOCK_STARS_DATA;
-  const submissions = usePracticeSubmissions();
+  const { progress } = usePatientLearning();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isGrownUpModalVisible, setIsGrownUpModalVisible] = useState(false);
   const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   if (!fontsLoaded) return null;
 
-  const totalProgressPercentage =
-    Math.min(100, (submissions.length / data.totalActivitiesTarget) * 100);
+  const totalProgressPercentage = progress?.assignedCount
+    ? Math.min(100, ((progress.completedCount / progress.assignedCount) * 100))
+    : 0;
 
   return (
     <>
@@ -101,7 +102,7 @@ export default function PatientStarsScreen() {
               <LinearGradient colors={['#106AB0', '#2A8AC8', '#4DB3E9']} locations={[0, 0.45, 1]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.collectingStarsCard}>
                 <Text style={styles.collectingStarsTitle}>COLLECTING STARS</Text>
                 <View style={styles.starNumberRow}>
-                  <Text style={styles.starNumberText}>{submissions.length * PARTICIPATION_STARS}</Text>
+                  <Text style={styles.starNumberText}>{progress?.stars ?? 0}</Text>
                   {/* FIXED IMAGE PATH */}
                   <Image source={require('../../../assets/images/speaksteps_star_3d.gif')} style={styles.starAssetImage} contentFit="contain" />
                 </View>
@@ -119,8 +120,10 @@ export default function PatientStarsScreen() {
 
               <View style={styles.categoriesList}>
                 {data.categories.map((cat) => {
-                  const completed = submissions.filter((activity) => activity.category === cat.id).length;
-                  const catPercentage = (completed / cat.total) * 100;
+                  const level = cat.id === 'sounds' ? 'Sound' : cat.id.charAt(0).toUpperCase() + cat.id.slice(1);
+                  const completed = progress?.completedByLevel[level] ?? 0;
+                  const total = progress?.assignedByLevel[level] ?? 0;
+                  const catPercentage = total ? (completed / total) * 100 : 0;
                   return (
                     <PatientPressable
                       key={cat.id}
@@ -139,7 +142,7 @@ export default function PatientStarsScreen() {
                       <View style={styles.categoryProgressTrack}>
                         <View style={[styles.categoryProgressFill, { width: `${Math.min(catPercentage, 100)}%` }]} />
                       </View>
-                      <Text style={styles.categoryCounterText}>{completed} done</Text>
+                      <Text style={styles.categoryCounterText}>{completed}/{total} done</Text>
                     </PatientPressable>
                   );
                 })}

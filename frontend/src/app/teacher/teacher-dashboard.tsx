@@ -3,14 +3,35 @@ import { ChecklistFilter } from '@/components/therapist/TherapistChecklistFilter
 import { matchesPracticeLanguage, PRACTICE_LANGUAGES } from '@/types/sentences';
 import { INITIAL_ACTIVITIES, getTeacherActivityPrompts, type ActivityItem } from '@/data/teacher-activities';
 import { practiceLevels } from '@/data/practice-levels';
-import { assignLearningActivity, DEMO_STUDENT_ID, useLearningAssignments } from '@/data/learning-workflow';
 import { AssignmentCalendar } from '@/components/assignment-calendar';
 import { ProfileEditWarning } from '@/components/profile-edit-warning';
 import { todayCalendarDate } from '@/data/calendar-date';
 import { isAssignmentDate } from '@/Therapist-modules/therapist-activities/data/activityData';
 import { SessionRevokeWarning } from '@/components/session-revoke-warning';
 import { CENTER_NAME } from '@/data/center-name';
-import React, { useState, useMemo, useEffect } from 'react';
+import { AudioPlaybackButton } from '@/components/audio/AudioPlaybackButton';
+import {
+  createAssignment,
+  changeAccountPassword,
+  clearSession,
+  getAccountProfile,
+  getActivities,
+  getActiveSessions,
+  getAssignments,
+  getNotifications,
+  getPatients,
+  getProgress,
+  getSubmissions,
+  getWordBank,
+  revokeSession,
+  submitTeacherFeedback,
+  updateAccountProfile,
+  type ApiActivity,
+  type ApiAssignment,
+  type PatientSearchResult,
+  type ApiSubmission,
+} from '@/services/user-api';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -79,6 +100,7 @@ import {
 // ==========================================
 interface Patient {
   id: string;
+  patientCode?: string;
   initials: string;
   name: string;
   age: number;
@@ -130,6 +152,95 @@ interface ReviewItem {
   submittedDate: string;
   targetWord: string;
   audioDuration: string;
+  audioRecordingUrl?: string;
+  teacherRating?: 'Correct' | 'Approximate' | 'Incorrect';
+  teacherNotes?: string;
+}
+
+function activityFromApi(activity: ApiActivity): ActivityItem {
+  const category = (practiceLevels.includes(activity.level as typeof practiceLevels[number])
+    ? activity.level
+    : activity.level === 'Isolation' ? 'Sound' : 'Words') as ActivityItem['category'];
+  const template = INITIAL_ACTIVITIES.find((item) => item.category === category) ?? INITIAL_ACTIVITIES[0];
+  return {
+    id: activity.id,
+    sound: activity.sound,
+    soundBg: template.soundBg,
+    soundColor: template.soundColor,
+    category,
+    title: activity.title,
+    subtitle: `${activity.language} · Therapist library`,
+    instructions: activity.instructions,
+    articulatoryGuide: activity.guide,
+    language: activity.language === 'Tagalog' ? 'Tagalog' : 'English',
+    targetSound: activity.sound,
+    practiceLevel: category,
+    wordPositions: activity.positions,
+    targetPositions: Object.fromEntries(activity.words.map((word) => [word.text, word.position])),
+    initialWords: activity.words.map((word) => word.text),
+    phrases: activity.words.map((word) => word.phrase),
+  };
+}
+
+function patientFromApi(
+  patient: PatientSearchResult,
+  progress: Awaited<ReturnType<typeof getProgress>> | null,
+): Patient {
+  const completion = progress?.assignedCount
+    ? Math.round((progress.completedCount / progress.assignedCount) * 100)
+    : 0;
+  const theme = completion >= 75
+    ? { color: '#16A34A', bg: '#DCFCE7' }
+    : completion >= 40
+      ? { color: '#D97706', bg: '#FEF3C7' }
+      : { color: '#DC2626', bg: '#FEE2E2' };
+  const name = [patient.firstName, patient.middleName, patient.lastName].filter(Boolean).join(' ');
+  return {
+    id: patient.id,
+    patientCode: patient.patientCode,
+    initials: name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase(),
+    name,
+    age: Number(patient.age) || 0,
+    targetDescription: `${patient.hierarchyLevel || 'Speech goals'} · target ${patient.targetSound || 'not set'}`,
+    accuracy: completion,
+    accuracyColor: theme.color,
+    progressColor: theme.color,
+    badgeBg: theme.bg,
+    badgeTextColor: theme.color,
+    stage: patient.hierarchyLevel || 'Not set',
+    compliance: progress
+      ? `${progress.completedCount}/${progress.assignedCount} activities completed`
+      : 'No progress data',
+    complianceDays: progress ? `${progress.submissionCount} submissions` : 'Not available',
+    phonemeTarget: {
+      primary: patient.targetSound || 'Not set',
+      secondary: patient.secondaryTargets || 'None',
+      errorPattern: patient.dominantErrorPattern || patient.dominantErrorOther || 'Not recorded',
+      languageProfile: patient.languageProfile || 'Not recorded',
+    },
+  };
+}
+
+function reviewFromSubmission(submission: ApiSubmission): ReviewItem {
+  const name = submission.student || 'Student';
+  return {
+    id: submission.id,
+    initials: name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase(),
+    avatarBg: '#DCFCE7',
+    avatarColor: '#166534',
+    studentName: name,
+    activityTitle: submission.activity || 'Practice activity',
+    phonemeDesc: [submission.sound, submission.level].filter(Boolean).join(' · '),
+    status: submission.status,
+    submittedDate: new Date(submission.submittedAt).toLocaleString(),
+    targetWord: submission.initial || '—',
+    audioDuration: submission.durationSeconds == null
+      ? '—'
+      : `${Math.floor(submission.durationSeconds / 60)}:${String(Math.floor(submission.durationSeconds % 60)).padStart(2, '0')}`,
+    audioRecordingUrl: submission.audioRecordingUrl,
+    teacherRating: submission.teacherReview?.rating,
+    teacherNotes: submission.teacherReview?.notes || '',
+  };
 }
 
 // ==========================================
@@ -209,7 +320,7 @@ const INITIAL_PATIENTS: Patient[] = [
     },
   },
   {
-    id: DEMO_STUDENT_ID,
+    id: 'demo-student',
     initials: 'MS',
     name: 'Mia Santos',
     age: 5,
@@ -572,17 +683,13 @@ export default function TeacherDashboardScreen() {
   });
 
   // --- Main Navigation Tabs ---
-  const learningAssignments = useLearningAssignments();
-  const teacherSubmissions = learningAssignments.flatMap((item) => {
-    if (item.source !== 'Teacher' || !item.submittedAt) return [];
-    return [{
-      id: item.id,
-      name: item.studentName,
-      initials: item.studentName.split(' ').map((part) => part[0]).slice(0, 2).join(''),
-      phrase: item.title,
-      time: new Date(item.submittedAt).toLocaleDateString(),
-    }];
-  });
+  const [teacherSubmissions, setTeacherSubmissions] = useState<Array<{
+    id: string;
+    name: string;
+    initials: string;
+    phrase: string;
+    time: string;
+  }>>([]);
   const [activeTab, setActiveTab] = useState<'home' | 'patients' | 'activities' | 'reviews'>('home');
   const routeParams = useLocalSearchParams<{ tab?: string; view?: string }>();
 
@@ -608,29 +715,27 @@ export default function TeacherDashboardScreen() {
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [notificationsFilter, setNotificationsFilter] = useState<'All' | 'Unread'>('All');
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    name: string;
+    action: string;
+    detail: string;
+    time: string;
+    unread: boolean;
+  }>>([]);
 
   // Therapist / Teacher Profile Data
   const [therapistProfile, setTherapistProfile] = useState({
-    name: 'Dr. Ameer Andres',
-    credentials: 'SLP-CCC',
-    fullName: 'Dr. Ameer Andres, SLP-CCC',
-    title: 'Speech-Language Pathologist',
-    license: 'PRC #0048291',
+    name: '',
+    credentials: '',
+    fullName: '',
+    title: 'Teacher',
+    license: '',
     clinic: CENTER_NAME,
-    contact: '+63 9000 000 000',
-    email: 'ameer@speakstep.com',
+    contact: '',
+    email: '',
     photoUri: null as string | null,
-    specializations: [
-      'Articulation',
-      'Phonological',
-      'Fluency',
-      'Language',
-      'Voice',
-      'Early intervention',
-      'Bilingual',
-      'AAC',
-    ],
+    specializations: [] as string[],
   });
   const [editProfileForm, setEditProfileForm] = useState({ ...therapistProfile });
 
@@ -640,15 +745,17 @@ export default function TeacherDashboardScreen() {
   const [readyToLevelUpToggle, setReadyToLevelUpToggle] = useState(false);
   const [teacherUpdatesToggle, setTeacherUpdatesToggle] = useState(true);
   const [missedExercisesToggle, setMissedExercisesToggle] = useState(true);
-  const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(true);
+  const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(false);
   const [themeMode, setThemeMode] = useState<'Light' | 'Dark'>('Light');
   const [sessionToRevoke, setSessionToRevoke] = useState<{ id: string; device: string } | null>(null);
   const [sessionNotice, setSessionNotice] = useState('');
-  const [activeSessions, setActiveSessions] = useState([
-    { id: '1', device: 'Redmi 15', isCurrent: true, location: 'Quezon City', lastActive: 'Active now' },
-    { id: '2', device: 'Samsung Galaxy Tab S9 FE', isCurrent: false, location: 'Android App', lastActive: 'Yesterday' },
-    { id: '3', device: 'Samsung Galaxy S24', isCurrent: false, location: 'Chrome', lastActive: 'Nov 10' },
-  ]);
+  const [activeSessions, setActiveSessions] = useState<Array<{
+    id: string;
+    device: string;
+    isCurrent: boolean;
+    location: string;
+    lastActive: string;
+  }>>([]);
   const [newSpecialtyInput, setNewSpecialtyInput] = useState('');
   const [profileOpenedFromSettings, setProfileOpenedFromSettings] = useState(false);
 
@@ -664,11 +771,14 @@ export default function TeacherDashboardScreen() {
 
   // --- Patients Tab State ---
   const [patientSearch, setPatientSearch] = useState('');
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [assignments, setAssignments] = useState<ApiAssignment[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [showSoapForm, setShowSoapForm] = useState(false);
-  const [soapNotes, setSoapNotes] = useState<SoapNote[]>([]);
+  const [soapNotes] = useState<SoapNote[]>([]);
   const [soapInputs, setSoapInputs] = useState({ s: '', o: '', a: '', p: '' });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState('');
 
   // --- Activities Sub-View State ---
   const [activitiesView, setActivitiesView] = useState<'library' | 'preview' | 'edit' | 'assign' | 'wordbank'>('library');
@@ -685,11 +795,11 @@ export default function TeacherDashboardScreen() {
     activitySoundFilter.length > 0 ||
     activityLanguageFilter !== 'ALL' ||
     activityCategoryFilter.length > 0;
-  const [activitiesList, setActivitiesList] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
+  const [activitiesList, setActivitiesList] = useState<ActivityItem[]>([]);
   const [currentActivity, setCurrentActivity] = useState<ActivityItem>(INITIAL_ACTIVITIES[0]);
 
   // --- Word Bank Tab State ---
-  const [wordBankEntries, setWordBankEntries] = useState<WordBankEntry[]>(INITIAL_WORD_BANK_ENTRIES);
+  const [wordBankEntries, setWordBankEntries] = useState<WordBankEntry[]>([]);
   const [wordBankQuery, setWordBankQuery] = useState('');
   const [wordBankFiltersOpen, setWordBankFiltersOpen] = useState(false);
   const [wordBankAdding, setWordBankAdding] = useState(false);
@@ -750,22 +860,12 @@ export default function TeacherDashboardScreen() {
       triggerToast(`"${trimmed}" is already in the word bank.`);
       return;
     }
-    const newEntry: WordBankEntry = {
-      id: `wb-${Date.now()}`,
-      text: trimmed,
-      sound: newWordSound,
-      position: newWordPosition,
-      language: newWordLanguage,
-    };
-    setWordBankEntries((prev) => [newEntry, ...prev]);
-    setNewWordText('');
-    setWordBankAdding(false);
-    triggerToast(`Added "${trimmed}" to Word Bank.`);
+    triggerToast('Only therapists can add words to the shared Word Bank.');
   };
 
   const handleRemoveWordBankEntry = (id: string) => {
-    setWordBankEntries((prev) => prev.filter((item) => item.id !== id));
-    triggerToast('Word removed from Word Bank.');
+    if (!wordBankEntries.some((item) => item.id === id)) return;
+    triggerToast('Only therapists can remove words from the shared Word Bank.');
   };
 
   // --- Edit Activity Wizard State (3 Steps) ---
@@ -824,32 +924,7 @@ export default function TeacherDashboardScreen() {
   };
 
   const handleSaveEditedActivity = () => {
-    const updatedPhrases = checkedWords.map((w) => wordPhrases[w] || '');
-    const updatedCategory = (['Words', 'Phrases', 'Syllables', 'Sound', 'Sentences'].includes(editPracticeLevel)
-      ? editPracticeLevel
-      : 'Words') as ActivityItem['category'];
-
-    const updatedItem: ActivityItem = {
-      ...currentActivity,
-      title: editTitle.trim() || currentActivity.title,
-      targetSound: editTargetSound,
-      sound: editTargetSound,
-      practiceLevel: editPracticeLevel,
-      category: updatedCategory,
-      wordPositions: editPositions,
-      language: editLanguage,
-      instructions: editInstructions,
-      articulatoryGuide: editArticulatoryGuide,
-      initialWords: checkedWords.length > 0 ? checkedWords : currentActivity.initialWords,
-      phrases: updatedPhrases.length > 0 ? updatedPhrases : currentActivity.phrases,
-    };
-
-    setActivitiesList((prev) =>
-      prev.map((act) => (act.id === currentActivity.id ? updatedItem : act))
-    );
-    setCurrentActivity(updatedItem);
-    setActivitiesView('library');
-    triggerToast('Activity saved successfully!');
+    triggerToast('Only therapists can save changes to the shared activity library.');
   };
 
   // Custom Word State
@@ -885,7 +960,7 @@ export default function TeacherDashboardScreen() {
   const [showStudentFilterDropdown, setShowStudentFilterDropdown] = useState(false);
 
   // --- Reviews Tab State (Image 2) ---
-  const [reviewsList, setReviewsList] = useState<ReviewItem[]>(INITIAL_REVIEWS);
+  const [reviewsList, setReviewsList] = useState<ReviewItem[]>([]);
   const [reviewsFilter, setReviewsFilter] = useState<'All' | 'Pending' | 'Reviewed'>('All');
   const [reviewActivities, setReviewActivities] = useState<string[]>([]);
   const [reviewStudents, setReviewStudents] = useState<string[]>([]);
@@ -896,11 +971,88 @@ export default function TeacherDashboardScreen() {
   const [reviewEvaluation, setReviewEvaluation] = useState<'Correct' | 'Approximate' | 'Incorrect' | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
 
+  const loadDashboardData = useCallback(async () => {
+    setDashboardError('');
+    try {
+      const [apiPatients, apiActivities, apiAssignments, apiSubmissions, apiNotifications, apiWordBank, profile, apiSessions] = await Promise.all([
+        getPatients(),
+        getActivities(),
+        getAssignments(),
+        getSubmissions(),
+        getNotifications(),
+        getWordBank(),
+        getAccountProfile(),
+        getActiveSessions(),
+      ]);
+      const progressErrors: string[] = [];
+      const progressResults = await Promise.all(apiPatients.map(async (patient) => {
+        try {
+          return await getProgress(patient.id);
+        } catch (error) {
+          progressErrors.push(error instanceof Error ? error.message : `Could not load progress for ${patient.firstName}.`);
+          return null;
+        }
+      }));
+      setPatients(apiPatients.map((patient, index) => patientFromApi(patient, progressResults[index])));
+      setActivitiesList(apiActivities.map(activityFromApi));
+      setAssignments(apiAssignments);
+      setWordBankEntries(apiWordBank.map(({ id, text, sound, position, language }) => ({
+        id, text, sound, position, language,
+      })));
+      const mappedReviews = apiSubmissions.map(reviewFromSubmission);
+      setReviewsList(mappedReviews);
+      setActiveSessions(apiSessions.map((session) => ({
+        id: session.sessionId,
+        device: session.deviceLabel || 'Unknown device',
+        isCurrent: session.current,
+        location: session.userAgent || 'Device details unavailable',
+        lastActive: new Date(session.lastActiveAt).toLocaleString(),
+      })));
+      setTeacherSubmissions(apiSubmissions.map((submission) => ({
+        id: submission.id,
+        name: submission.student,
+        initials: submission.student.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase(),
+        phrase: submission.activity,
+        time: new Date(submission.submittedAt).toLocaleDateString(),
+      })));
+      setNotifications(apiNotifications);
+      setTherapistProfile((current) => ({
+        ...current,
+        name: profile.fullName.split(',')[0] || profile.fullName,
+        fullName: profile.fullName,
+        email: profile.email,
+        contact: profile.contact,
+        title: 'Teacher',
+      }));
+      setTwoFactorAuthToggle(profile.totpEnabled ?? false);
+      setEditProfileForm((current) => ({
+        ...current,
+        name: profile.fullName.split(',')[0] || profile.fullName,
+        fullName: profile.fullName,
+        email: profile.email,
+        contact: profile.contact,
+        title: 'Teacher',
+      }));
+      if (apiActivities.length) {
+        const nextActivity = activityFromApi(apiActivities[0]);
+        setCurrentActivity(nextActivity);
+        setAssignActivityId(nextActivity.id);
+      }
+      if (progressErrors.length) setDashboardError(progressErrors.join(' '));
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : 'Could not load teacher dashboard data.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
+
   // Dynamic Pending count
   const pendingReviewsCount = reviewsList.filter((r) => r.status === 'Pending').length;
 
   // Filtered Students
-  const filteredPatients = INITIAL_PATIENTS.filter((p) => {
+  const filteredPatients = patients.filter((p) => {
     const matchesTarget =
       studentFilter === 'ALL' ||
       p.targetDescription.toLowerCase().includes(studentFilter.toLowerCase().replace(/\//g, ''));
@@ -947,7 +1099,7 @@ export default function TeacherDashboardScreen() {
   // Filtered Reviews
   const reviewCatalog = new Map(activitiesList.map((item) => [item.title, item]));
   const reviewActivityOptions = [...new Set([...reviewCatalog.keys(), ...reviewsList.map((review) => review.activityTitle)])].sort();
-  const reviewStudentOptions = [...new Set([...INITIAL_PATIENTS.map((student) => student.name), ...reviewsList.map((review) => review.studentName)])]
+  const reviewStudentOptions = [...new Set([...patients.map((student) => student.name), ...reviewsList.map((review) => review.studentName)])]
     .sort((first, second) => reviewStudentSort === 'A–Z' ? first.localeCompare(second) : second.localeCompare(first));
   const reviewActivityCaptions = new Map(activitiesList.map((item) => [item.title, item.language + ' · ' + item.category]));
   const filteredReviews = reviewsList.filter((review) =>
@@ -971,7 +1123,7 @@ export default function TeacherDashboardScreen() {
   };
 
   // Assign Multi-Select Helpers & Handler
-  const studentOptions = INITIAL_PATIENTS;
+  const studentOptions = patients;
   const assignmentStudents = studentOptions.filter(({ id }) => assignSelectedStudents.includes(id));
   const selectedAssignActivity = activitiesList.find((item) => item.id === assignActivityId);
   const allStudentsSelected =
@@ -995,7 +1147,7 @@ export default function TeacherDashboardScreen() {
     setActivitiesView('assign');
   };
 
-  const handleAssignActivity = () => {
+  const handleAssignActivity = async () => {
     try {
       if (assignmentStudents.length === 0) {
         triggerToast('Please select at least one student.');
@@ -1015,48 +1167,29 @@ export default function TeacherDashboardScreen() {
         return;
       }
       for (const student of assignmentStudents) {
-        assignLearningActivity({
-          source: 'Teacher', activityId: activity.id, studentId: student.id, studentName: student.name,
-          title: activity.title, level: activity.category, dueDate: assignDueDate,
-          language: activity.language,
-          instructions: assignInstructions.trim(), assignedBy: therapistProfile.name,
-          prompts: getTeacherActivityPrompts(activity),
-          guidance: activity.articulatoryGuide,
+        if (!student.patientCode) throw new Error(`Student code is unavailable for ${student.name}.`);
+        await createAssignment({
+          activityId: activity.id,
+          patientCode: student.patientCode,
+          dueDate: assignDueDate,
+          instructions: assignInstructions.trim(),
         });
       }
+      await loadDashboardData();
       setActivitiesView('library');
       const msg =
         assignmentStudents.length === 1
           ? `Activity assigned to ${assignmentStudents[0].name}`
           : `Activity assigned to ${assignmentStudents.length} students`;
       triggerToast(msg);
-    } catch (err: any) {
-      triggerToast(err?.message || 'Failed to assign activity.');
+    } catch (err) {
+      triggerToast(err instanceof Error ? err.message : 'Failed to assign activity.');
     }
   };
 
   // SOAP Save
   const handleSaveSoapNote = () => {
-    try {
-      if (!soapInputs.s.trim() && !soapInputs.o.trim() && !soapInputs.a.trim() && !soapInputs.p.trim()) {
-        triggerToast('Please fill in at least one SOAP note field before saving.');
-        return;
-      }
-      const newNote: SoapNote = {
-        sessionNumber: soapNotes.length + 1,
-        date: 'Oct 24, 2026',
-        s: soapInputs.s.trim() || 'Khyll was engaged. Parent reports 6 days of home practice.',
-        o: soapInputs.o.trim() || 'Initial /r/ in isolated syllables 15/20 correct (75%).',
-        a: soapInputs.a.trim() || 'Tongue tip elevation improving with visual lip cue.',
-        p: soapInputs.p.trim() || 'Continue initial /r/ monosyllabic words next session.',
-      };
-      setSoapNotes([newNote, ...soapNotes]);
-      setSoapInputs({ s: '', o: '', a: '', p: '' });
-      setShowSoapForm(false);
-      triggerToast('SOAP Note added successfully!');
-    } catch (err: any) {
-      triggerToast(err?.message || 'Failed to save SOAP note.');
-    }
+    triggerToast('Only therapists can save clinical SOAP notes.');
   };
 
   // Toggle Word in checklist
@@ -1109,21 +1242,30 @@ export default function TeacherDashboardScreen() {
   };
 
   // Submit Review Action
-  const handleSubmitReview = (item: ReviewItem) => {
+  const openReview = (review: ReviewItem) => {
+    setReviewEvaluation(review.teacherRating ?? null);
+    setReviewNotes(review.teacherNotes ?? '');
+    setSelectedReview(review);
+  };
+
+  const handleSubmitReview = async (item: ReviewItem) => {
+    if (!reviewEvaluation) {
+      triggerToast('Choose a feedback rating before submitting.');
+      return;
+    }
     try {
-      if (!reviewEvaluation) {
-        triggerToast('Please select a clinical accuracy rating (Correct, Approximate, or Needs Practice).');
-        return;
-      }
-      setReviewsList(
-        reviewsList.map((r) => (r.id === item.id ? { ...r, status: 'Reviewed' as const } : r))
-      );
+      await submitTeacherFeedback({
+        submissionId: item.id,
+        rating: reviewEvaluation,
+        notes: reviewNotes.trim(),
+      });
+      setReviewsList((current) => current.map((review) => review.id === item.id
+        ? { ...review, status: 'Reviewed', teacherRating: reviewEvaluation, teacherNotes: reviewNotes.trim() }
+        : review));
       setSelectedReview(null);
-      setReviewEvaluation(null);
-      setReviewNotes('');
-      triggerToast(`Review submitted for ${item.studentName}!`);
-    } catch (err: any) {
-      triggerToast(err?.message || 'Failed to submit review.');
+      triggerToast('Feedback submitted.');
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not submit teacher feedback.');
     }
   };
 
@@ -1139,7 +1281,7 @@ export default function TeacherDashboardScreen() {
     setEditingProfile(true);
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!editingProfile) return;
     try {
       if (!editProfileForm.name.trim()) {
@@ -1159,17 +1301,19 @@ export default function TeacherDashboardScreen() {
         triggerToast('Contact number must follow the correct format (10-12 digits).');
         return;
       }
-      // License and clinic/school are permanently locked from edits
+      const savedProfile = await updateAccountProfile({
+        fullName: editProfileForm.name.trim(),
+        contact: editProfileForm.contact.trim(),
+      });
       setTherapistProfile((prev) => ({
         ...prev,
-        name: editProfileForm.name.trim(),
-        title: editProfileForm.title.trim(),
-        contact: editProfileForm.contact.trim(),
-        specializations: editProfileForm.specializations,
-        photoUri: editProfileForm.photoUri,
+        name: savedProfile.fullName.split(',')[0] || savedProfile.fullName,
+        fullName: savedProfile.fullName,
+        email: savedProfile.email,
+        contact: savedProfile.contact,
       }));
       setShowProfileModal(false);
-      triggerToast('Credentials saved successfully!');
+      triggerToast('Name and contact saved. Other profile fields are not supported by the backend.');
       if (profileOpenedFromSettings) {
         setShowSettingsModal(true);
         setProfileOpenedFromSettings(false);
@@ -1198,9 +1342,14 @@ export default function TeacherDashboardScreen() {
     }));
   };
 
-  const handleRevokeSession = (id: string) => {
-    setActiveSessions((current) => current.filter((s) => s.id !== id));
-    setSessionNotice('Session revoked successfully.');
+  const handleRevokeSession = async (id: string) => {
+    try {
+      await revokeSession(id);
+      setActiveSessions((current) => current.filter((session) => session.id !== id));
+      setSessionNotice('The selected session was revoked.');
+    } catch (error) {
+      setSessionNotice(error instanceof Error ? error.message : 'Could not revoke the selected session.');
+    }
   };
 
   const handlePickPhoto = () => {
@@ -1218,7 +1367,7 @@ export default function TeacherDashboardScreen() {
     }
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     try {
       if (!currentPassword) {
         triggerToast('Current password is required. Please fill in this field.');
@@ -1240,11 +1389,12 @@ export default function TeacherDashboardScreen() {
         triggerToast('New passwords do not match. Please try again.');
         return;
       }
+      await changeAccountPassword({ currentPassword, newPassword });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setShowChangePasswordModal(false);
-      triggerToast('Password changed successfully!');
+      triggerToast('Password changed successfully.');
     } catch (err: any) {
       triggerToast(err?.message || 'Failed to change password.');
     }
@@ -1258,6 +1408,7 @@ export default function TeacherDashboardScreen() {
     if (router.canDismiss()) {
       router.dismissAll();
     }
+    router.replace('/login' as any);
   };
 
   const handleMarkAllNotificationsRead = () => {
@@ -1357,14 +1508,15 @@ export default function TeacherDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {dashboardError ? <Text style={styles.reviewsSubtitle}>{dashboardError}</Text> : null}
         {/* ----------------------------------------------------
             TAB 1: HOME DASHBOARD
            ---------------------------------------------------- */}
         {activeTab === 'home' && (
           <>
             <View style={styles.greetingSection}>
-              <Text style={[styles.dateText, { color: colors.textSub }]}>Friday, October 29</Text>
-              <Text style={[styles.greetingTitle, { color: colors.heading }]}>Good morning, Dr. Andres</Text>
+              <Text style={[styles.dateText, { color: colors.textSub }]}>{new Date().toLocaleDateString()}</Text>
+              <Text style={[styles.greetingTitle, { color: colors.heading }]}>Welcome, {therapistProfile.name}</Text>
               <Text style={[styles.greetingSubtitle, { color: colors.textSub }]}>Here's what needs your attention today.</Text>
 
               {/* Assign Activity Quick Button -> Switches to Assign Screen */}
@@ -1401,7 +1553,7 @@ export default function TeacherDashboardScreen() {
 
               <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
-                  <Text style={[styles.statNumber, { color: isDark ? '#38BDF8' : '#F97316' }]}>3</Text>
+                  <Text style={[styles.statNumber, { color: isDark ? '#38BDF8' : '#F97316' }]}>{assignments.filter((item) => item.status === 'Assigned').length}</Text>
                   <View style={[styles.statBadge, { backgroundColor: colors.peachPillBg }]}>
                     <Text style={[styles.statBadgeText, { color: colors.peachPillText }]}>Alert</Text>
                   </View>
@@ -1411,7 +1563,7 @@ export default function TeacherDashboardScreen() {
 
               <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
-                  <Text style={[styles.statNumber, { color: '#0EA5E9' }]}>7</Text>
+                  <Text style={[styles.statNumber, { color: '#0EA5E9' }]}>{teacherSubmissions.length}</Text>
                   <View style={[styles.statBadge, { backgroundColor: '#BAE6FD' }]}>
                     <Text style={[styles.statBadgeText, { color: '#0369A1' }]}>Today</Text>
                   </View>
@@ -1421,7 +1573,7 @@ export default function TeacherDashboardScreen() {
 
               <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.statCardTop}>
-                  <Text style={[styles.statNumber, { color: '#F59E0B' }]}>14</Text>
+                  <Text style={[styles.statNumber, { color: '#F59E0B' }]}>{patients.length}</Text>
                   <View style={[styles.statBadge, { backgroundColor: '#FEF3C7' }]}>
                     <Text style={[styles.statBadgeText, { color: '#B45309' }]}>Active</Text>
                   </View>
@@ -1439,7 +1591,7 @@ export default function TeacherDashboardScreen() {
             </View>
 
             <View style={styles.patientListContainer}>
-              {INITIAL_PATIENTS.map((item) => (
+              {patients.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[styles.patientCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -1486,7 +1638,7 @@ export default function TeacherDashboardScreen() {
             </View>
 
             <View style={[styles.submissionsCardWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {[...teacherSubmissions, ...INITIAL_SUBMISSIONS].map((sub) => (
+              {teacherSubmissions.map((sub) => (
                 <View key={sub.id} style={[styles.submissionItem, { backgroundColor: colors.cardSubtle, borderColor: colors.border }]}>
                   <View style={[styles.patientAvatarSmall, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Text style={[styles.avatarTextSmall, { color: colors.text }]}>{sub.initials}</Text>
@@ -1506,7 +1658,7 @@ export default function TeacherDashboardScreen() {
                     onPress={() => {
                       const match = reviewsList.find((r) => r.studentName === sub.name && r.activityTitle === sub.phrase);
                       if (!match) { triggerToast('No matching review is available.'); return; }
-                      setSelectedReview(match);
+                      openReview(match);
                     }}
                   >
                     <Text style={styles.reviewButtonText}>Review</Text>
@@ -2256,7 +2408,7 @@ export default function TeacherDashboardScreen() {
                     <View style={styles.previewActionsRow}>
                       <TouchableOpacity
                         style={styles.outlineBtn}
-                        onPress={() => triggerToast('Draft saved successfully!')}
+                        onPress={() => triggerToast('Draft saving is not available in the backend.')}
                         activeOpacity={0.7}
                       >
                         <FileText size={15} color={colors.text} style={{ marginRight: 6 }} />
@@ -3273,7 +3425,7 @@ export default function TeacherDashboardScreen() {
                   key={rev.id}
                   style={styles.reviewCard}
                   activeOpacity={0.7}
-                  onPress={() => setSelectedReview(rev)}
+                  onPress={() => openReview(rev)}
                 >
                   {/* Avatar KS */}
                   <View style={[styles.reviewAvatar, { backgroundColor: rev.avatarBg }]}>
@@ -3788,9 +3940,13 @@ export default function TeacherDashboardScreen() {
 
             {/* Audio Playback Box */}
             <View style={[styles.audioModelCard, { marginVertical: 12 }]}>
-              <View style={styles.audioPlayCircle}>
-                <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
-              </View>
+              <AudioPlaybackButton
+                audioUrl={selectedReview?.audioRecordingUrl}
+                label="Play child recording"
+                variant="inline"
+                buttonStyle={styles.audioPlayCircle}
+                renderIcon={() => <Play size={13} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />}
+              />
               <View style={{ flex: 1, marginHorizontal: 12 }}>
                 <Text style={styles.audioModelTitle}>Child Audio Recording</Text>
                 <Text style={styles.audioModelSub}>Duration: {selectedReview?.audioDuration}</Text>
@@ -3922,11 +4078,11 @@ export default function TeacherDashboardScreen() {
             {/* 3 Metric Summary Boxes */}
             <View style={styles.modalMetricsRow}>
               <View style={[styles.modalMetricBox, { backgroundColor: '#DCFCE7' }]}>
-                <Text style={styles.metricBoxTitle}>Current Accuracy</Text>
+                <Text style={styles.metricBoxTitle}>Assignment Completion</Text>
                 <Text style={[styles.metricBoxValue, { color: '#16A34A' }]}>
-                  {selectedPatient?.accuracy}% ↑ 10%
+                  {selectedPatient?.accuracy}%
                 </Text>
-                <Text style={styles.metricBoxSubtitle}>Baseline</Text>
+                <Text style={styles.metricBoxSubtitle}>Assigned activities</Text>
               </View>
 
               <View style={[styles.modalMetricBox, { backgroundColor: '#CFFAFE' }]}>
@@ -4328,7 +4484,7 @@ export default function TeacherDashboardScreen() {
                   value={newRecordingsToggle}
                   onValueChange={(val) => {
                     setNewRecordingsToggle(val);
-                    triggerToast(`New recordings alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -4346,7 +4502,7 @@ export default function TeacherDashboardScreen() {
                   value={followUpAlertsToggle}
                   onValueChange={(val) => {
                     setFollowUpAlertsToggle(val);
-                    triggerToast(`Follow-up alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -4364,7 +4520,7 @@ export default function TeacherDashboardScreen() {
                   value={readyToLevelUpToggle}
                   onValueChange={(val) => {
                     setReadyToLevelUpToggle(val);
-                    triggerToast(`Level up alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -4382,7 +4538,7 @@ export default function TeacherDashboardScreen() {
                   value={teacherUpdatesToggle}
                   onValueChange={(val) => {
                     setTeacherUpdatesToggle(val);
-                    triggerToast(`Teacher updates ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -4400,7 +4556,7 @@ export default function TeacherDashboardScreen() {
                   value={missedExercisesToggle}
                   onValueChange={(val) => {
                     setMissedExercisesToggle(val);
-                    triggerToast(`Missed exercises alerts ${val ? 'enabled' : 'disabled'}`);
+                    triggerToast('This preference is temporary and is not saved to the backend.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -4462,9 +4618,9 @@ export default function TeacherDashboardScreen() {
                 </View>
                 <Switch
                   value={twoFactorAuthToggle}
-                  onValueChange={(val) => {
-                    setTwoFactorAuthToggle(val);
-                    triggerToast(`Two-factor authentication ${val ? 'enabled' : 'disabled'}`);
+                  onValueChange={(enabled) => {
+                    if (enabled) router.push({ pathname: '/totp-setup', params: { role: 'teacher' } } as any);
+                    else triggerToast('Authenticator protection cannot be disabled from this screen.');
                   }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
@@ -4474,6 +4630,7 @@ export default function TeacherDashboardScreen() {
 
             <Text style={styles.newSubSectionTitle}>Active Mobile Session</Text>
             <View style={styles.newCard}>
+              {activeSessions.length === 0 ? <Text style={styles.newRowSubtitle}>Session information is unavailable from the backend.</Text> : null}
               {activeSessions.map((session, index) => (
                 <React.Fragment key={session.id}>
                   <View style={styles.newSessionRow}>

@@ -52,6 +52,7 @@ export function AddPatientModal() {
   const { palette, isDark, setAddPatientOpen, addPatient } = useTherapist();
   const [form, setForm] = useState<NewPatientInput>(emptyForm);
   const [errors, setErrors] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const set = <K extends keyof NewPatientInput>(key: K, value: NewPatientInput[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -71,16 +72,19 @@ export function AddPatientModal() {
     setForm((current) => ({ ...current, dateOfBirth, age: age === null ? '' : String(age) }));
   };
 
-  const save = () => {
+  const save = async () => {
     try {
       const nextErrors = validatePatient(form);
       setErrors(nextErrors);
       if (nextErrors.length > 0) return;
-      addPatient(form);
+      setSaving(true);
+      await addPatient(form);
       setForm(emptyForm());
       setAddPatientOpen(false);
-    } catch (err: any) {
-      setErrors([err?.message || 'Failed to save student profile. Please try again.']);
+    } catch (error) {
+      setErrors([error instanceof Error ? error.message : 'Failed to save student profile. Please try again.']);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -202,7 +206,7 @@ export function AddPatientModal() {
             <Pressable accessibilityRole="button" onPress={close} style={styles.cancel}>
               <Text style={[styles.cancelText, { color: palette.muted }]}>Cancel</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={save} style={[styles.save, { backgroundColor: '#0284C7' }]}>
+            <Pressable accessibilityRole="button" disabled={saving} onPress={() => void save()} style={[styles.save, { backgroundColor: '#0284C7' }]}>
               <Text style={styles.saveText}>Save Student</Text>
             </Pressable>
           </View>

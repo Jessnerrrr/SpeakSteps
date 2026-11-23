@@ -1,11 +1,9 @@
-import { useAssignedActivities } from '@/data/assigned-activities';
 import { PatientPressable } from '@/components/patient-pressable';
 import { FontAwesome6, Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
 import {
   ImageBackground,
   SafeAreaView,
@@ -19,9 +17,8 @@ import {
 
 import { ParentBottomNav } from '@/components/parent-bottom-nav';
 import { ParentHeader } from '@/components/parent-header';
-import { ChildProfile, ChildProfileStore } from '@/data/child-profile-store';
-import { PARTICIPATION_STARS, usePracticeSubmissions } from '@/data/practice-submissions';
-import { MOCK_STARS_DATA } from '@/data/stars-mock';
+import { ChildProfileStore } from '@/data/child-profile-store';
+import { usePatientLearning } from '@/components/patient/PatientLearningProvider';
 
 export default function ParentDashboardScreen() {
   const { width } = useWindowDimensions();
@@ -34,23 +31,19 @@ export default function ParentDashboardScreen() {
     'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
   });
 
-  const [childProfile, setChildProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
-  const activities = useAssignedActivities();
-  const submissions = usePracticeSubmissions();
-
-  useEffect(() => {
-    const unsubscribe = ChildProfileStore.subscribe((updatedProfile: ChildProfile) => {
-      setChildProfile(updatedProfile);
-    });
-    return unsubscribe;
-  }, []);
+  const { patient, progress, assignments, feedback, error } = usePatientLearning();
+  const childProfile = ChildProfileStore.getProfile();
 
   if (!fontsLoaded) return null;
 
-  const completedActivities = submissions.length;
-  const pendingActivities = activities.filter((task) => !task.submitted && task.status === 'pending').length;
-  const totalAttempts = submissions.reduce((sum, activity) => sum + activity.attempts, 0);
-  const progressPercentage = Math.min(100, (completedActivities / MOCK_STARS_DATA.totalActivitiesTarget) * 100);
+  const displayName = patient
+    ? [patient.firstName, patient.lastName].filter(Boolean).join(' ')
+    : childProfile.displayName;
+  const completedActivities = progress?.completedCount ?? 0;
+  const pendingActivities = assignments.filter((assignment) => assignment.status === 'Assigned').length;
+  const totalAttempts = progress?.submissionCount ?? 0;
+  const totalAssigned = progress?.assignedCount ?? 0;
+  const progressPercentage = totalAssigned ? Math.min(100, (completedActivities / totalAssigned) * 100) : 0;
 
   return (
     <>
@@ -74,9 +67,9 @@ export default function ParentDashboardScreen() {
                 end={{ x: 0, y: 1 }}
                 style={styles.progressHeroCard}
               >
-                <Text style={styles.heroTitle}>{childProfile.displayName}'s Progress</Text>
+                <Text style={styles.heroTitle}>{displayName}'s Progress</Text>
                 <View style={styles.starRow}>
-                  <Text style={styles.starCountText}>{completedActivities * PARTICIPATION_STARS}</Text>
+                  <Text style={styles.starCountText}>{progress?.stars ?? 0}</Text>
                   {/* FIXED IMAGE PATH */}
                   <Image source={require('../../../assets/images/speaksteps_star_3d.gif')} style={styles.starIcon} contentFit="contain" />
                 </View>
@@ -92,7 +85,7 @@ export default function ParentDashboardScreen() {
                 <PatientPressable style={styles.childProfileCard} onPress={() => router.push('/child-profile' as any)}>
                   <Image source={childProfile.avatar} style={styles.childProfileAvatar} contentFit="cover" />
                   <Text style={styles.cardTitle}>Child Profile</Text>
-                  <Text style={styles.cardSubText}>{childProfile.fullName}</Text>
+                  <Text style={styles.cardSubText}>{displayName}</Text>
                 </PatientPressable>
 
                 <PatientPressable style={styles.assignedCard} onPress={() => router.push('/parent-tasks' as any)}>
@@ -110,7 +103,7 @@ export default function ParentDashboardScreen() {
                 </View>
                 <View style={styles.progressReportTextWrapper}>
                   <Text style={styles.progressReportTitle}>Progress</Text>
-                  <Text style={styles.progressReportSubtitle}>View {childProfile.displayName}'s progress report</Text>
+                  <Text style={styles.progressReportSubtitle}>View {displayName}'s progress report</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={22} color="#3EA88A" />
               </PatientPressable>
@@ -124,7 +117,7 @@ export default function ParentDashboardScreen() {
                 </View>
                 <View style={styles.therapistBodyBox}>
                   <Text style={styles.therapistBodyText}>
-                    No feedback yet. Your therapist's comments will show up here as soon as they review a recording.
+                    {error || feedback[0]?.parentFeedback || 'No feedback yet. Your therapist’s comments will show up here as soon as they review a recording.'}
                   </Text>
                 </View>
               </View>
