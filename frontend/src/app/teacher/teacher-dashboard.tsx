@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useFonts } from 'expo-font';
+import { AudioPlaybackButton } from '@/components/audio/AudioPlaybackButton';
 import { clearSession } from '@/services/user-api';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import {
@@ -2523,9 +2524,16 @@ export default function TeacherDashboardScreen() {
                 <Text style={styles.audioModelSub}>
                   Duration: {selectedReview?.audioDuration || 'Not recorded'}
                 </Text>
-                <Text style={styles.audioModelSub} selectable>
-                  {selectedReview?.audioRecordingUrl || 'No audio URI saved.'}
-                </Text>
+                {selectedReview?.audioRecordingUrl ? (
+                  <AudioPlaybackButton
+                    audioUrl={selectedReview.audioRecordingUrl}
+                    label="Play child recording"
+                    variant="inline"
+                    color={colors.textSub}
+                  />
+                ) : (
+                  <Text style={styles.audioModelSub}>No audio URI saved.</Text>
+                )}
               </View>
             </View>
 

@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('node:fs');
+const path = require('node:path');
 const { connectDB, getDatabaseTree, redactUri } = require('./config/db');
 const { getJwtSecret } = require('./users/session');
 
@@ -8,10 +10,15 @@ const PORT = process.env.PORT || 5000;
 const { users: userRoutes, admins: adminRoutes, therapists: therapistRoutes, teachers: teacherRoutes } = require('./users/routes');
 const { patients: patientRoutes } = require('./patients/routes');
 const { learning: learningRoutes } = require('./learning/routes');
+const { audio: audioRoutes } = require('./audio/routes');
 const Patient = require('./patients/Patient');
+
+fs.mkdirSync(path.join(__dirname, 'uploads', 'audio'), { recursive: true });
 
 app.use(cors());
 app.use(express.json({ limit: '3mb' }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/audio', audioRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/therapists', therapistRoutes);
@@ -68,7 +75,11 @@ app.use((error, req, res, next) => {
 // Start server after connecting to database
 const startServer = async () => {
   getJwtSecret();
-  await connectDB();
+  const connection = await connectDB();
+  await connection.connection.db.collection('audit_logs').createIndex(
+    { createdAt: -1 },
+    { name: 'createdAt_-1' },
+  );
   await Patient.createIndexes();
   app.listen(PORT, () => {
     console.log(`[Server] SpeakSteps backend running on http://localhost:${PORT}`);

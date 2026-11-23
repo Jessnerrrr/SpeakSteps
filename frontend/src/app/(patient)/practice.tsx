@@ -14,6 +14,8 @@ import {
   AudioModule,
   RecordingPresets,
   setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
@@ -21,7 +23,7 @@ import {
 // FIXED IMPORTS: 2 levels up to reach src/types and src/components
 import type { Position } from '../../types/sentences';
 import { ChildBottomNav } from '../../components/child-bottom-nav';
-import { createSubmission, getMyPatients, type PatientSearchResult } from '@/services/user-api';
+import { createSubmission, getMyPatients, resolveAudioUrl, uploadAudioFile, type PatientSearchResult } from '@/services/user-api';
 
 export default function PracticeScreen() {
   const params = useLocalSearchParams<{
@@ -34,16 +36,21 @@ export default function PracticeScreen() {
     practiceItemId?: string;
     patientId?: string;
     patientCode?: string;
+    modelAudioUrl?: string | string[];
   }>();
 
   const position = (params.position ?? 'Initial') as Position;
   const sound = params.sound ?? '/s/';
   const syllable = params.syllable ?? 'sa';
+  const modelAudioUrl = Array.isArray(params.modelAudioUrl) ? params.modelAudioUrl[0] : params.modelAudioUrl;
+  const modelPlayer = useAudioPlayer(modelAudioUrl ? resolveAudioUrl(modelAudioUrl) : null);
+  const modelPlayerStatus = useAudioPlayerStatus(modelPlayer);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [recordingUri, setRecordingUri] = useState<string | null>(null);
+  const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
   const [patient, setPatient] = useState<PatientSearchResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -116,11 +123,29 @@ export default function PracticeScreen() {
           return;
         }
       }
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setRecordingUri(null);
+      setUploadedAudioUrl(null);
     } catch (recordError) {
       setError(recordError instanceof Error ? recordError.message : 'Could not record this practice attempt.');
+    }
+  };
+
+  const toggleModelPlayback = async () => {
+    if (!modelAudioUrl) return;
+    setError('');
+    if (modelPlayerStatus.playing) {
+      modelPlayer.pause();
+      return;
+    }
+    try {
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+      if (modelPlayerStatus.didJustFinish) await modelPlayer.seekTo(0);
+      modelPlayer.play();
+    } catch (playError) {
+      setError(playError instanceof Error ? playError.message : 'Could not play the SLP model audio.');
     }
   };
 
@@ -140,12 +165,14 @@ export default function PracticeScreen() {
     setSaving(true);
     setError('');
     try {
+      const audioRecordingUrl = uploadedAudioUrl || await uploadAudioFile(recordingUri);
+      if (!uploadedAudioUrl) setUploadedAudioUrl(audioRecordingUrl);
       await createSubmission({
         patientId: patient.id,
         patientCode: patient.patientCode,
         assignmentId: params.assignmentId,
         practiceItemId: params.practiceItemId,
-        audioRecordingUrl: recordingUri,
+        audioRecordingUrl,
         durationSeconds: Math.round(recorderState.durationMillis / 1000),
       });
       router.back();
@@ -199,8 +226,17 @@ export default function PracticeScreen() {
                 <Text style={styles.videoPlaceholderText}>▶</Text>
               </View>
               <Text style={styles.videoHint}>Watch the video how to say the word</Text>
-              <TouchableOpacity style={styles.watchAgainBtn} activeOpacity={0.8}>
-                <Text style={styles.watchAgainText}>▶  Watch again</Text>
+              <TouchableOpacity
+                style={styles.watchAgainBtn}
+                activeOpacity={0.8}
+                onPress={modelAudioUrl ? () => void toggleModelPlayback() : undefined}
+                accessibilityLabel={modelAudioUrl ? 'Play or pause SLP model audio' : 'Watch again'}
+              >
+                <Text style={styles.watchAgainText}>
+                  {modelAudioUrl
+                    ? `${modelPlayerStatus.playing ? '❚❚  Pause' : '▶  Listen to'} SLP Model`
+                    : '▶  Watch again'}
+                </Text>
               </TouchableOpacity>
             </View>
 

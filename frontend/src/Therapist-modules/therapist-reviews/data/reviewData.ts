@@ -19,6 +19,7 @@ export type ReviewRecord = {
   activity: string;
   sound: string;
   level: string;
+  audioRecordingUrl?: string;
   status: ReviewStatus;
   targets: ReviewTarget[];
   observations: string;

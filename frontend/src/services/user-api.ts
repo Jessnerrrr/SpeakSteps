@@ -46,6 +46,7 @@ type ApiResponse<T> = {
   accomplishments?: T[];
   notifications?: T[];
   users?: T[];
+  auditLogs?: T[];
   word?: T;
   activity?: T;
   assignment?: T;
@@ -58,6 +59,7 @@ export type ApiActivityWord = {
   sound: string;
   position: 'Initial' | 'Medial' | 'Final';
   phrase: string;
+  modelAudioUrl?: string;
 };
 
 export type ApiActivity = {
@@ -84,6 +86,7 @@ export type ApiWordBankEntry = {
   position: 'Initial' | 'Medial' | 'Final';
   language: string;
   isStandard: boolean;
+  modelAudioUrl?: string;
 };
 
 export type ApiAssignment = {
@@ -222,6 +225,19 @@ export type AdminUser = {
   childAge: number | null;
   studentId: string;
   contact: string;
+};
+
+export type AuditLogEntry = {
+  id: string;
+  actorId: string;
+  actorRole: string;
+  actorName: string;
+  action: string;
+  category: string;
+  targetType: string;
+  targetId: string;
+  details: string;
+  createdAt: string;
 };
 
 export type AccountProfile = {
@@ -523,8 +539,14 @@ export async function getWordBank(): Promise<ApiWordBankEntry[]> {
   return requireArray(result.words, 'word bank entries');
 }
 
-export async function createWordBankEntry(word: { text: string; sound: string; position: string; language: string }) {
-  const result = await request<{ id: string; text: string; sound: string; position: string; language: string; isStandard: boolean }>('/word-bank', {
+export async function createWordBankEntry(word: {
+  text: string;
+  sound: string;
+  position: string;
+  language: string;
+  modelAudioUrl?: string;
+}) {
+  const result = await request<ApiWordBankEntry>('/word-bank', {
     method: 'POST',
     body: word,
   });
@@ -576,6 +598,98 @@ export async function createSubmission(input: {
   });
   if (!result.submission) throw new Error('The backend response did not include the saved submission.');
   return result.submission;
+}
+
+const audioMimeTypes: Record<string, string> = {
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  webm: 'audio/webm',
+  aac: 'audio/aac',
+  ogg: 'audio/ogg',
+};
+
+function audioExtensionFromMimeType(mimeType: string): string | undefined {
+  const normalized = mimeType.toLowerCase().split(';')[0].trim();
+  return Object.entries(audioMimeTypes).find(([, type]) => type === normalized)?.[0];
+}
+
+export async function uploadAudioFile(localUri: string): Promise<string> {
+  const token = await getSessionToken();
+  if (!token) throw new Error('Sign in before uploading audio.');
+
+  const uriExtension = /\.([a-z\d]+)(?:[?#].*)?$/i.exec(localUri)?.[1]?.toLowerCase();
+  let extension = uriExtension && audioMimeTypes[uriExtension] ? uriExtension : undefined;
+  const formData = new FormData();
+  let filename: string;
+
+  if (Platform.OS === 'web') {
+    let fileResponse: Response;
+    try {
+      fileResponse = await fetch(localUri);
+    } catch {
+      throw new Error('Could not read the recorded audio file.');
+    }
+    if (!fileResponse.ok) throw new Error('Could not read the recorded audio file.');
+    const blob = await fileResponse.blob();
+    extension = extension || audioExtensionFromMimeType(blob.type) || 'webm';
+    filename = `recording-${Date.now()}.${extension}`;
+    formData.append('audio', blob, filename);
+  } else {
+    extension = extension || 'm4a';
+    filename = `recording-${Date.now()}.${extension}`;
+    const nativeFile = {
+      uri: localUri,
+      name: filename,
+      type: audioMimeTypes[extension],
+    };
+    // React Native FormData accepts URI-backed files; the DOM type only describes Blob values.
+    const nativeFormData = formData as FormData & {
+      append(name: string, value: typeof nativeFile): void;
+    };
+    nativeFormData.append('audio', nativeFile);
+  }
+
+  let url: URL;
+  try {
+    url = new URL(`${apiBaseUrl}/audio/upload`);
+  } catch {
+    throw new Error('The backend URL is invalid. Check EXPO_PUBLIC_API_URL.');
+  }
+  if (url.protocol !== 'https:' && !(__DEV__ && isPrivateHost(url.hostname))) {
+    throw new Error('Use HTTPS for the backend URL, or a private local-network URL during development.');
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+  } catch {
+    throw new Error('Could not upload the audio file. Check that the backend is reachable.');
+  }
+
+  let result: { audioUrl?: string; error?: string };
+  try {
+    result = await response.json() as { audioUrl?: string; error?: string };
+  } catch {
+    throw new Error('The backend returned an invalid audio upload response.');
+  }
+  if (!response.ok || typeof result.audioUrl !== 'string' || !result.audioUrl) {
+    throw new Error(result.error || `Audio upload failed (${response.status}).`);
+  }
+  return result.audioUrl;
+}
+
+export function resolveAudioUrl(audioUrl: string): string {
+  if (!audioUrl.trim()) throw new Error('An audio URL is required.');
+  try {
+    return new URL(audioUrl, apiBaseUrl).toString();
+  } catch {
+    throw new Error('The audio URL is invalid.');
+  }
 }
 
 export async function getReviews(): Promise<ApiReview[]> {
@@ -722,6 +836,15 @@ export async function getAdminUsers(role?: string, status?: string) {
   const suffix = params.toString() ? `?${params.toString()}` : '';
   const result = await request<AdminUser>(`/admin/users${suffix}`);
   return requireArray(result.users, 'accounts');
+}
+
+export async function fetchAuditLogs(search = '', category = ''): Promise<AuditLogEntry[]> {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set('search', search.trim());
+  if (category && category !== 'All activity') params.set('category', category);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const result = await request<AuditLogEntry>(`/admin/audit-logs${suffix}`);
+  return requireArray(result.auditLogs, 'audit logs');
 }
 
 export async function updateAdminUserStatus(userId: string, status: 'verified' | 'rejected') {

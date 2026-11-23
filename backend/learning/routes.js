@@ -5,6 +5,7 @@ const User = require('../users/User');
 const { hashPassword, verifyPassword } = require('../users/password');
 const Patient = require('../patients/Patient');
 const { requireSession } = require('../users/session');
+const { logAuditEvent } = require('../utils/auditLogger');
 const {
   ActivityWord,
   ClinicalReview,
@@ -212,6 +213,7 @@ function activityInput(body) {
     sound: boundedString(word && word.sound, 'Word sound', 50),
     position: word && word.position ? mapPositions([word.position])[0] : undefined,
     phrase: boundedString(word && word.phrase, 'Target phrase', 500),
+    model_audio_url: boundedString(word && word.modelAudioUrl, 'Model audio URL', 2048),
     word_bank_id: word && typeof word.id === 'string' && !word.id.startsWith('custom-') ? word.id : undefined,
   }));
   const customLines = Array.isArray(body.customLines)
@@ -255,6 +257,7 @@ async function activityDto(activity, options = {}) {
       sound: word.sound || activity.sound,
       position: POSITION_FROM_DB[word.position] || 'Initial',
       phrase: word.phrase || '',
+      modelAudioUrl: word.model_audio_url || '',
     })),
     customLines: activity.custom_lines || [],
     visualName: activity.visual_asset_name || '',
@@ -412,6 +415,16 @@ router.post('/activities', requireRoles('therapist'), endpoint(async (req, res) 
     await saveActivityWords(document[0]._id, words, session);
     return document[0].toObject();
   });
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: user._id,
+    actorRole: user.role,
+    actorName: user.full_name,
+    action: 'Activity created',
+    category: 'Activity',
+    targetType: 'activity',
+    targetId: saved._id,
+    details: 'Therapist created a practice activity.',
+  });
   return res.status(201).json({ success: true, activity: await activityDto(saved) });
 }));
 
@@ -444,6 +457,7 @@ router.get('/word-bank', requireRoles('therapist', 'teacher', 'admin'), endpoint
       position: POSITION_FROM_DB[entry.position] || 'Initial',
       language: entry.language,
       isStandard: entry.is_standard,
+      modelAudioUrl: entry.model_audio_url || '',
     })),
   });
 }));
@@ -458,6 +472,7 @@ router.post('/word-bank', requireRoles('therapist'), endpoint(async (req, res) =
     sound: boundedString(body.sound, 'Target sound', 50, true),
     position,
     language: boundedString(body.language, 'Language', 80) || 'English',
+    model_audio_url: boundedString(body.modelAudioUrl, 'Model audio URL', 2048),
     is_standard: false,
     created_by_therapist_id: await getProfileId(user),
   });
@@ -470,6 +485,60 @@ router.post('/word-bank', requireRoles('therapist'), endpoint(async (req, res) =
       position: POSITION_FROM_DB[word.position],
       language: word.language,
       isStandard: word.is_standard,
+      modelAudioUrl: word.model_audio_url || '',
+    },
+  });
+}));
+
+router.put('/word-bank/:wordId', requireRoles('therapist'), endpoint(async (req, res) => {
+  const user = await getSessionUser(req);
+  const body = req.body || {};
+  const updates = {};
+  const unset = {};
+  if (Object.prototype.hasOwnProperty.call(body, 'text')) {
+    updates.word_text = boundedString(body.text, 'Word', 100, true);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'sound')) {
+    updates.sound = boundedString(body.sound, 'Target sound', 50, true);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'position')) {
+    updates.position = mapPositions([body.position])[0];
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'language')) {
+    updates.language = boundedString(body.language, 'Language', 80, true);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'modelAudioUrl')) {
+    const modelAudioUrl = boundedString(body.modelAudioUrl, 'Model audio URL', 2048);
+    if (modelAudioUrl) updates.model_audio_url = modelAudioUrl;
+    else unset.model_audio_url = '';
+  }
+  if (!Object.keys(updates).length && !Object.keys(unset).length) {
+    throw new HttpError(400, 'At least one word field must be provided.');
+  }
+
+  const update = {};
+  if (Object.keys(updates).length) update.$set = updates;
+  if (Object.keys(unset).length) update.$unset = unset;
+  const word = await WordBankEntry.findOneAndUpdate(
+    {
+      _id: req.params.wordId,
+      created_by_therapist_id: await getProfileId(user),
+      is_standard: false,
+    },
+    update,
+    { new: true, runValidators: true },
+  ).lean();
+  if (!word) throw new HttpError(404, 'Custom word was not found or cannot be updated.');
+  return res.json({
+    success: true,
+    word: {
+      id: word._id,
+      text: word.word_text,
+      sound: word.sound,
+      position: POSITION_FROM_DB[word.position] || 'Initial',
+      language: word.language,
+      isStandard: word.is_standard,
+      modelAudioUrl: word.model_audio_url || '',
     },
   });
 }));
@@ -646,6 +715,16 @@ router.post('/submissions', requireRoles('parent'), endpoint(async (req, res) =>
     }
     created = document[0].toObject();
   });
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: user._id,
+    actorRole: user.role,
+    actorName: user.full_name,
+    action: 'Practice submitted',
+    category: 'Practice',
+    targetType: 'submission',
+    targetId: created._id,
+    details: 'A practice recording was submitted for review.',
+  });
   return res.status(201).json({
     success: true,
     submission: { id: String(created._id), patientId: String(created.patient_id), status: created.status },
@@ -703,6 +782,16 @@ router.post('/reviews', requireRoles('therapist'), endpoint(async (req, res) => 
     await SubmissionTargetRating.deleteMany({ submission_id: submissionId }, { session });
     if (ratings.length) await SubmissionTargetRating.insertMany(ratings, { session });
     await Submission.updateOne({ _id: submissionId }, { status: 'reviewed' }, { session });
+  });
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: user._id,
+    actorRole: user.role,
+    actorName: user.full_name,
+    action: 'Clinical review saved',
+    category: 'Clinical',
+    targetType: 'submission',
+    targetId: submissionId,
+    details: 'Therapist completed a clinical review.',
   });
   return res.json({ success: true, review: { submissionId: String(submissionId), averageScore: averageScore ?? null } });
 }));
@@ -974,6 +1063,16 @@ router.post('/patients/:patientId/soap-notes', requireRoles('therapist'), endpoi
     plan: boundedString(body.plan, 'Plan note', 5000),
     created_at: new Date(),
   });
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: user._id,
+    actorRole: user.role,
+    actorName: user.full_name,
+    action: 'SOAP note created',
+    category: 'Clinical',
+    targetType: 'soap_note',
+    targetId: note._id,
+    details: 'Therapist added a SOAP note.',
+  });
   return res.status(201).json({ success: true, note: { id: String(note._id), number: note.session_number } });
 }));
 
@@ -1226,7 +1325,7 @@ router.get('/admin/users', requireRoles('admin'), endpoint(async (req, res) => {
 }));
 
 router.patch('/admin/users/:userId/status', requireRoles('admin'), endpoint(async (req, res) => {
-  await getSessionUser(req);
+  const actor = await getSessionUser(req);
   const id = objectId(req.params.userId, 'user ID');
   const status = req.body && req.body.status;
   if (!['verified', 'rejected'].includes(status)) {
@@ -1238,6 +1337,16 @@ router.patch('/admin/users/:userId/status', requireRoles('admin'), endpoint(asyn
     { new: true, runValidators: true },
   ).select('full_name email role status created_at').lean();
   if (!user) throw new HttpError(404, 'Account was not found.');
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: actor._id,
+    actorRole: actor.role,
+    actorName: actor.full_name,
+    action: 'Account status updated',
+    category: 'Account',
+    targetType: 'account',
+    targetId: user._id,
+    details: `${user.role} account status changed to ${user.status}.`,
+  });
   return res.json({
     success: true,
     user: {

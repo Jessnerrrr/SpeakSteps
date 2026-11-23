@@ -204,6 +204,7 @@ export default function SentencesScreen() {
       sound: word.sound || assignment?.activity.sound || '',
       syllable: word.phrase || word.text,
       stars: 0,
+      modelAudioUrl: word.modelAudioUrl,
     }));
   const items: Sentence[] = assignedItems.length > 0
     ? assignedItems
@@ -224,6 +225,7 @@ export default function SentencesScreen() {
         sentenceId: sentence.id,
         sound: sentence.sound,
         syllable: sentence.syllable,
+        modelAudioUrl: sentence.modelAudioUrl,
         stars: sentence.stars,
         position,
         assignmentId: assignment?.id,

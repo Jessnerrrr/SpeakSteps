@@ -1,3 +1,19 @@
+11-22-2026
+
+### Added
+- Added a non-blocking MongoDB audit logger and initialized/indexed the `audit_logs` collection at backend startup.
+- Recorded successful logins, parent registrations, admin account-status changes, therapist activity creation, audio uploads, practice submissions, clinical reviews, and SOAP-note creation.
+- Added admin-authenticated `GET /api/admin/audit-logs` with search and category filters.
+
+### Changed
+- Connected the Admin Activity Logs screen and dashboard recent-activity panel to live audit records; removed the hardcoded activity-log sample data.
+- Preserved existing search and category controls and added filters for activity, practice, clinical, and media events.
+
+### Verification
+- Backend syntax checks passed.
+- Backend tests passed (14/14).
+- Frontend `npx tsc --noEmit` passed.
+
 11-18-2026
 
 ## Unreleased

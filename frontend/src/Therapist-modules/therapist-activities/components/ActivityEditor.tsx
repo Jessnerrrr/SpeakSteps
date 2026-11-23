@@ -30,6 +30,7 @@ export function ActivityEditor() {
   const { draft, setDraft, saveActivity, wordBank, addBankWord } = useActivities();
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [audioBusy, setAudioBusy] = useState(false);
   const [bankQuery, setBankQuery] = useState('');
   const phraseMode = usesPhraseFields(draft.level);
   const positions = positionsFromLabel(draft.positionLabel);
@@ -70,6 +71,10 @@ export function ActivityEditor() {
   };
 
   const persistActivity = async () => {
+    if (audioBusy) {
+      setError('Stop recording and wait for the model audio upload to finish before saving.');
+      return;
+    }
     if (!draft.title.trim()) {
       setError('Enter an activity title.');
       return;
@@ -84,6 +89,22 @@ export function ActivityEditor() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const attachModelAudio = (audioUrl: string) => {
+    setDraft((current) => {
+      const words = current.origin === 'custom'
+        ? current.customWords
+        : wordBank.filter((word) => current.selectedWordIds.includes(word.id));
+      return {
+        ...current,
+        modelAudioUrl: audioUrl,
+        modelAudioUrls: {
+          ...current.modelAudioUrls,
+          ...Object.fromEntries(words.map((word) => [word.id, audioUrl])),
+        },
+      };
+    });
   };
 
   const toggleWord = (id: string, position: WordPosition) => {
@@ -267,7 +288,15 @@ export function ActivityEditor() {
             <Text style={{ color: palette.faint, fontSize: 12 }}>MP4 or MOV, up to 20 MB per file</Text>
           </Pressable>
           <Text style={[styles.heading, { color: palette.text }]}>Preview Audio Model</Text>
-          <AudioCard title="Sample Audio Model" meta="Demo Playback • 0:08" />
+          <AudioCard
+            title="Sample Audio Model"
+            meta={draft.modelAudioUrl ? 'Tap to preview model audio' : 'Tap to record; stopping uploads'}
+            audioUrl={draft.modelAudioUrl}
+            recordable
+            onUploaded={attachModelAudio}
+            onUploadStateChange={setAudioBusy}
+            onRecordingStateChange={setAudioBusy}
+          />
           <View style={styles.actions}>
             <Pressable accessibilityRole="button" onPress={() => setDraft({ step: 'focus' })} style={[styles.secondary, { borderColor: palette.line }]}>
               <Text style={[styles.secondaryText, { color: palette.text }]}>Back</Text>
@@ -302,7 +331,15 @@ export function ActivityEditor() {
               ? draft.customLines.filter(Boolean).map((line, index) => <Text key={index} style={styles.previewBody}>{line}</Text>)
               : null}
             <Text style={styles.previewHeading}>Preview Audio Model</Text>
-            <AudioCard title="Pronunciation Model" meta="Demo Playback • 0:08" />
+            <AudioCard
+              title="Pronunciation Model"
+              meta={draft.modelAudioUrl ? 'Tap to preview model audio' : 'Tap to record; stopping uploads'}
+              audioUrl={draft.modelAudioUrl}
+              recordable
+              onUploaded={attachModelAudio}
+              onUploadStateChange={setAudioBusy}
+              onRecordingStateChange={setAudioBusy}
+            />
             <Text style={styles.previewHeading}>Visual Material</Text>
             <View style={styles.visual}><Text style={{ color: '#8B9AAB' }}>{draft.visualName || '▶'}</Text></View>
           </View>

@@ -10,6 +10,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { TherapistShell } from '@/components/therapist/TherapistShell';
 import { useTherapist } from '@/components/therapist/TherapistProvider';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/therapist/icons';
+import { AudioCard } from '@/Therapist-modules/therapist-activities/components/AudioCard';
 import { useReviews } from '@/Therapist-modules/therapist-reviews/state/ReviewsProvider';
 import type { ReviewRecord, ReviewStatus, ReviewTarget, WordPosition } from '@/Therapist-modules/therapist-reviews/data/reviewData';
 import {
@@ -19,29 +20,6 @@ import {
   ratingGuide,
   scoredTargets,
 } from '@/Therapist-modules/therapist-reviews/data/reviewData';
-
-// ─── Simple Audio Demo Card ──────────────────────────────────────────────────
-
-function AudioCard({ title, meta }: { title: string; meta: string }) {
-  const [playing, setPlaying] = useState(false);
-  const bars = [8, 14, 10, 18, 12, 16, 9, 15];
-  return (
-    <Pressable accessibilityRole="button" onPress={() => setPlaying((c) => !c)} style={reviewStyles.audioCard}>
-      <View style={reviewStyles.audioPlay}>
-        <Text style={reviewStyles.audioPlayIcon}>{playing ? '❚❚' : '▶'}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={reviewStyles.audioTitle}>{title}</Text>
-        <Text style={reviewStyles.audioMeta}>{playing ? 'Playing demo…' : meta}</Text>
-      </View>
-      <View style={reviewStyles.audioBars}>
-        {bars.map((height, i) => (
-          <View key={i} style={[reviewStyles.audioBar, { height: playing ? height + 4 : height }]} />
-        ))}
-      </View>
-    </Pressable>
-  );
-}
 
 // ─── Status Pill Component (Exact same size & centered) ───────────────────────
 
@@ -179,7 +157,6 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
         <Stat value={formatAverage(average)} label="Average" />
         <Stat value={`${review.targets.length - scored.length}`} label="unscored" />
       </View>
-
       <Text style={[reviewStyles.disclaimer, { color: palette.faint }]}>
         Hold the recording on any placeholder and record SLP observations before clinical use. Scores are practice
         observations, not diagnostic results.
@@ -218,6 +195,7 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
                 key={target.id}
                 reviewId={review.id}
                 target={target}
+                audioUrl={review.audioRecordingUrl}
                 onChange={(patch) => updateTarget(review.id, target.id, patch)}
               />
             ))}
@@ -288,10 +266,12 @@ function Stat({ value, label }: { value: string; label: string }) {
 function TargetCard({
   reviewId,
   target,
+  audioUrl,
   onChange,
 }: {
   reviewId: string;
   target: ReviewTarget;
+  audioUrl?: string;
   onChange: (patch: Partial<ReviewTarget>) => void;
 }) {
   const { palette } = useTherapist();
@@ -330,7 +310,12 @@ function TargetCard({
       </Pressable>
       {target.notesOpen ? (
         <View style={reviewStyles.notes}>
-          <AudioCard title="Student Final Take" meta="Demo Playback · 0:08" />
+          <AudioCard
+            title="Student Final Take"
+            meta="Demo Playback · 0:08"
+            audioUrl={audioUrl}
+            empty="No child recording available."
+          />
           <Field
             label="Short Feedback"
             value={target.feedback}
@@ -457,12 +442,4 @@ const reviewStyles = StyleSheet.create({
   save: { flex: 1, borderRadius: 12, minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#C48B5A' },
   saveText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
-  // Audio Demo Card
-  audioCard: { borderWidth: 1, borderColor: '#F0D2BC', backgroundColor: '#FFF8F3', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  audioPlay: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F97316', alignItems: 'center', justifyContent: 'center' },
-  audioPlayIcon: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  audioTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
-  audioMeta: { fontSize: 12, color: '#8B9AAB', marginTop: 2 },
-  audioBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 22 },
-  audioBar: { width: 4, borderRadius: 2, backgroundColor: '#F97316' },
 });

@@ -56,7 +56,6 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
         <Stat value={formatAverage(average)} label="Average" />
         <Stat value={`${review.targets.length - scored.length}`} label="unscored" />
       </View>
-
       <Text style={[styles.disclaimer, { color: palette.faint }]}>
         Hold the recording on any placeholder and record SLP observations before clinical use. Scores are practice observations, not diagnostic results.
       </Text>
@@ -82,7 +81,13 @@ export function RecordingReview({ reviewId }: { reviewId: string }) {
             <Text style={[styles.positionMeta, { color: palette.faint }]}>{positionSummary(position)}</Text>
           </View>
           {review.targets.filter((target) => target.position === position).map((target) => (
-            <TargetCard key={target.id} reviewId={review.id} target={target} onChange={(patch) => updateTarget(review.id, target.id, patch)} />
+            <TargetCard
+              key={target.id}
+              reviewId={review.id}
+              target={target}
+              audioUrl={review.audioRecordingUrl}
+              onChange={(patch) => updateTarget(review.id, target.id, patch)}
+            />
           ))}
         </View>
       ))}
@@ -149,10 +154,12 @@ function Stat({ value, label }: { value: string; label: string }) {
 function TargetCard({
   reviewId,
   target,
+  audioUrl,
   onChange,
 }: {
   reviewId: string;
   target: ReviewTarget;
+  audioUrl?: string;
   onChange: (patch: Partial<ReviewTarget>) => void;
 }) {
   const { palette } = useTherapist();
@@ -184,7 +191,12 @@ function TargetCard({
       </Pressable>
       {target.notesOpen ? (
         <View style={styles.notes}>
-          <AudioCard title="Student Final Take" meta="Demo Playback · 0:08" />
+          <AudioCard
+            title="Student Final Take"
+            meta="Demo Playback · 0:08"
+            audioUrl={audioUrl}
+            empty="No child recording available."
+          />
           <Field label="Short Feedback" value={target.feedback} placeholder="" onChangeText={(feedback) => onChange({ feedback })} />
           <Field label="Private Therapist Remarks" value={target.remarks} placeholder="" onChangeText={(remarks) => onChange({ remarks })} />
           <Text style={[styles.privateNote, { color: palette.faint }]}>Private remarks are only visible to you and not shared with guardians.</Text>

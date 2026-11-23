@@ -8,6 +8,7 @@ export interface Sentence {
   sound: string;   // e.g. "/s/"
   syllable: string; // e.g. "sa"
   stars: 0 | 1 | 2 | 3;
+  modelAudioUrl?: string;
 }
 
 export const POSITIONS: Position[] = ['Initial', 'Medial', 'Final'];

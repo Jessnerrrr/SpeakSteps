@@ -145,16 +145,6 @@ export type RequestEvent = {
   date: string;
 };
 
-export type ActivityEntry = {
-  id: string;
-  title: string;
-  detail: string;
-  actor: string;
-  date: string;
-  category: 'Account' | 'Student' | 'Request' | 'Settings';
-  read: boolean;
-};
-
 export type AdminNotification = {
   id: string;
   title: string;
@@ -210,13 +200,6 @@ export const initialRequests: SuspensionRequest[] = [
 export const initialReleaseRequests: ReleaseRequest[] = [
   { id: 'rel-2501', patientId: 'pt-1', therapistId: 'pro-1', origin: 'Therapist', requestType: 'Therapist assignment release', workflowStage: 'Ready for Admin Review', guardianConfirmation: 'Not required', teacherVerification: 'Not required', reason: 'No longer receiving services', explanation: 'The family has asked to end services with the assigned Therapist. Please review the assignment before making a change.', submitted: '2026-11-15', status: 'Pending', reminderCount: 0, events: [{ id: 'rel-2501-created', title: 'Request submitted', detail: 'Original explanation received from the Therapist.', actor: 'Maria Santos', date: '2026-11-15T10:16:00' }] },
   { id: 'rel-2492', patientId: 'pt-3', therapistId: 'pro-1', origin: 'Guardian', followupRecipient: 'Teacher', requestType: 'Transfer', workflowStage: 'Awaiting Teacher Verification', guardianConfirmation: 'Confirmed', teacherVerification: 'Pending', reason: 'Transferred to another school', explanation: 'We moved to Northview School this month. Please confirm the school record before changing enrollment.', submitted: '2026-11-05', status: 'Pending', reminderCount: 2, lastReminderAt: '2026-11-12T09:00:00', events: [{ id: 'rel-2492-created', title: 'Guardian request submitted', detail: 'Guardian selected the transfer reason and submitted the original explanation.', actor: 'Teresa Lim', date: '2026-11-05T09:00:00' }, { id: 'rel-2492-day3', title: 'Day 3 reminder recorded', detail: 'Teacher verification reminder recorded in mock state. No message was sent.', actor: 'System simulation', date: '2026-11-08T09:00:00' }, { id: 'rel-2492-day7', title: 'Day 7 reminder recorded', detail: 'Second Teacher follow-up reminder recorded in mock state. No message was sent.', actor: 'System simulation', date: '2026-11-12T09:00:00' }, { id: 'rel-2492-day14', title: 'Day 14 admin follow-up flagged', detail: 'No Teacher verification is recorded. The request remains unresolved and Student enrollment is unchanged.', actor: 'System simulation', date: '2026-11-19T09:00:00' }] },
-];
-
-export const initialActivity: ActivityEntry[] = [
-  { id: 'evt-1', title: 'Student enrolled', detail: 'Ava Mendoza · SS-24415', actor: 'Maria Santos', date: '2026-10-28T09:24:00', category: 'Student', read: true },
-  { id: 'evt-2', title: 'Invitation created', detail: 'Ana Cruz · Therapist', actor: 'Center admin', date: '2026-10-30T14:10:00', category: 'Account', read: true },
-  { id: 'evt-3', title: 'Student access suspended', detail: 'Noah Lim · SS-23891', actor: 'Center admin', date: '2026-11-02T11:05:00', category: 'Student', read: true },
-  { id: 'evt-4', title: 'Suspension request submitted', detail: 'Sophia Garcia · SS-24122', actor: 'Maria Santos', date: '2026-11-16T08:42:00', category: 'Request', read: false },
 ];
 
 export const initialNotifications: AdminNotification[] = [

@@ -46,6 +46,7 @@ const ActivityWord = makeModel(
     sound: String,
     position: { type: String, enum: ['initial', 'medial', 'final'] },
     phrase: String,
+    model_audio_url: String,
   },
   'activity_words',
   [
@@ -64,6 +65,7 @@ const WordBankEntry = makeModel(
     language: { type: String, required: true },
     is_standard: { type: Boolean, required: true, default: false },
     created_by_therapist_id: objectId,
+    model_audio_url: String,
   },
   'word_bank',
   [

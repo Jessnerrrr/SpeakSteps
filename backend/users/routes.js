@@ -6,6 +6,7 @@ const { validateRegistration } = require('./validation');
 const { requireSession, signAccessToken, TOKEN_LIFETIME_SECONDS } = require('./session');
 const { getRegistrationStatus } = require('./registration-policy');
 const { generatePatientCode } = require('../patients/patient-code');
+const { logAuditEvent } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -33,9 +34,21 @@ function loginHandler(role) {
       return res.status(403).json({ success: false, error: 'This account is not approved for sign in.' });
     }
 
+    const token = signAccessToken(user);
+    void logAuditEvent(mongoose.connection.db, {
+      actorId: user._id,
+      actorRole: user.role,
+      actorName: user.full_name,
+      action: 'Successful login',
+      category: 'Account',
+      targetType: 'account',
+      targetId: user._id,
+      details: `${role} account signed in.`,
+    });
+
     return res.json({
       success: true,
-      token: signAccessToken(user),
+      token,
       expiresIn: TOKEN_LIFETIME_SECONDS,
       user: publicUser(user),
     });
@@ -45,6 +58,52 @@ function loginHandler(role) {
 function roleLoginRouter(role) {
   const roleRouter = express.Router();
   roleRouter.post('/login', loginHandler(role));
+  if (role === 'admin') {
+    roleRouter.get('/audit-logs', requireSession, async (req, res) => {
+      const admin = await User.findById(req.session.sub).select('role status');
+      if (!admin || admin.status !== 'verified' || admin.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Administrator access is required.' });
+      }
+
+      const filter = {};
+      const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+      const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 200) : '';
+      if (category && category !== 'All activity') filter.category = category.slice(0, 60);
+      if (search) {
+        const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const expression = new RegExp(escapedSearch, 'i');
+        filter.$or = [
+          { actorName: expression },
+          { action: expression },
+          { category: expression },
+          { targetType: expression },
+          { targetId: expression },
+          { details: expression },
+        ];
+      }
+
+      const logs = await mongoose.connection.db.collection('audit_logs')
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .limit(200)
+        .toArray();
+      return res.json({
+        success: true,
+        auditLogs: logs.map((log) => ({
+          id: String(log._id),
+          actorId: String(log.actorId || ''),
+          actorRole: log.actorRole || '',
+          actorName: log.actorName || 'Unknown',
+          action: log.action,
+          category: log.category,
+          targetType: log.targetType,
+          targetId: String(log.targetId || ''),
+          details: typeof log.details === 'string' ? log.details : '',
+          createdAt: log.createdAt instanceof Date ? log.createdAt.toISOString() : log.createdAt,
+        })),
+      });
+    });
+  }
   return roleRouter;
 }
 
@@ -140,6 +199,16 @@ router.post('/register', async (req, res) => {
   }
 
   if (!createdUser) throw new Error('Could not allocate a unique patient code after several attempts.');
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: createdUser._id,
+    actorRole: createdUser.role,
+    actorName: createdUser.full_name,
+    action: 'Account registered',
+    category: 'Account',
+    targetType: 'account',
+    targetId: createdUser._id,
+    details: 'Parent registration completed.',
+  });
   const isApproved = createdUser.status === 'verified';
   return res.status(201).json({
     success: true,
