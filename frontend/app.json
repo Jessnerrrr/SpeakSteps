@@ -4,20 +4,17 @@
     "slug": "SpeakSteps",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/upload-icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "speakstepsclean",
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.speaksteps.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/images/app-icon.png",
+        "backgroundColor": "#F3F4F6"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
@@ -36,7 +33,14 @@
           }
         }
       ],
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/app-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#F3F4F6"
+        }
+      ],
       "expo-image",
       "expo-font",
       "@react-native-community/datetimepicker",
