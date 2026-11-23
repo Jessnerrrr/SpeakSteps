@@ -1,6 +1,35 @@
 # SpeakSteps change log
 
-This document records the Center Admin design review, the SUDE merge, and subsequent Student, Guardian, and Therapist changes on the local `ameer` branch.
+This document records the Center Admin design review, the SUDE merge, and subsequent updates to the Student, Guardian, Teacher, and Therapist portals.
+
+## Student Play and Practice
+
+- Redesigned Play with SpeakSteps buddy art, a speech bubble, an English and Tagalog selector, colorful level tiles, and larger play controls. The selected buddy bounces when tapped, and level changes animate the activity cards.
+- Activity cards show prompt counts and earned stars from the same practice records used on Home and Stars. Child Mode shows a buddy-led empty state with a next step when there are no activities.
+- Practice shows one prompt at a time with a progress bar, sound-position labels, a separate Therapist guidance card, and recording controls. Students can listen to a take or record it again before moving on.
+- The completion card brings together the buddy, activity title, practiced prompt count, and Done button. A newly earned star animates with sparkles. Repeat practice shows encouragement and keeps the earlier star.
+- Removed colored backgrounds behind the animal artwork and enlarged the transparent animations in Play, Practice, the completion card, and the empty state.
+- Used the reference's house, gamepad, outlined star, and paw in Child Mode. Guardian navigation uses matching house, clipboard, and chart icons, with the same highlighted active tab. Guardian Home cards use the same clipboard and chart icons.
+
+## Assignments, reviews, and audio
+
+- Student Play and Practice, Guardian Tasks, and task details show the assigner's name and role from the shared assignment.
+- Teacher Reviews supports student and activity multi-select, search, practice-level filtering, single-choice language filtering, and student A–Z / Z–A sorting. The demo review records use matching activity names and phonemes.
+- Used the same All languages, English, or Tagalog choice in Therapist review and activity filters. Syllables is tracked separately in My Adventure, Stars, and Guardian progress and feedback.
+- Practice recordings and playback are local to the session. Added the SpeakSteps microphone permission message and disabled background recording and playback in the Expo Audio configuration.
+
+## Child name-change approval
+
+- Guardian Child Profile warns that a proposed name requires Center Admin approval. The existing name stays in use while the request is pending.
+- Center Admin reviews pending name changes in Student Requests and can approve or decline them. Decisions appear in Activity Logs.
+- After approval, the guardian applies the specific approved name to Student and Guardian mode. Approval, application, and shared workflow data are held in the same demo session.
+
+## Recent verification
+
+- Chrome checks covered Play at 320 px, prompt navigation, recording and replay with a test microphone, the first and repeat completion states, assignment attribution, Child Mode empty states, and Guardian navigation.
+- Verified the guardian request, Center Admin approval and log, and application of the approved name in one Chrome session. Phone recording and cross-device workflows remain unverified.
+
+## Earlier changes
 
 ## Archive Center
 

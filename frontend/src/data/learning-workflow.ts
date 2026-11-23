@@ -84,6 +84,10 @@ export function learningCategory(level: PracticeLevel): PracticeLevel {
   return level;
 }
 
+export function assignmentAttribution({ assignedBy, source }: { assignedBy: string; source?: LearningAssignment['source'] }) {
+  return source ? `${assignedBy} · ${source}` : assignedBy;
+}
+
 export function subscribeLearningWorkflow(listener: () => void) {
   listeners.add(listener);
   return () => { listeners.delete(listener); };

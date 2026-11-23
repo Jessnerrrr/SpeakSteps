@@ -386,7 +386,7 @@ const INITIAL_REVIEWS: ReviewItem[] = [
     avatarBg: '#DCFCE7',
     avatarColor: '#166534',
     studentName: 'Khyl Shervin Sude',
-    activityTitle: 'Ready, set, /t/',
+    activityTitle: 'Ready, set, /r/',
     phonemeDesc: '/r/ - Phrases',
     status: 'Pending',
     submittedDate: '1 hr ago',
@@ -425,11 +425,11 @@ const INITIAL_REVIEWS: ReviewItem[] = [
     avatarBg: '#DCFCE7',
     avatarColor: '#166534',
     studentName: 'Khyl Shervin Sude',
-    activityTitle: 'Ready, set, /t/',
-    phonemeDesc: '/r/ - Phrases',
+    activityTitle: 'Try these /t/ words',
+    phonemeDesc: '/t/ - Words',
     status: 'Pending',
     submittedDate: 'Oct 24, 2026',
-    targetWord: 'tap',
+    targetWord: 'tea',
     audioDuration: '0:05',
   },
   {
@@ -890,6 +890,7 @@ export default function TeacherDashboardScreen() {
   const [reviewActivities, setReviewActivities] = useState<string[]>([]);
   const [reviewStudents, setReviewStudents] = useState<string[]>([]);
   const [reviewLanguage, setReviewLanguage] = useState<string[]>([]);
+  const [reviewLevels, setReviewLevels] = useState<string[]>([]);
   const [reviewStudentSort, setReviewStudentSort] = useState<'A–Z' | 'Z–A'>('A–Z');
   const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null);
   const [reviewEvaluation, setReviewEvaluation] = useState<'Correct' | 'Approximate' | 'Incorrect' | null>(null);
@@ -953,6 +954,7 @@ export default function TeacherDashboardScreen() {
     (reviewsFilter === 'All' || review.status === reviewsFilter) &&
     (!reviewActivities.length || reviewActivities.includes(review.activityTitle)) &&
     (!reviewStudents.length || reviewStudents.includes(review.studentName)) &&
+    (!reviewLevels.length || reviewLevels.some((level) => level === reviewCatalog.get(review.activityTitle)?.category)) &&
     matchesPracticeLanguage(reviewCatalog.get(review.activityTitle)?.language, reviewLanguage[0]),
   ).sort((first, second) => reviewStudentSort === 'A–Z'
     ? first.studentName.localeCompare(second.studentName) : second.studentName.localeCompare(first.studentName));
@@ -960,7 +962,7 @@ export default function TeacherDashboardScreen() {
   const studentPages = useListPagination(filteredPatients.length, 10, JSON.stringify([studentFilter, patientSearch]));
   const activityPages = useListPagination(filteredActivities.length, 10, JSON.stringify([activityCategoryFilter, activitySortBy, activitySoundFilter, activityLanguageFilter, activitySearch]));
   const wordPages = useListPagination(filteredWordBank.length, 10, JSON.stringify([wordBankQuery, wordBankFilterSounds, wordBankFilterPositions, wordBankFilterLanguages]));
-  const reviewPages = useListPagination(filteredReviews.length, 10, JSON.stringify([reviewsFilter, reviewActivities, reviewStudents, reviewLanguage, reviewStudentSort]));
+  const reviewPages = useListPagination(filteredReviews.length, 10, JSON.stringify([reviewsFilter, reviewActivities, reviewStudents, reviewLanguage, reviewLevels, reviewStudentSort]));
 
   // Trigger Toast Notification
   const triggerToast = (msg: string) => {
@@ -3248,6 +3250,7 @@ export default function TeacherDashboardScreen() {
                 selected={reviewActivities} onChange={setReviewActivities} emptyLabel="All activities" allLabel="All activities" compact resetOnAll searchable
                 extraSections={[
                   { label: 'Language', options: PRACTICE_LANGUAGES, selected: reviewLanguage, onChange: setReviewLanguage, allLabel: 'All languages', single: true },
+                  { label: 'Level', options: practiceLevels, selected: reviewLevels, onChange: setReviewLevels, allLabel: 'All levels' },
                   { label: 'Students', options: reviewStudentOptions, selected: reviewStudents, onChange: setReviewStudents, allLabel: 'All students',
                     headerContent: (
                       <View style={styles.reviewSortRow}>
@@ -4909,6 +4912,9 @@ export default function TeacherDashboardScreen() {
         {/* Tab 4: Reviews */}
         <TouchableOpacity
           style={styles.navItem}
+          accessibilityRole="button"
+          accessibilityLabel="Reviews"
+          accessibilityState={{ selected: activeTab === 'reviews' }}
           onPress={() => setActiveTab('reviews')}
           activeOpacity={0.7}
         >
