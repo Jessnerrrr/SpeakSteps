@@ -6,6 +6,7 @@ const { hashPassword, verifyPassword } = require('../users/password');
 const Patient = require('../patients/Patient');
 const { requireSession } = require('../users/session');
 const { logAuditEvent } = require('../utils/auditLogger');
+const { generatePatientCode } = require('../patients/patient-code');
 const {
   ActivityWord,
   ClinicalReview,
@@ -79,6 +80,14 @@ function objectId(value, label = 'record ID') {
   return new mongoose.Types.ObjectId(value);
 }
 
+function temporaryPassword() {
+  return [
+    crypto.randomBytes(4).toString('hex').toUpperCase(),
+    crypto.randomBytes(4).toString('hex'),
+    'Aa1!',
+  ].join('');
+}
+
 async function getSessionUser(req) {
   const user = await User.findById(objectId(req.session.sub, 'session user ID'));
   if (!user || user.status !== 'verified' || user.role !== req.session.role) {
@@ -131,6 +140,10 @@ async function patientDto(patient) {
     lastName: patient.last_name,
     dateOfBirth: patient.date_of_birth,
     createdAt: patient.created_at,
+    schoolStudentId: patient.school_student_id || '',
+    school: patient.school || '',
+    grade: patient.grade || '',
+    section: patient.section || '',
     primaryTherapistId: patient.primary_therapist_id ? String(patient.primary_therapist_id) : '',
     assignedTeacherId: patient.assigned_teacher_id ? String(patient.assigned_teacher_id) : '',
     age: guardian?.child_age != null ? String(guardian.child_age) : age,
@@ -673,8 +686,15 @@ router.get('/submissions', requireRoles('therapist', 'teacher', 'admin'), endpoi
       audioRecordingUrl: submission.audio_recording_url,
       waveformSample: submission.waveform_sample || [],
       durationSeconds: submission.duration_seconds ?? null,
-      status: submission.status === 'reviewed' ? 'Reviewed' : 'Pending',
+      status: user.role === 'teacher'
+        ? (submission.teacher_feedback ? 'Reviewed' : 'Pending')
+        : submission.status === 'reviewed' ? 'Reviewed' : 'Pending',
       submittedAt: submission.submitted_at,
+      teacherReview: submission.teacher_feedback ? {
+        rating: submission.teacher_feedback.rating,
+        notes: submission.teacher_feedback.notes || '',
+        reviewedAt: submission.teacher_feedback.reviewed_at,
+      } : null,
       review: review ? {
         observations: review.observations || '',
         parentFeedback: review.parent_feedback || '',
@@ -767,13 +787,51 @@ router.post('/submissions', requireRoles('parent'), endpoint(async (req, res) =>
   });
 }));
 
-router.post('/reviews', requireRoles('therapist'), endpoint(async (req, res) => {
+router.post('/reviews', requireRoles('therapist', 'teacher'), endpoint(async (req, res) => {
   const user = await getSessionUser(req);
-  const therapistId = await getProfileId(user);
   const body = req.body || {};
   const submissionId = objectId(body.submissionId, 'submission ID');
   const submission = await Submission.findById(submissionId).lean();
   if (!submission) throw new HttpError(404, 'Submission was not found.');
+  if (user.role === 'teacher') {
+    const teacherId = await getProfileId(user);
+    const patient = await Patient.findOne({
+      _id: submission.patient_id,
+      assigned_teacher_id: teacherId,
+    }).select('_id').lean();
+    if (!patient) throw new HttpError(403, 'This submission is not for an assigned student.');
+    const rating = body.rating;
+    if (!['Correct', 'Approximate', 'Incorrect'].includes(rating)) {
+      throw new HttpError(400, 'Choose a supported classroom feedback rating.');
+    }
+    const feedback = {
+      reviewer_role: 'teacher',
+      reviewer_teacher_id: teacherId,
+      rating,
+      notes: boundedString(body.notes, 'Feedback notes', 2000) || '',
+      reviewed_at: new Date(),
+    };
+    await Submission.updateOne(
+      { _id: submissionId },
+      { $set: { teacher_feedback: feedback } },
+      { runValidators: true },
+    );
+    void logAuditEvent(mongoose.connection.db, {
+      actorId: user._id,
+      actorRole: user.role,
+      actorName: user.full_name,
+      action: 'Teacher feedback saved',
+      category: 'Practice',
+      targetType: 'submission',
+      targetId: submissionId,
+      details: 'Teacher submitted classroom feedback for an assigned student.',
+    });
+    return res.json({
+      success: true,
+      feedback: { submissionId: String(submissionId), reviewerRole: 'teacher', rating, notes: feedback.notes },
+    });
+  }
+  const therapistId = await getProfileId(user);
   const patient = await Patient.findOne({
     _id: submission.patient_id,
     primary_therapist_id: therapistId,
@@ -1211,6 +1269,7 @@ router.get('/account/profile', requireRoles('parent', 'therapist', 'teacher', 'a
       email: user.email,
       contact: user.phone_number,
       role: user.role,
+      totpEnabled: user.totp_enabled === true,
     },
   });
 }));
@@ -1224,7 +1283,7 @@ router.patch('/account/profile', requireRoles('parent', 'therapist', 'teacher', 
     user._id,
     { full_name: fullName, phone_number: contact, updated_at: new Date() },
     { new: true, runValidators: true },
-  ).select('full_name email phone_number role').lean();
+  ).select('full_name email phone_number role totp_enabled').lean();
   return res.json({
     success: true,
     profile: {
@@ -1233,6 +1292,7 @@ router.patch('/account/profile', requireRoles('parent', 'therapist', 'teacher', 
       email: updated.email,
       contact: updated.phone_number,
       role: updated.role,
+      totpEnabled: updated.totp_enabled === true,
     },
   });
 }));
@@ -1353,14 +1413,14 @@ router.get('/admin/users', requireRoles('admin'), endpoint(async (req, res) => {
   if (['parent', 'therapist', 'teacher', 'admin'].includes(req.query.role)) filter.role = req.query.role;
   if (['pending', 'verified', 'rejected'].includes(req.query.status)) filter.status = req.query.status;
   const users = await User.find(filter)
-    .select('full_name email role status created_at child_name child_age student_id phone_number')
+    .select('full_name email role status created_at child_name child_age student_id phone_number archived_at archive_reason')
     .sort({ created_at: -1 })
     .limit(200)
     .lean();
   return res.json({
     success: true,
     users: await Promise.all(users.map(async (item) => {
-      const profile = ['therapist', 'teacher'].includes(item.role)
+      const profile = ['parent', 'therapist', 'teacher', 'admin'].includes(item.role)
         ? await mongoose.connection.db.collection(`${item.role}_profiles`).findOne(
           { user_id: item._id },
           { projection: { _id: 1 } },
@@ -1378,6 +1438,8 @@ router.get('/admin/users', requireRoles('admin'), endpoint(async (req, res) => {
       childAge: item.child_age ?? null,
       studentId: item.student_id || '',
       contact: item.phone_number || '',
+      archivedAt: item.archived_at || null,
+      archiveReason: item.archive_reason || '',
       };
     })),
   });
@@ -1392,10 +1454,16 @@ router.patch('/admin/users/:userId/status', requireRoles('admin'), endpoint(asyn
   }
   const user = await User.findByIdAndUpdate(
     id,
-    { status, updated_at: new Date() },
+    { status, updated_at: new Date(), ...(status === 'verified' ? { archived_at: null, archived_by: null, archive_reason: null } : {}) },
     { new: true, runValidators: true },
   ).select('full_name email role status created_at').lean();
   if (!user) throw new HttpError(404, 'Account was not found.');
+  if (status === 'rejected') {
+    await mongoose.connection.db.collection('user_sessions').updateMany(
+      { userId: user._id, revokedAt: null },
+      { $set: { revokedAt: new Date() } },
+    );
+  }
   void logAuditEvent(mongoose.connection.db, {
     actorId: actor._id,
     actorRole: actor.role,
@@ -1415,6 +1483,224 @@ router.patch('/admin/users/:userId/status', requireRoles('admin'), endpoint(asyn
       role: user.role,
       status: user.status,
       createdAt: user.created_at,
+      archivedAt: user.archived_at || null,
+      archiveReason: user.archive_reason || '',
+    },
+  });
+}));
+
+router.post('/admin/users', requireRoles('admin'), endpoint(async (req, res) => {
+  const actor = await getSessionUser(req);
+  const body = req.body || {};
+  const role = body.role;
+  if (!['therapist', 'teacher', 'parent', 'admin'].includes(role)) {
+    throw new HttpError(400, 'Choose a supported account role.');
+  }
+  const fullName = boundedString(body.fullName, 'Full name', 120, true);
+  const email = boundedString(body.email, 'Email', 254, true).toLowerCase();
+  const contact = boundedString(body.contact || '', 'Contact number', 40);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Enter a valid email address.');
+  if (await User.exists({ email })) throw new HttpError(409, 'An account with this email already exists.');
+  const invitePassword = temporaryPassword();
+  const invitationToken = crypto.randomBytes(32).toString('base64url');
+  const { salt, hash } = await hashPassword(invitePassword);
+  const user = new User({
+    full_name: fullName,
+    email,
+    phone_number: contact || '',
+    password_hash: `${salt}:${hash}`,
+    role,
+    status: 'pending',
+    invited_by_admin: true,
+    invitation_token_hash: crypto.createHash('sha256').update(invitationToken).digest('hex'),
+    invitation_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    ...(role === 'parent' ? {
+      child_name: boundedString(body.childName, 'Student name', 120, true),
+      student_id: boundedString(body.studentId, 'Student number', 40, true),
+      ...(Number.isInteger(body.childAge) && body.childAge >= 0 && body.childAge <= 18 ? { child_age: body.childAge } : {}),
+      ...(typeof body.startingLevel === 'string' ? { starting_level: body.startingLevel } : {}),
+    } : {}),
+  });
+  const db = mongoose.connection.db;
+  let patient;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      await user.save({ session });
+      const profileId = new mongoose.Types.ObjectId();
+      const now = new Date();
+      const nameFields = {
+        _id: profileId,
+        user_id: user._id,
+        full_name: fullName,
+        created_at: now,
+      };
+      if (role === 'therapist') {
+        await db.collection('therapist_profiles').insertOne({
+          ...nameFields,
+          staff_id: boundedString(body.staffId || '', 'Staff ID', 40),
+          professional_title: boundedString(body.professionalTitle || '', 'Professional title', 120),
+          specialization: boundedString(body.specialization || '', 'Specialization', 160),
+          license_number: boundedString(body.licenseNumber || '', 'License number', 120),
+          contact_number: contact,
+          clinic_name: boundedString(body.clinic || '', 'Clinic', 160),
+        }, { session });
+      } else if (role === 'teacher') {
+        await db.collection('teacher_profiles').insertOne({
+          ...nameFields,
+          professional_identifier: boundedString(body.professionalIdentifier || '', 'Professional ID', 40),
+          school: boundedString(body.school || '', 'School', 160),
+          grade_sections: Array.isArray(body.gradeSections) ? body.gradeSections.map((item) => boundedString(item, 'Grade section', 80)) : [],
+        }, { session });
+      } else if (role === 'parent') {
+        const parentProfile = {
+          ...nameFields,
+          guardian_name: fullName,
+          relationship_to_child: boundedString(body.relationship || 'Parent', 'Relationship', 80),
+        };
+        await db.collection('parent_profiles').insertOne(parentProfile, { session });
+        if (body.primaryTherapistId || body.assignedTeacherId) {
+          const therapistId = body.primaryTherapistId ? objectId(body.primaryTherapistId, 'therapist profile ID') : null;
+          const teacherId = body.assignedTeacherId ? objectId(body.assignedTeacherId, 'teacher profile ID') : null;
+          const [therapistProfile, teacherProfile] = await Promise.all([
+            therapistId ? db.collection('therapist_profiles').findOne({ _id: therapistId }, { session, projection: { _id: 1 } }) : null,
+            teacherId ? db.collection('teacher_profiles').findOne({ _id: teacherId }, { session, projection: { _id: 1 } }) : null,
+          ]);
+          if (therapistId && !therapistProfile) throw new HttpError(400, 'The assigned Therapist profile was not found.');
+          if (teacherId && !teacherProfile) throw new HttpError(400, 'The assigned Teacher profile was not found.');
+          const patientCode = await generatePatientCode(db.collection('patients'), new Date(), undefined, session);
+          const childParts = user.child_name.split(/\s+/);
+          const patientData = {
+            patientCode,
+            parent_id: profileId,
+            ...(therapistId ? { primary_therapist_id: therapistId } : {}),
+            ...(teacherId ? { assigned_teacher_id: teacherId } : {}),
+            first_name: childParts[0],
+            last_name: childParts.slice(1).join(' ') || 'Child',
+            school_student_id: user.student_id,
+            school: boundedString(body.school || '', 'School', 160),
+            grade: boundedString(body.grade || '', 'Grade', 40),
+            section: boundedString(body.section || '', 'Section', 80),
+            created_at: now,
+            language_profile: '',
+            target_positions: [],
+            baseline_done: false,
+            total_stars: 0,
+          };
+          if (typeof body.dateOfBirth === 'string' && !Number.isNaN(Date.parse(body.dateOfBirth))) {
+            patientData.date_of_birth = new Date(body.dateOfBirth);
+          }
+          const inserted = await db.collection('patients').insertOne(patientData, { session });
+          patient = { id: String(inserted.insertedId), patientCode, firstName: childParts[0], lastName: childParts.slice(1).join(' ') || 'Child' };
+        }
+      } else {
+        await db.collection('admin_profiles').insertOne(nameFields, { session });
+      }
+      user._adminProfileId = profileId;
+    });
+  } catch (error) {
+    if (error.code === 11000) throw new HttpError(409, 'An account with this email or student code already exists.');
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+  void logAuditEvent(db, {
+    actorId: actor._id,
+    actorRole: actor.role,
+    actorName: actor.full_name,
+    action: 'Account invitation created',
+    category: 'Account',
+    targetType: 'account',
+    targetId: user._id,
+    details: `A ${role} account invitation was created for ${email}.`,
+  });
+  return res.status(201).json({
+    success: true,
+    user: {
+      id: String(user._id),
+      profileId: String(user._adminProfileId),
+      name: fullName,
+      email,
+      role,
+      status: user.status,
+      createdAt: user.created_at,
+      contact,
+      archivedAt: null,
+      archiveReason: '',
+    },
+    temporaryPassword: invitePassword,
+    invitationToken,
+    ...(patient ? { patient } : {}),
+  });
+}));
+
+router.post('/admin/users/:userId/invitation', requireRoles('admin'), endpoint(async (req, res) => {
+  const actor = await getSessionUser(req);
+  const id = objectId(req.params.userId, 'user ID');
+  const user = await User.findById(id).select('+password_hash');
+  if (!user || !user.invited_by_admin || user.status !== 'pending' || user.archived_at) {
+    throw new HttpError(409, 'Only pending, active invitations can be resent.');
+  }
+  const invitePassword = temporaryPassword();
+  const invitationToken = crypto.randomBytes(32).toString('base64url');
+  const { salt, hash } = await hashPassword(invitePassword);
+  user.password_hash = `${salt}:${hash}`;
+  user.invitation_token_hash = crypto.createHash('sha256').update(invitationToken).digest('hex');
+  user.invitation_expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  user.updated_at = new Date();
+  await user.save();
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: actor._id,
+    actorRole: actor.role,
+    actorName: actor.full_name,
+    action: 'Account invitation resent',
+    category: 'Account',
+    targetType: 'account',
+    targetId: user._id,
+    details: `A new setup credential was issued for ${user.email}.`,
+  });
+  return res.json({ success: true, temporaryPassword: invitePassword, invitationToken });
+}));
+
+router.patch('/admin/users/:userId/archive', requireRoles('admin'), endpoint(async (req, res) => {
+  const actor = await getSessionUser(req);
+  const id = objectId(req.params.userId, 'user ID');
+  const archived = req.body?.archived !== false;
+  const reason = archived ? boundedString(req.body?.reason, 'Archive reason', 1000, true) : '';
+  const user = await User.findById(id);
+  if (!user) throw new HttpError(404, 'Account was not found.');
+  if (user.role === 'admin' && archived) throw new HttpError(409, 'Administrator accounts cannot be archived.');
+  const now = new Date();
+  user.archived_at = archived ? now : null;
+  user.archived_by = archived ? actor._id : null;
+  user.archive_reason = archived ? reason : null;
+  if (archived) user.status = 'rejected';
+  else user.status = 'verified';
+  user.updated_at = now;
+  await user.save();
+  if (archived) {
+    await mongoose.connection.db.collection('user_sessions').updateMany(
+      { userId: user._id, revokedAt: null },
+      { $set: { revokedAt: now } },
+    );
+  }
+  void logAuditEvent(mongoose.connection.db, {
+    actorId: actor._id,
+    actorRole: actor.role,
+    actorName: actor.full_name,
+    action: archived ? 'Account archived' : 'Account restored',
+    category: 'Account',
+    targetType: 'account',
+    targetId: user._id,
+    details: archived ? reason : 'Account membership and sign-in access were restored.',
+  });
+  return res.json({
+    success: true,
+    user: {
+      id: String(user._id),
+      status: user.status,
+      archivedAt: user.archived_at,
+      archiveReason: user.archive_reason || '',
     },
   });
 }));

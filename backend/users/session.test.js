@@ -21,7 +21,9 @@ test('session token verification rejects a modified signature', () => {
   process.env.JWT_SECRET = 'test-secret-with-at-least-32-characters';
   try {
     const token = signAccessToken({ _id: { toString: () => 'user-123' }, role: 'parent' });
-    const modifiedToken = `${token.slice(0, -1)}${token.endsWith('a') ? 'b' : 'a'}`;
+    const parts = token.split('.');
+    parts[2] = `${parts[2][0] === 'a' ? 'b' : 'a'}${parts[2].slice(1)}`;
+    const modifiedToken = parts.join('.');
     assert.throws(() => verifyAccessToken(modifiedToken), /Invalid or expired session/);
   } finally {
     if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;

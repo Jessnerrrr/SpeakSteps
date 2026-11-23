@@ -2,7 +2,7 @@ import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { loginAccount } from '@/services/user-api';
+import { AccountSetupRequiredError, loginAccount, TotpRequiredError } from '@/services/user-api';
 import {
   ImageBackground,
   StyleSheet,
@@ -68,7 +68,13 @@ export default function TherapistLoginScreen() {
       await loginAccount(email.trim(), password, 'therapist');
       router.replace('/therapist' as any);
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : 'Could not sign in.');
+      if (error instanceof TotpRequiredError) {
+        router.replace({ pathname: '/otp-verification', params: { role: 'therapist' } } as any);
+      } else if (error instanceof AccountSetupRequiredError) {
+        router.replace({ pathname: '/totp-setup', params: { role: 'therapist' } } as any);
+      } else {
+        setLoginError(error instanceof Error ? error.message : 'Could not sign in.');
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -213,7 +219,7 @@ export default function TherapistLoginScreen() {
                   <Text style={styles.signInText}>{isLoggingIn ? 'Signing in…' : 'Sign in'}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => setLoginError('Password recovery is not available here. Please contact your administrator.')}>
+                <TouchableOpacity onPress={() => router.push('/forgot-password' as any)}>
                   <Text style={styles.forgotPasswordText}>Forgot password?</Text>
                 </TouchableOpacity>
               </ScrollView>

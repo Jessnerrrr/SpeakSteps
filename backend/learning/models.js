@@ -115,6 +115,7 @@ const Submission = makeModel(
     submitted_at: { type: Date, required: true, default: Date.now },
     speech_match_score: Number,
     speech_match_provider: String,
+    teacher_feedback: { type: Schema.Types.Mixed, default: null },
   },
   'submissions',
   [

@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const mongoose = require('mongoose');
 
 const TOKEN_LIFETIME_SECONDS = 12 * 60 * 60;
 const TOKEN_ISSUER = 'speaksteps-api';
@@ -15,12 +16,13 @@ function encodeBase64Url(value) {
   return Buffer.from(value).toString('base64url');
 }
 
-function signAccessToken(user) {
+function signAccessToken(user, sessionId) {
   const now = Math.floor(Date.now() / 1000);
   const header = encodeBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = encodeBase64Url(JSON.stringify({
     sub: user._id.toString(),
     role: user.role,
+    sessionId,
     iss: TOKEN_ISSUER,
     iat: now,
     exp: now + TOKEN_LIFETIME_SECONDS,
@@ -68,18 +70,42 @@ function verifyAccessToken(token) {
   }
 }
 
-function requireSession(req, res, next) {
+async function requireSession(req, res, next) {
   const authorization = req.get('authorization') || '';
   const match = authorization.match(/^Bearer ([^\s]+)$/i);
   if (!match) {
     return res.status(401).json({ success: false, error: 'A valid session is required.' });
   }
 
+  let payload;
   try {
-    req.session = verifyAccessToken(match[1]);
-    return next();
+    payload = verifyAccessToken(match[1]);
   } catch {
     return res.status(401).json({ success: false, error: 'Your session is invalid or has expired. Please sign in again.' });
+  }
+  if (typeof payload.sessionId !== 'string' || !payload.sessionId) {
+    return res.status(401).json({ success: false, error: 'Your session is invalid or has expired. Please sign in again.' });
+  }
+  try {
+    const sessions = mongoose.connection.db.collection('user_sessions');
+    const session = await sessions.findOne({
+      sessionId: payload.sessionId,
+      userId: new mongoose.Types.ObjectId(payload.sub),
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+    if (!session) {
+      return res.status(401).json({ success: false, error: 'This session has been revoked or expired. Please sign in again.' });
+    }
+    const staleBefore = new Date(Date.now() - 60_000);
+    await sessions.updateOne(
+      { sessionId: payload.sessionId, lastActiveAt: { $lt: staleBefore } },
+      { $set: { lastActiveAt: new Date() } },
+    );
+    req.session = payload;
+    return next();
+  } catch (error) {
+    return next(error);
   }
 }
 

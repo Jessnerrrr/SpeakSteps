@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { router, Stack, useLocalSearchParams } from 'expo-router'; 
 import React, { useState } from 'react';
+import { getPendingAccountSetup, setupTotp, verifyTotpSetup } from '@/services/user-api';
 import {
   ImageBackground,
   KeyboardAvoidingView,
@@ -19,11 +20,14 @@ import {
 
 export default function TotpSetupScreen() {
   const { role } = useLocalSearchParams(); 
+  const pendingSetup = getPendingAccountSetup();
   const [step, setStep] = useState(1);
-  const [emailAccount, setEmailAccount] = useState('');
-  const [password, setPassword] = useState('');
+  const [emailAccount, setEmailAccount] = useState(pendingSetup?.email || '');
+  const [password, setPassword] = useState(pendingSetup?.password || '');
   const [showPassword, setShowPassword] = useState(false);
   const [otpPin, setOtpPin] = useState('');
+  const [secret, setSecret] = useState('');
+  const [setupError, setSetupError] = useState('');
   const [showValidation, setShowValidation] = useState(false);
   const emailWarning = !emailAccount.trim() ? 'Enter your email address.'
     : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAccount.trim()) ? 'Enter a valid email address.' : '';
@@ -41,18 +45,37 @@ export default function TotpSetupScreen() {
 
   if (!fontsLoaded) return null;
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if ((step === 1 && (emailWarning || passwordWarning)) || (step === 3 && pinWarning)) {
       setShowValidation(true);
       return;
     }
     setShowValidation(false);
-    if (step < 4) {
-      setStep(step + 1);
-    } else {
-      // Show Change Password alert modal before navigating
-      setShowPasswordModal(true);
+    setSetupError('');
+    if (step === 1) {
+      try {
+        const setup = await setupTotp(emailAccount.trim(), password);
+        setSecret(setup.secret);
+        setStep(2);
+      } catch (error) {
+        setSetupError(error instanceof Error ? error.message : 'Could not start authenticator setup.');
+      }
+      return;
     }
+    if (step === 2) {
+      setStep(3);
+      return;
+    }
+    if (step === 3) {
+      try {
+        await verifyTotpSetup(emailAccount.trim(), password, otpPin);
+        setStep(4);
+      } catch (error) {
+        setSetupError(error instanceof Error ? error.message : 'Could not verify the authenticator code.');
+      }
+      return;
+    }
+    setShowPasswordModal(true);
   };
 
   const handleProceedToPassword = () => {
@@ -62,7 +85,7 @@ export default function TotpSetupScreen() {
     // Continue Account Setup -> Change Temporary Password
     router.replace({
       pathname: '/new-password',
-      params: { role: currentRole || 'patient', flow: 'setup' },
+      params: { role: currentRole || 'patient', flow: 'setup', email: emailAccount.trim() },
     } as any);
   };
 
@@ -177,7 +200,7 @@ export default function TotpSetupScreen() {
         <View style={styles.optionCol}>
           <Text style={styles.optionTitle}>Option 2 - Secret Key</Text>
           <View style={styles.secretKeyBox}>
-            <Text style={styles.secretKeyText}>VLX8L5CD78D6CM9D</Text>
+            <Text selectable style={styles.secretKeyText}>{secret}</Text>
           </View>
         </View>
       </View>
@@ -253,6 +276,7 @@ export default function TotpSetupScreen() {
               {step === 2 && renderStep2()}
               {step === 3 && renderStep3()}
               {step === 4 && renderStep4()}
+              {setupError ? <Text accessibilityRole="alert" style={styles.fieldWarning}>{setupError}</Text> : null}
 
               <View style={styles.footerAction}>
                 <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.8}>

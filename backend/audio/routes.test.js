@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { once } = require('node:events');
 const express = require('express');
+const mongoose = require('mongoose');
 const { test } = require('node:test');
 const User = require('../users/User');
 const { signAccessToken } = require('../users/session');
@@ -16,8 +17,22 @@ test('audio upload accepts authenticated audio and serves it statically', async 
   fs.mkdirSync(audioDirectory, { recursive: true });
 
   const originalFindById = User.findById;
+  const originalDb = mongoose.connection.db;
+  let sessionActive = true;
+  mongoose.connection.db = {
+    collection: () => ({
+      findOne: async () => sessionActive ? ({ sessionId: 'audio-test-session' }) : null,
+      updateOne: async () => ({ matchedCount: 1 }),
+      insertOne: async () => ({ insertedId: 'test-audit-record' }),
+    }),
+  };
   User.findById = () => ({
-    select: async () => ({ role: 'therapist', status: 'verified' }),
+    select: async () => ({
+      _id: '0123456789abcdef01234567',
+      role: 'therapist',
+      status: 'verified',
+      full_name: 'Test Therapist',
+    }),
   });
 
   const app = express();
@@ -29,7 +44,7 @@ test('audio upload accepts authenticated audio and serves it statically', async 
   try {
     await once(server, 'listening');
     const baseUrl = `http://127.0.0.1:${server.address().port}`;
-    const token = signAccessToken({ _id: '0123456789abcdef01234567', role: 'therapist' });
+    const token = signAccessToken({ _id: '0123456789abcdef01234567', role: 'therapist' }, 'audio-test-session');
 
     const form = new FormData();
     form.append('audio', new Blob(['audio upload test'], { type: 'audio/mpeg' }), 'practice.mp3');
@@ -50,6 +65,13 @@ test('audio upload accepts authenticated audio and serves it statically', async 
 
     const unauthorizedResponse = await fetch(`${baseUrl}/api/audio/upload`, { method: 'POST' });
     assert.equal(unauthorizedResponse.status, 401);
+
+    const legacyToken = signAccessToken({ _id: '0123456789abcdef01234567', role: 'therapist' });
+    const legacyResponse = await fetch(`${baseUrl}/api/audio/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${legacyToken}` },
+    });
+    assert.equal(legacyResponse.status, 401);
 
     const invalidForm = new FormData();
     invalidForm.append('audio', new Blob(['not audio'], { type: 'audio/mpeg' }), 'file.exe');
@@ -72,11 +94,19 @@ test('audio upload accepts authenticated audio and serves it statically', async 
       body: oversizedForm,
     });
     assert.equal(oversizedResponse.status, 413);
+
+    sessionActive = false;
+    const revokedResponse = await fetch(`${baseUrl}/api/audio/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(revokedResponse.status, 401);
   } finally {
     for (const file of uploadedFiles) {
       if (fs.existsSync(file)) fs.unlinkSync(file);
     }
     User.findById = originalFindById;
+    mongoose.connection.db = originalDb;
     await new Promise((resolve) => server.close(resolve));
   }
 });

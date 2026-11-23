@@ -16,12 +16,15 @@ import {
   clearSession,
   getAccountProfile,
   getActivities,
+  getActiveSessions,
   getAssignments,
   getNotifications,
   getPatients,
   getProgress,
   getSubmissions,
   getWordBank,
+  revokeSession,
+  submitTeacherFeedback,
   updateAccountProfile,
   type ApiActivity,
   type ApiAssignment,
@@ -150,6 +153,8 @@ interface ReviewItem {
   targetWord: string;
   audioDuration: string;
   audioRecordingUrl?: string;
+  teacherRating?: 'Correct' | 'Approximate' | 'Incorrect';
+  teacherNotes?: string;
 }
 
 function activityFromApi(activity: ApiActivity): ActivityItem {
@@ -233,6 +238,8 @@ function reviewFromSubmission(submission: ApiSubmission): ReviewItem {
       ? '—'
       : `${Math.floor(submission.durationSeconds / 60)}:${String(Math.floor(submission.durationSeconds % 60)).padStart(2, '0')}`,
     audioRecordingUrl: submission.audioRecordingUrl,
+    teacherRating: submission.teacherReview?.rating,
+    teacherNotes: submission.teacherReview?.notes || '',
   };
 }
 
@@ -738,11 +745,11 @@ export default function TeacherDashboardScreen() {
   const [readyToLevelUpToggle, setReadyToLevelUpToggle] = useState(false);
   const [teacherUpdatesToggle, setTeacherUpdatesToggle] = useState(true);
   const [missedExercisesToggle, setMissedExercisesToggle] = useState(true);
-  const [twoFactorAuthToggle] = useState(false);
+  const [twoFactorAuthToggle, setTwoFactorAuthToggle] = useState(false);
   const [themeMode, setThemeMode] = useState<'Light' | 'Dark'>('Light');
   const [sessionToRevoke, setSessionToRevoke] = useState<{ id: string; device: string } | null>(null);
   const [sessionNotice, setSessionNotice] = useState('');
-  const [activeSessions] = useState<Array<{
+  const [activeSessions, setActiveSessions] = useState<Array<{
     id: string;
     device: string;
     isCurrent: boolean;
@@ -966,7 +973,7 @@ export default function TeacherDashboardScreen() {
   const loadDashboardData = useCallback(async () => {
     setDashboardError('');
     try {
-      const [apiPatients, apiActivities, apiAssignments, apiSubmissions, apiNotifications, apiWordBank, profile] = await Promise.all([
+      const [apiPatients, apiActivities, apiAssignments, apiSubmissions, apiNotifications, apiWordBank, profile, apiSessions] = await Promise.all([
         getPatients(),
         getActivities(),
         getAssignments(),
@@ -974,6 +981,7 @@ export default function TeacherDashboardScreen() {
         getNotifications(),
         getWordBank(),
         getAccountProfile(),
+        getActiveSessions(),
       ]);
       const progressErrors: string[] = [];
       const progressResults = await Promise.all(apiPatients.map(async (patient) => {
@@ -992,6 +1000,13 @@ export default function TeacherDashboardScreen() {
       })));
       const mappedReviews = apiSubmissions.map(reviewFromSubmission);
       setReviewsList(mappedReviews);
+      setActiveSessions(apiSessions.map((session) => ({
+        id: session.sessionId,
+        device: session.deviceLabel || 'Unknown device',
+        isCurrent: session.current,
+        location: session.userAgent || 'Device details unavailable',
+        lastActive: new Date(session.lastActiveAt).toLocaleString(),
+      })));
       setTeacherSubmissions(apiSubmissions.map((submission) => ({
         id: submission.id,
         name: submission.student,
@@ -1008,6 +1023,7 @@ export default function TeacherDashboardScreen() {
         contact: profile.contact,
         title: 'Teacher',
       }));
+      setTwoFactorAuthToggle(profile.totpEnabled ?? false);
       setEditProfileForm((current) => ({
         ...current,
         name: profile.fullName.split(',')[0] || profile.fullName,
@@ -1224,8 +1240,31 @@ export default function TeacherDashboardScreen() {
   };
 
   // Submit Review Action
-  const handleSubmitReview = (_item: ReviewItem) => {
-    triggerToast('Only the assigned therapist can save a clinical review. This teacher view is read-only.');
+  const openReview = (review: ReviewItem) => {
+    setReviewEvaluation(review.teacherRating ?? null);
+    setReviewNotes(review.teacherNotes ?? '');
+    setSelectedReview(review);
+  };
+
+  const handleSubmitReview = async (item: ReviewItem) => {
+    if (!reviewEvaluation) {
+      triggerToast('Choose a feedback rating before submitting.');
+      return;
+    }
+    try {
+      await submitTeacherFeedback({
+        submissionId: item.id,
+        rating: reviewEvaluation,
+        notes: reviewNotes.trim(),
+      });
+      setReviewsList((current) => current.map((review) => review.id === item.id
+        ? { ...review, status: 'Reviewed', teacherRating: reviewEvaluation, teacherNotes: reviewNotes.trim() }
+        : review));
+      setSelectedReview(null);
+      triggerToast('Feedback submitted.');
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : 'Could not submit teacher feedback.');
+    }
   };
 
   // --- Profile, Settings & Logout Handlers ---
@@ -1301,8 +1340,14 @@ export default function TeacherDashboardScreen() {
     }));
   };
 
-  const handleRevokeSession = (_id: string) => {
-    setSessionNotice('Session revocation is not available in the backend.');
+  const handleRevokeSession = async (id: string) => {
+    try {
+      await revokeSession(id);
+      setActiveSessions((current) => current.filter((session) => session.id !== id));
+      setSessionNotice('The selected session was revoked.');
+    } catch (error) {
+      setSessionNotice(error instanceof Error ? error.message : 'Could not revoke the selected session.');
+    }
   };
 
   const handlePickPhoto = () => {
@@ -1612,7 +1657,7 @@ export default function TeacherDashboardScreen() {
                     onPress={() => {
                       const match = reviewsList.find((r) => r.studentName === sub.name && r.activityTitle === sub.phrase);
                       if (!match) { triggerToast('No matching review is available.'); return; }
-                      setSelectedReview(match);
+                      openReview(match);
                     }}
                   >
                     <Text style={styles.reviewButtonText}>Review</Text>
@@ -3378,7 +3423,7 @@ export default function TeacherDashboardScreen() {
                   key={rev.id}
                   style={styles.reviewCard}
                   activeOpacity={0.7}
-                  onPress={() => setSelectedReview(rev)}
+                  onPress={() => openReview(rev)}
                 >
                   {/* Avatar KS */}
                   <View style={[styles.reviewAvatar, { backgroundColor: rev.avatarBg }]}>
@@ -4571,7 +4616,10 @@ export default function TeacherDashboardScreen() {
                 </View>
                 <Switch
                   value={twoFactorAuthToggle}
-                  onValueChange={() => triggerToast('Two-factor authentication is not supported by the backend.')}
+                  onValueChange={(enabled) => {
+                    if (enabled) router.push({ pathname: '/totp-setup', params: { role: 'teacher' } } as any);
+                    else triggerToast('Authenticator protection cannot be disabled from this screen.');
+                  }}
                   trackColor={{ false: colors.isDark ? '#334155' : '#CBD5E1', true: '#22C55E' }}
                   thumbColor="#FFFFFF"
                 />

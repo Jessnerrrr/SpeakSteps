@@ -1,11 +1,14 @@
 import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
-import { router, Stack } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { verifyTotpLogin } from '@/services/user-api';
 
 export default function OtpVerificationScreen() {
+  const { role } = useLocalSearchParams();
+  const accountRole = Array.isArray(role) ? role[0] : role;
   // Responsive Hooks
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -21,6 +24,7 @@ export default function OtpVerificationScreen() {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('error');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'SourGummy': require('../../../assets/SourGummy-Regular.ttf'),
@@ -48,16 +52,36 @@ export default function OtpVerificationScreen() {
     }
   };
 
-  const handleSubmit = () => {
-    setAlertTitle('Recovery unavailable');
-    setAlertMessage('No verification was performed. Password recovery is not connected to the backend.');
-    setAlertType('error');
-    setAlertVisible(true);
+  const handleSubmit = async () => {
+    const code = otp.join('');
+    if (!/^\d{6}$/.test(code)) {
+      setAlertTitle('Enter your code');
+      setAlertMessage('Enter the 6-digit code from your authenticator app.');
+      setAlertType('error');
+      setAlertVisible(true);
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await verifyTotpLogin(code);
+      setAlertVisible(false);
+      if (accountRole === 'admin') router.replace('/(admin)/admin-dashboard' as any);
+      else if (accountRole === 'teacher') router.replace('/teacher' as any);
+      else if (accountRole === 'therapist') router.replace('/therapist' as any);
+      else router.replace('/user-mode-select' as any);
+    } catch (error) {
+      setAlertTitle('Verification failed');
+      setAlertMessage(error instanceof Error ? error.message : 'Could not verify the authenticator code.');
+      setAlertType('error');
+      setAlertVisible(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleResend = () => {
-    setAlertTitle('Recovery unavailable');
-    setAlertMessage('No OTP was sent. Password recovery is not connected to the backend.');
+    setAlertTitle('Authenticator code');
+    setAlertMessage('Open your authenticator app to get the current code. Authenticator codes cannot be resent.');
     setAlertType('error');
     setAlertVisible(true);
   };
@@ -141,13 +165,13 @@ export default function OtpVerificationScreen() {
                 
                 {/* Text color now matches the ring color! */}
                 <Text style={[styles.timerText, { color: getRingColor() }]}>
-                  Unavailable
+                  TOTP
                 </Text>
               </View>
 
               <View style={styles.textContainer}>
                 <Text style={styles.subText}>
-                  No OTP was sent. Password recovery verification is not available.
+                  Enter the current code from your authenticator app.
                 </Text>
               </View>
 
@@ -168,11 +192,11 @@ export default function OtpVerificationScreen() {
                   ))}
                 </View>
 
-                <Text style={styles.timeBasedLabel}>VERIFICATION NOT CONFIGURED</Text>
+                <Text style={styles.timeBasedLabel}>AUTHENTICATOR CODE</Text>
 
                 <View style={styles.buttonStack}>
-                  <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                    <Text style={styles.submitBtnText}>Submit</Text>
+                  <TouchableOpacity style={styles.submitBtn} onPress={() => void handleSubmit()} disabled={isSubmitting}>
+                    <Text style={styles.submitBtnText}>{isSubmitting ? 'Verifying…' : 'Submit'}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity 

@@ -195,13 +195,13 @@ export function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
           <View style={styles.menuField}>
             <FieldMenu label="Language" value={language} options={activityLanguages} onChange={setLanguage} />
           </View>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <Text style={styles.empty}>{error}</Text> : null}
           <Pressable accessibilityRole="button" disabled={saving} onPress={() => void save()} style={[styles.save, { backgroundColor: palette.primary }]}>
-            <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Word'}</Text>
+            <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Phrase'}</Text>
           </Pressable>
         </View>
       ) : null}
-      {!adding && error ? <Text style={styles.error}>{error}</Text> : null}
+      {!adding && error ? <Text style={styles.empty}>{error}</Text> : null}
 
       <View style={styles.listHeader}>
         <Text style={[styles.listTitle, { color: palette.text }]}>Word Bank List</Text>
@@ -222,11 +222,15 @@ export function WordBank({ onOpenLibrary }: { onOpenLibrary: () => void }) {
           <View key={item.id} style={[styles.row, index > 0 && { borderTopColor: palette.line, borderTopWidth: 1 }]}>
             <Text style={[styles.word, { color: palette.text }]}>{item.text}</Text>
             {editing ? (
-              item.isStandard ? <Text style={[styles.badgeText, { color: palette.faint }]}>Standard</Text> : (
-                <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.text}`} onPress={() => void remove(item.id)} hitSlop={8}>
-                  <Text style={[styles.minus, { color: palette.faint }]}>—</Text>
-                </Pressable>
-              )
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${item.text}`}
+                disabled={item.isStandard}
+                onPress={() => void remove(item.id)}
+                hitSlop={8}
+              >
+                <Text style={[styles.minus, { color: palette.faint }]}>—</Text>
+              </Pressable>
             ) : (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{item.position}</Text>
@@ -281,5 +285,4 @@ const styles = StyleSheet.create({
   badgeText: { color: '#38B6E6', fontSize: 12, fontWeight: '700' },
   minus: { fontSize: 18, fontWeight: '700', paddingHorizontal: 6 },
   empty: { padding: 16, textAlign: 'center' },
-  error: { color: '#F5693F', fontSize: 13, marginBottom: 8 },
 });

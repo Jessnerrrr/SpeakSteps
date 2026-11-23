@@ -16,16 +16,19 @@ export type FamilyUser = {
   role: AccountRole;
 };
 
-type ApiResponse<T> = {
+type ApiResponse<T, P = T> = {
   success: boolean;
   error?: string;
+  code?: string;
+  challengeToken?: string;
   message?: string;
   profile?: T;
   user?: T;
-  patient?: T;
+  patient?: P;
   patients?: T[];
   patientCode?: string;
   token?: string;
+  setupRequired?: boolean;
   expiresIn?: number;
   expiresAt?: number;
   activities?: T[];
@@ -46,11 +49,17 @@ type ApiResponse<T> = {
   accomplishments?: T[];
   notifications?: T[];
   users?: T[];
+  sessions?: T[];
   auditLogs?: T[];
   word?: T;
   activity?: T;
   assignment?: T;
   accomplishment?: T;
+  temporaryPassword?: string;
+  invitationToken?: string;
+  resetCode?: string;
+  secret?: string;
+  otpauthUrl?: string;
 };
 
 export type ApiActivityWord = {
@@ -121,6 +130,11 @@ export type ApiSubmission = {
     parentFeedback: string;
     homePractice: string;
     averageScore: number | null;
+  } | null;
+  teacherReview: {
+    rating: 'Correct' | 'Approximate' | 'Incorrect';
+    notes: string;
+    reviewedAt: string;
   } | null;
 };
 
@@ -232,6 +246,24 @@ export type AdminUser = {
   childAge: number | null;
   studentId: string;
   contact: string;
+  archivedAt?: string | null;
+  archiveReason?: string;
+};
+
+export type AdminUserInvitation = {
+  user: AdminUser;
+  temporaryPassword: string;
+  invitationToken: string;
+  patient?: { id: string; patientCode: string; firstName: string; lastName: string };
+};
+
+export type ActiveSession = {
+  sessionId: string;
+  deviceLabel: string;
+  userAgent: string;
+  createdAt: string;
+  lastActiveAt: string;
+  current: boolean;
 };
 
 export type AuditLogEntry = {
@@ -253,6 +285,7 @@ export type AccountProfile = {
   email: string;
   contact: string;
   role: AccountRole;
+  totpEnabled?: boolean;
 };
 
 export type TherapistProfileData = AccountProfile & {
@@ -324,10 +357,36 @@ function isPrivateHost(hostname: string): boolean {
 }
 
 class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+    readonly challengeToken?: string,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+export class TotpRequiredError extends Error {
+  constructor() {
+    super('Authenticator verification is required.');
+    this.name = 'TotpRequiredError';
+  }
+}
+
+export class AccountSetupRequiredError extends Error {
+  constructor() {
+    super('Complete authenticator setup to activate this invited account.');
+    this.name = 'AccountSetupRequiredError';
+  }
+}
+
+let pendingTotpChallenge: string | null = null;
+let pendingAccountSetup: { email: string; password: string; role: AccountRole } | null = null;
+
+export function getPendingAccountSetup() {
+  return pendingAccountSetup;
 }
 
 async function getSessionToken(): Promise<string | null> {
@@ -351,10 +410,10 @@ export async function clearSession(): Promise<void> {
   await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
 }
 
-async function request<T>(
+async function request<T, P = T>(
   path: string,
   options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: unknown; authenticated?: boolean } = {},
-): Promise<ApiResponse<T>> {
+): Promise<ApiResponse<T, P>> {
   let url: URL;
   try {
     url = new URL(`${apiBaseUrl}${path}`);
@@ -383,14 +442,14 @@ async function request<T>(
     throw new Error('Could not reach the backend. Check that it is running and EXPO_PUBLIC_API_URL uses your computer’s local IP for Expo Go.');
   }
 
-  let result: ApiResponse<T>;
+  let result: ApiResponse<T, P>;
   try {
-    result = await response.json() as ApiResponse<T>;
+    result = await response.json() as ApiResponse<T, P>;
   } catch {
     throw new Error('The backend returned an invalid response.');
   }
   if (!response.ok || !result.success) {
-    throw new ApiError(result.error || `Request failed (${response.status}).`, response.status);
+    throw new ApiError(result.error || `Request failed (${response.status}).`, response.status, result.code, result.challengeToken);
   }
   return result;
 }
@@ -448,11 +507,24 @@ export async function loginAccount(
 ): Promise<AuthSession> {
   await clearSession();
   const loginPath = role === 'parent' ? '/users/login' : role === 'admin' ? '/admin/login' : `/${role}s/login`;
-  const result = await request<FamilyUser>(loginPath, {
-    method: 'POST',
-    body: { email, password },
-    authenticated: false,
-  });
+  let result: ApiResponse<FamilyUser>;
+  try {
+    result = await request<FamilyUser>(loginPath, {
+      method: 'POST',
+      body: { email, password, deviceLabel: `${Platform.OS} device` },
+      authenticated: false,
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'TOTP_REQUIRED' && error.challengeToken) {
+      pendingTotpChallenge = error.challengeToken;
+      throw new TotpRequiredError();
+    }
+    throw error;
+  }
+  if (result.setupRequired && result.user?.role === role) {
+    pendingAccountSetup = { email, password, role };
+    throw new AccountSetupRequiredError();
+  }
   if (
     !result.token ||
     typeof result.expiresIn !== 'number' ||
@@ -468,6 +540,71 @@ export async function loginAccount(
     token: result.token,
     expiresAt: Date.now() + result.expiresIn * 1000,
   };
+}
+
+export async function verifyTotpLogin(code: string): Promise<AuthSession> {
+  if (!pendingTotpChallenge) throw new Error('No authenticator sign-in challenge is active.');
+  const result = await request<FamilyUser>('/auth/totp/verify', {
+    method: 'POST',
+    body: { purpose: 'login', code, challengeToken: pendingTotpChallenge, deviceLabel: `${Platform.OS} device` },
+    authenticated: false,
+  });
+  if (!result.token || typeof result.expiresIn !== 'number' || !result.user) {
+    throw new Error('The backend response did not include a valid sign-in session.');
+  }
+  pendingTotpChallenge = null;
+  await storeSessionToken(result.token);
+  return { user: result.user, token: result.token, expiresAt: Date.now() + result.expiresIn * 1000 };
+}
+
+export async function requestPasswordReset(email: string): Promise<{ resetCode?: string }> {
+  const result = await request<never>('/auth/forgot-password', {
+    method: 'POST',
+    body: { email },
+    authenticated: false,
+  });
+  return { resetCode: result.resetCode };
+}
+
+export async function resetPassword(email: string, token: string, newPassword: string): Promise<void> {
+  await request('/auth/reset-password', {
+    method: 'POST',
+    body: { email, token, newPassword },
+    authenticated: false,
+  });
+}
+
+export async function setupTotp(email: string, password: string): Promise<{ secret: string; otpauthUrl: string }> {
+  const result = await request<never>('/auth/totp/setup', {
+    method: 'POST',
+    body: { email, password },
+    authenticated: false,
+  });
+  if (!result.secret || !result.otpauthUrl) throw new Error('The backend response did not include the authenticator setup details.');
+  return { secret: result.secret, otpauthUrl: result.otpauthUrl };
+}
+
+export async function verifyTotpSetup(email: string, password: string, code: string): Promise<AuthSession> {
+  const result = await request<FamilyUser>('/auth/totp/verify', {
+    method: 'POST',
+    body: { purpose: 'setup', email, password, code, deviceLabel: `${Platform.OS} device` },
+    authenticated: false,
+  });
+  if (!result.token || typeof result.expiresIn !== 'number' || !result.user) {
+    throw new Error('The backend response did not include a valid sign-in session.');
+  }
+  pendingAccountSetup = null;
+  await storeSessionToken(result.token);
+  return { user: result.user, token: result.token, expiresAt: Date.now() + result.expiresIn * 1000 };
+}
+
+export async function getActiveSessions(): Promise<ActiveSession[]> {
+  const result = await request<ActiveSession>('/auth/sessions');
+  return requireArray(result.sessions, 'active sessions');
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  await request(`/auth/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
 }
 
 function requireArray<T>(value: T[] | undefined, label: string): T[] {
@@ -588,6 +725,14 @@ export async function updateAssignmentStatus(id: string, status: 'assigned' | 'i
 export async function getSubmissions(): Promise<ApiSubmission[]> {
   const result = await request<ApiSubmission>('/submissions');
   return requireArray(result.submissions, 'submissions');
+}
+
+export async function submitTeacherFeedback(input: {
+  submissionId: string;
+  rating: 'Correct' | 'Approximate' | 'Incorrect';
+  notes: string;
+}): Promise<void> {
+  await request('/reviews', { method: 'POST', body: input });
 }
 
 export async function createSubmission(input: {
@@ -854,6 +999,55 @@ export async function getAdminUsers(role?: string, status?: string) {
   const suffix = params.toString() ? `?${params.toString()}` : '';
   const result = await request<AdminUser>(`/admin/users${suffix}`);
   return requireArray(result.users, 'accounts');
+}
+
+export async function createAdminUser(input: {
+  role: AccountRole;
+  fullName: string;
+  email: string;
+  contact?: string;
+  staffId?: string;
+  professionalIdentifier?: string;
+  professionalTitle?: string;
+  specialization?: string;
+  licenseNumber?: string;
+  school?: string;
+  gradeSections?: string[];
+  childName?: string;
+  studentId?: string;
+  relationship?: string;
+  grade?: string;
+  section?: string;
+  primaryTherapistId?: string;
+  assignedTeacherId?: string;
+}) : Promise<AdminUserInvitation> {
+  const result = await request<AdminUser, AdminUserInvitation['patient']>('/admin/users', { method: 'POST', body: input });
+  if (!result.user || !result.temporaryPassword || !result.invitationToken) {
+    throw new Error('The backend response did not include complete account invitation details.');
+  }
+  return {
+    user: result.user,
+    temporaryPassword: result.temporaryPassword,
+    invitationToken: result.invitationToken,
+    ...(result.patient ? { patient: result.patient } : {}),
+  };
+}
+
+export async function resendAdminInvitation(userId: string): Promise<{ temporaryPassword: string; invitationToken: string }> {
+  const result = await request<AdminUser>(`/admin/users/${encodeURIComponent(userId)}/invitation`, { method: 'POST' });
+  if (!result.temporaryPassword || !result.invitationToken) {
+    throw new Error('The backend response did not include updated invitation credentials.');
+  }
+  return { temporaryPassword: result.temporaryPassword, invitationToken: result.invitationToken };
+}
+
+export async function archiveAdminUser(userId: string, archived: boolean, reason = '') {
+  const result = await request<{ id: string; status: string; archivedAt: string | null; archiveReason: string }>(
+    `/admin/users/${encodeURIComponent(userId)}/archive`,
+    { method: 'PATCH', body: { archived, reason } },
+  );
+  if (!result.user) throw new Error('The backend response did not include the updated account.');
+  return result.user;
 }
 
 export async function fetchAuditLogs(search = '', category = ''): Promise<AuditLogEntry[]> {

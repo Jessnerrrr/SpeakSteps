@@ -7,7 +7,7 @@ const { getJwtSecret } = require('./users/session');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const { users: userRoutes, admins: adminRoutes, therapists: therapistRoutes, teachers: teacherRoutes } = require('./users/routes');
+const { users: userRoutes, auth: authRoutes, admins: adminRoutes, therapists: therapistRoutes, teachers: teacherRoutes } = require('./users/routes');
 const { patients: patientRoutes } = require('./patients/routes');
 const { learning: learningRoutes } = require('./learning/routes');
 const { audio: audioRoutes } = require('./audio/routes');
@@ -20,6 +20,7 @@ app.use(express.json({ limit: '3mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/audio', audioRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/therapists', therapistRoutes);
 app.use('/api/teachers', teacherRoutes);
@@ -79,6 +80,18 @@ const startServer = async () => {
   await connection.connection.db.collection('audit_logs').createIndex(
     { createdAt: -1 },
     { name: 'createdAt_-1' },
+  );
+  await connection.connection.db.collection('user_sessions').createIndex(
+    { sessionId: 1 },
+    { name: 'sessionId_1', unique: true },
+  );
+  await connection.connection.db.collection('login_challenges').createIndex(
+    { expiresAt: 1 },
+    { name: 'loginChallengeExpiry_ttl', expireAfterSeconds: 0 },
+  );
+  await connection.connection.db.collection('user_sessions').createIndex(
+    { expiresAt: 1 },
+    { name: 'expiresAt_ttl', expireAfterSeconds: 0 },
   );
   await Patient.createIndexes();
   app.listen(PORT, () => {
