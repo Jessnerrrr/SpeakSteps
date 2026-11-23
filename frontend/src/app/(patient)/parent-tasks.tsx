@@ -1,5 +1,6 @@
 import { ListPagination, useListPagination } from '@/components/list-pagination';
 import { useAssignedActivities } from '@/data/assigned-activities';
+import { assignmentAttribution } from '@/data/learning-workflow';
 import { PatientPressable } from '@/components/patient-pressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
@@ -171,7 +172,7 @@ export default function ParentTasksScreen() {
                       <Text style={styles.taskTitle}>{activity.title}</Text>
                       <Text style={styles.taskLevel}>{activity.level}{activity.dueDate ? ' · Due ' + activity.dueDate : ''}</Text>
                       <Text style={styles.taskAssignee}>
-                        Assigned : {activity.assignedBy}
+                        Assigned by {assignmentAttribution(activity)}
                       </Text>
                     </View>
 

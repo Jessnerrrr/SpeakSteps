@@ -95,7 +95,9 @@ export function usePracticeRecorder(prompt: number) {
       if (playback.playing) {
         player.pause();
       } else {
-        await player.seekTo(0);
+        if (playback.didJustFinish || (playback.duration > 0 && playback.currentTime >= playback.duration)) {
+          await player.seekTo(0);
+        }
         if (focused.current) player.play();
       }
     } catch {
@@ -106,5 +108,9 @@ export function usePracticeRecorder(prompt: number) {
     }
   };
 
-  return { take, recording, busy, error, playing: playback.playing, record, listen, stopPlayback: () => player.pause() };
+  return {
+    take, recording, busy,
+    error: error || (playback.error ? 'This recording could not play. Try recording again.' : ''),
+    playing: playback.playing, record, listen, stopPlayback: () => player.pause(),
+  };
 }

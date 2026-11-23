@@ -1,3 +1,4 @@
+import { applyApprovedStudentName, requestStudentNameChange, useStudentNameRequests } from '@/data/student-name-requests';
 import { maximumStudentAge, minimumStudentAge } from '@/data/calendar-date';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
@@ -34,6 +35,10 @@ export default function ChildProfileScreen() {
 
   const [profile, setProfile] = useState<ChildProfile>(ChildProfileStore.getProfile());
 
+  const nameRequest = useStudentNameRequests().find((request) => request.studentId === profile.id);
+  const namePending = nameRequest?.status === 'Pending';
+  const nameApproved = nameRequest?.status === 'Approved';
+
   // Edit Modals State
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(profile.fullName);
@@ -42,9 +47,8 @@ export default function ChildProfileScreen() {
   const [isEditingAge, setIsEditingAge] = useState(false);
   const [tempAge, setTempAge] = useState(Math.min(maximumStudentAge, Math.max(minimumStudentAge, profile.age)));
 
-  // Confirmation Modal State (for both Name and Age changes)
+  // Age change confirmation
   const [pendingChange, setPendingChange] = useState<{
-    type: 'name' | 'age';
     oldValue: string | number;
     newValue: string | number;
   } | null>(null);
@@ -76,35 +80,16 @@ export default function ChildProfileScreen() {
   };
 
   const handleSaveName = () => {
-    const trimmed = tempName.trim();
-    if (!trimmed) {
-      setNameError('Child’s name is required. Please fill in this field.');
-      return;
-    }
-    if (!/^[a-zA-Z\s.'-]+$/.test(trimmed)) {
-      setNameError('Child’s name should only contain letters and spaces (no numbers or special characters).');
-      return;
-    }
-    if (trimmed.length < 2) {
-      setNameError('Name must be at least 2 characters');
-      return;
-    }
-    if (!/^[a-zA-Z\s.'-]+$/.test(trimmed)) {
-      setNameError('Name can only contain letters, spaces, and hyphens');
-      return;
-    }
-
-    if (trimmed === profile.fullName) {
+    if (namePending) return;
+    if (nameApproved && nameRequest) {
+      if (!applyApprovedStudentName(nameRequest.id)) {
+        setNameError('This approval is no longer available. Ask your center to review the change.');
+        return;
+      }
       setIsEditingName(false);
       return;
     }
-
-    // Require confirmation for changes
-    setPendingChange({
-      type: 'name',
-      oldValue: profile.fullName,
-      newValue: trimmed,
-    });
+    setNameError(requestStudentNameChange(tempName));
   };
 
   const handleOpenAgeEdit = () => {
@@ -124,7 +109,6 @@ export default function ChildProfileScreen() {
 
     // Require confirmation for changes
     setPendingChange({
-      type: 'age',
       oldValue: `${profile.age} years old`,
       newValue: `${tempAge} years old`,
     });
@@ -133,14 +117,9 @@ export default function ChildProfileScreen() {
   const handleConfirmChange = () => {
     if (!pendingChange) return;
 
-    if (pendingChange.type === 'name') {
-      ChildProfileStore.updateProfile({ fullName: pendingChange.newValue as string });
-      setIsEditingName(false);
-    } else if (pendingChange.type === 'age') {
-      const numericAge = parseInt(String(pendingChange.newValue), 10);
-      ChildProfileStore.updateProfile({ age: Number.isNaN(numericAge) ? minimumStudentAge : numericAge });
-      setIsEditingAge(false);
-    }
+    const numericAge = parseInt(String(pendingChange.newValue), 10);
+    ChildProfileStore.updateProfile({ age: Number.isNaN(numericAge) ? minimumStudentAge : numericAge });
+    setIsEditingAge(false);
 
     setPendingChange(null);
   };
@@ -242,10 +221,15 @@ export default function ChildProfileScreen() {
                 activeOpacity={0.85}
                 style={styles.fieldCard}
                 onPress={handleOpenNameEdit}
+                accessibilityRole="button"
+                accessibilityLabel="Change child name"
               >
                 <View style={styles.fieldInfo}>
                   <Text style={styles.fieldLabel}>Name</Text>
                   <Text style={styles.fieldValue}>{profile.fullName}</Text>
+                  {namePending || nameApproved ? (
+                    <Text style={styles.nameRequestHint}>{nameApproved ? 'Approved name ready to apply' : 'Awaiting Center Admin approval'}</Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.editIconBadge}>
@@ -300,25 +284,32 @@ export default function ChildProfileScreen() {
               <View style={styles.dialogIconBadge}>
                 <Ionicons name="person" size={20} color="#0D68AC" />
               </View>
-              <Text style={styles.dialogTitle}>Edit Child's Name</Text>
+              <Text style={styles.dialogTitle}>Change Child’s Name</Text>
             </View>
 
-            <Text style={styles.dialogSubtitle}>
-              Update your child's name for both Parent and Child modes.
-            </Text>
+            <View accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.nameApprovalWarning}>
+              <Ionicons name={nameApproved ? 'checkmark-circle-outline' : 'warning-outline'} size={20} color="#805310" />
+              <Text style={styles.nameApprovalText}>
+                {namePending ? 'Your request is awaiting Center Admin approval. The current name stays in use.'
+                  : nameApproved ? 'Center Admin approved this name. Apply it to update Student and Guardian mode.'
+                  : nameRequest?.status === 'Declined' ? 'Center Admin declined the previous request. You can submit a new name for approval.'
+                  : 'Child name changes require Center Admin approval. Submit the proposed name, then return here to apply it after approval.'}
+              </Text>
+            </View>
 
             <View style={[styles.inputContainer, nameError ? styles.inputErrorBorder : null]}>
               <TextInput
-                value={tempName}
+                value={namePending || nameApproved ? nameRequest?.proposedName ?? '' : tempName}
+                editable={!namePending && !nameApproved}
+                accessibilityLabel="Proposed child name"
                 onChangeText={(val) => {
-                  const filtered = val.replace(/[^a-zA-Z\s.'-]/g, '');
-                  setTempName(filtered);
+                  setTempName(val);
                   if (nameError) setNameError('');
                 }}
                 placeholder="Enter child's full name"
                 placeholderTextColor="#8FA7BA"
                 style={styles.textInput}
-                autoFocus
+                maxLength={80}
                 autoCapitalize="words"
                 returnKeyType="done"
                 onSubmitEditing={handleSaveName}
@@ -331,18 +322,20 @@ export default function ChildProfileScreen() {
               <TouchableOpacity
                 style={styles.cancelButton}
                 activeOpacity={0.7}
+                accessibilityRole="button"
                 onPress={() => setIsEditingName(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{namePending ? 'Close' : 'Cancel'}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
+              {!namePending && <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
                 onPress={handleSaveName}
+                accessibilityRole="button"
               >
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
+                <Text style={styles.saveButtonText}>{nameApproved ? 'Apply approved name' : 'Request approval'}</Text>
+              </TouchableOpacity>}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -515,7 +508,7 @@ export default function ChildProfileScreen() {
       </Modal>
 
       {/* =========================================================================
-          MODAL 4: CONFIRMATION MODAL (Name / Age Change Confirmation)
+          MODAL 4: AGE CHANGE CONFIRMATION
           ========================================================================= */}
       <Modal
         visible={pendingChange !== null}
@@ -532,20 +525,18 @@ export default function ChildProfileScreen() {
             <View style={styles.dialogHeader}>
               <View style={[styles.dialogIconBadge, { backgroundColor: '#E8F4FC' }]}>
                 <Ionicons
-                  name={pendingChange?.type === 'name' ? 'person' : 'calendar'}
+                  name="calendar"
                   size={20}
                   color="#0D68AC"
                 />
               </View>
               <Text style={styles.dialogTitle}>
-                {pendingChange?.type === 'name' ? 'Confirm Name Change' : 'Confirm Age Change'}
+                Confirm Age Change
               </Text>
             </View>
 
             <Text style={styles.dialogSubtitle}>
-              {pendingChange?.type === 'name'
-                ? "Are you sure you want to update your child's name? This will be updated across both Parent and Child modes."
-                : "Are you sure you want to update your child's age?"}
+              Are you sure you want to update your child's age?
             </Text>
 
             <View style={styles.changeComparisonCard}>
@@ -593,6 +584,9 @@ export default function ChildProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  nameRequestHint: { color: '#526D83', fontFamily: 'SourGummy-Medium', fontSize: 13, marginTop: 3 },
+  nameApprovalWarning: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#FFF3D5', borderWidth: 1, borderColor: '#EDCD87', borderRadius: 11, padding: 10, marginBottom: 12 },
+  nameApprovalText: { flex: 1, color: '#704500', fontFamily: 'SourGummy-Medium', fontSize: 14, lineHeight: 19 },
   safeArea: {
     flex: 1,
     backgroundColor: '#CCE5F6',

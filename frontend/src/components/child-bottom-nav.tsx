@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -11,29 +11,25 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
     {
       id: 'home',
       label: 'Home',
-      icon: 'home-outline' as const,
-      activeIcon: 'home' as const,
+      icon: 'house',
       route: '/patient-dashboard',
     },
     {
       id: 'play',
       label: 'Play',
-      icon: 'game-controller-outline' as const,
-      activeIcon: 'game-controller' as const,
+      icon: 'gamepad',
       route: '/sentences',
     },
     {
       id: 'stars',
       label: 'Stars',
-      icon: 'star-outline' as const,
-      activeIcon: 'star' as const,
+      icon: 'star',
       route: '/patient-stars',
     },
     {
       id: 'buddy',
       label: 'Buddy',
-      icon: 'paw-outline' as const,
-      activeIcon: 'paw' as const,
+      icon: 'paw',
       route: '/pick-buddy',
     },
   ];
@@ -56,10 +52,12 @@ export function ChildBottomNav({ activeTab = 'home' }: ChildBottomNavProps) {
             }}
           >
             <View style={[styles.iconWrapper, isActive && styles.activeIconWrapper]}>
-              <Ionicons
-                name={isActive ? tab.activeIcon : tab.icon}
-                size={24}
-                color={isActive ? '#0D68AC' : '#5F8BAE'}
+              <FontAwesome6
+                name={tab.icon}
+                regular={tab.id === 'stars'}
+                solid={tab.id !== 'stars'}
+                size={21}
+                color={isActive ? '#0D68AC' : '#648199'}
               />
             </View>
             <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
@@ -86,22 +84,23 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 36,
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   iconWrapper: {
-    width: 42,
+    width: 48,
     height: 32,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activeIconWrapper: { backgroundColor: '#E7F4FF' },
+  activeIconWrapper: { backgroundColor: '#E7F4FF', borderColor: '#BBDDF7', borderWidth: 1 },
   tabLabel: {
     fontFamily: 'SourGummy-Bold',
     fontSize: 12,
-    color: '#0D68AC',
+    color: '#56758E',
     marginTop: 2,
   },
   activeTabLabel: {
