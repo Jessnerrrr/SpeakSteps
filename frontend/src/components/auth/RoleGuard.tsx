@@ -41,6 +41,7 @@ export function RoleGuard({ role, loginRoute, children, publicRoutes = [] }: Rol
     void (async () => {
       try {
         const session = await getCurrentSession();
+        console.log('[RoleGuard] session:', session);
         if (!active) return;
 
         if (!session) {
@@ -72,28 +73,39 @@ export function RoleGuard({ role, loginRoute, children, publicRoutes = [] }: Rol
     };
   }, [isPublicRoute, loginRoute, retryCount, role, sessionValidated]);
 
-  if (isPublicRoute || (state === 'allowed' && sessionValidated)) return <>{children}</>;
-
-  if (state === 'error') {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.message}>{errorMessage}</Text>
-        <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)}>
-          <Text style={styles.retry}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  const showOverlay = !isPublicRoute && !(state === 'allowed' && sessionValidated);
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator color="#0D68AC" />
+    <View style={styles.root}>
+      {children}
+      {showOverlay ? (
+        <View style={styles.overlay}>
+          {state === 'error' ? (
+            <>
+              <Text style={styles.message}>{errorMessage}</Text>
+              <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)}>
+                <Text style={styles.retry}>Retry</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <ActivityIndicator color="#0D68AC" />
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  root: { flex: 1 },
+  overlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    zIndex: 999,
+  },
   message: { color: '#334155', textAlign: 'center', marginBottom: 12 },
   retry: { color: '#0D68AC', fontWeight: '700' },
 });
