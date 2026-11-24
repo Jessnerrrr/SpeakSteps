@@ -54,6 +54,7 @@ This document records the Center Admin design review, the SUDE merge, and subseq
 - Applied the shared table spacing, clickable-row hover, and chevron styling. Status badges and follow-up notes align with the Status header.
 - Kept Request Type, Workflow Stage, and Status filters available after results narrow to a single row.
 - Moved the closure form into a scrollable area and placed Cancel and Review closure in a footer inside the dialog.
+- Added supporting document uploads to enrollment closure requests, with browse or web drag-and-drop selection and attachment previews in request history.
 
 ## Activity Logs and Profile Settings
 
