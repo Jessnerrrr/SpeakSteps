@@ -29,6 +29,11 @@ export function RoleGuard({ role, loginRoute, children, publicRoutes = [] }: Rol
       return;
     }
 
+    if (sessionValidated) {
+      setState('allowed');
+      return;
+    }
+
     let active = true;
     setState('checking');
     setErrorMessage('');
@@ -65,7 +70,7 @@ export function RoleGuard({ role, loginRoute, children, publicRoutes = [] }: Rol
     return () => {
       active = false;
     };
-  }, [isPublicRoute, loginRoute, retryCount, role, router]);
+  }, [isPublicRoute, loginRoute, retryCount, role, sessionValidated]);
 
   if (isPublicRoute || (state === 'allowed' && sessionValidated)) return <>{children}</>;
 
