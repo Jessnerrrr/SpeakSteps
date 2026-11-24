@@ -111,6 +111,12 @@ export default function AdminAuthScreen({ mode }: { mode: AuthMode }) {
       return;
     }
 
+    // Temporary demo bypass for local / Vercel testing
+   if (userId.trim().toLowerCase() === 'admin@speaksteps.com' && password === 'Admin@123') {
+  router.replace('/(admin)/admin-dashboard' as any);
+  return;
+}
+
     setIsSubmitting(true);
     try {
       await loginAccount(userId.trim(), password, 'admin');
