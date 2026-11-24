@@ -390,13 +390,21 @@ export function getPendingAccountSetup() {
 }
 
 async function getSessionToken(): Promise<string | null> {
-  if (Platform.OS === 'web') return webSessionToken;
+  if (Platform.OS === 'web') {
+    if (!webSessionToken && typeof window !== 'undefined') {
+      webSessionToken = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    }
+    return webSessionToken;
+  }
   return SecureStore.getItemAsync(TOKEN_STORAGE_KEY);
 }
 
 async function storeSessionToken(token: string): Promise<void> {
   if (Platform.OS === 'web') {
     webSessionToken = token;
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    }
     return;
   }
   await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
@@ -405,6 +413,9 @@ async function storeSessionToken(token: string): Promise<void> {
 export async function clearSession(): Promise<void> {
   if (Platform.OS === 'web') {
     webSessionToken = null;
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
     return;
   }
   await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);

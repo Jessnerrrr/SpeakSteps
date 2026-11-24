@@ -625,12 +625,14 @@ export default function AdminDashboardScreen({ initialAccountView }: { initialAc
     if (profileCloseTimer.current) clearTimeout(profileCloseTimer.current);
     profileCloseTimer.current = setTimeout(() => setShowProfile(false), 120);
   };
-  const [fontsLoaded] = useFonts({
-    'Geist-Regular': require('../../../assets/fonts/Geist-Regular.ttf'),
-    'Geist-Medium': require('../../../assets/fonts/Geist-Medium.ttf'),
-    'Geist-SemiBold': require('../../../assets/fonts/Geist-SemiBold.ttf'),
-    'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
-  });
+  const [fontsLoaded, fontError] = useFonts({
+  'Geist-Regular': require('../../../assets/fonts/Geist-Regular.ttf'),
+  'Geist-Medium': require('../../../assets/fonts/Geist-Medium.ttf'),
+  'Geist-SemiBold': require('../../../assets/fonts/Geist-SemiBold.ttf'),
+  'SourGummy-Bold': require('../../../assets/SourGummy-Bold.ttf'),
+});
+
+if (!fontsLoaded && !fontError && Platform.OS !== 'web') return null;
 
   const flash = (message: string) => {
     setToast(message);
